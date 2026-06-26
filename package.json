@@ -1,0 +1,25 @@
+{
+  "name": "eln",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electronic Lab Notebook (ELN) monorepo",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "backend": "pnpm --filter @eln/backend",
+    "shared": "pnpm --filter @eln/shared",
+    "frontend": "pnpm --filter @eln/frontend",
+    "type-check": "turbo run type-check"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.0",
+    "typescript": "^5.5.0"
+  }
+}
