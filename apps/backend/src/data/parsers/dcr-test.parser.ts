@@ -8,6 +8,12 @@ const NUMERIC_FIELDS = ['q0', 'du0', 'du1', 'di', 'cu0', 'cu1', 'ci'] as const;
 /**
  * dcrTest — flat one-row-per-cell sheet capturing 4C DCR pulse response:
  * pre/post-pulse voltage and current for both discharge and charge pulses.
+ *
+ * Computed fields written at parse time:
+ *   ddcr       = |du1 - du0| / di      放电直流内阻 (Ω)
+ *   cdcr       = |cu1 - cu0| / ci      充电直流内阻 (Ω)
+ *   dRcProduct = q0 * ddcr             放电R-C乘积 (Ah·Ω)
+ *   cRcProduct = q0 * cdcr             充电R-C乘积 (Ah·Ω)
  */
 export class DcrTestParser implements DataParser<Partial<DcrTest>> {
   readonly tableName = 'dcrTest';
@@ -39,6 +45,31 @@ export class DcrTestParser implements DataParser<Partial<DcrTest>> {
           (record as Record<string, unknown>)[field] = value !== null ? String(value) : null;
         }
       }
+
+      // ─── Compute derived fields ─────────────────────────────────────────────
+      const q0  = record.q0  != null ? Number(record.q0)  : null;
+      const du0 = record.du0 != null ? Number(record.du0) : null;
+      const du1 = record.du1 != null ? Number(record.du1) : null;
+      const di  = record.di  != null ? Number(record.di)  : null;
+      const cu0 = record.cu0 != null ? Number(record.cu0) : null;
+      const cu1 = record.cu1 != null ? Number(record.cu1) : null;
+      const ci  = record.ci  != null ? Number(record.ci)  : null;
+
+      const ddcr = (du0 != null && du1 != null && di != null && di !== 0)
+        ? Math.abs(du1 - du0) / di
+        : null;
+
+      const cdcr = (cu0 != null && cu1 != null && ci != null && ci !== 0)
+        ? Math.abs(cu1 - cu0) / ci
+        : null;
+
+      const dRcProduct = (q0 != null && ddcr != null) ? q0 * ddcr : null;
+      const cRcProduct = (q0 != null && cdcr != null) ? q0 * cdcr : null;
+
+      record.ddcr       = ddcr       != null ? ddcr.toFixed(6)       : null;
+      record.cdcr       = cdcr       != null ? cdcr.toFixed(6)       : null;
+      record.dRcProduct = dRcProduct != null ? dRcProduct.toFixed(6) : null;
+      record.cRcProduct = cRcProduct != null ? cRcProduct.toFixed(6) : null;
 
       rows.push(record);
     });

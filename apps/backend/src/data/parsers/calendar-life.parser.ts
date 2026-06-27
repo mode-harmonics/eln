@@ -22,6 +22,16 @@ interface ParsedHeader {
  *   2. ddcr_Xd / cdcr_Xd -> if one side is 0/missing, copy from the other.
  *   3. Missing r_0d or u_0d -> backfill from the first later day's r_Xd/u_Xd.
  *   4. Missing dq_Xd -> compute as ((q_Xd - q_0d) / q_0d) * 100.
+ *
+ * After flattening, a second pass computes 6 derived metrics relative to
+ * the day=0 row for each cell (stored directly; see CalendarLife entity):
+ *
+ *   qRetention  = (dq   / q_0d)    * 100
+ *   qRecovery   = (q    / q_0d)    * 100
+ *   ddcrGrowth  = (ddcr / ddcr_0d - 1) * 100
+ *   cdcrGrowth  = (cdcr / cdcr_0d - 1) * 100
+ *   uGrowth     = (u    / u_0d   - 1) * 100
+ *   rGrowth     = (r    / r_0d   - 1) * 100
  */
 export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
   readonly tableName = 'calendarLife';
@@ -72,22 +82,69 @@ export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
 
       this.applyFallbackRules(byDay, sortedDays);
 
+      // ─── First pass: emit raw rows ────────────────────────────────────────
+      const cellRows: Partial<CalendarLife>[] = [];
       for (const dayCount of sortedDays) {
         const metrics = byDay.get(dayCount)!;
-        allRows.push({
+        cellRows.push({
           id: uuid(),
           experimentId,
           cellName,
           isHorizontal: true,
           dayCount,
-          q: metrics.q !== undefined && metrics.q !== null ? String(metrics.q) : null,
-          dq: metrics.dq !== undefined && metrics.dq !== null ? String(metrics.dq) : null,
-          ddcr: metrics.ddcr !== undefined && metrics.ddcr !== null ? String(metrics.ddcr) : null,
-          cdcr: metrics.cdcr !== undefined && metrics.cdcr !== null ? String(metrics.cdcr) : null,
-          u: metrics.u !== undefined && metrics.u !== null ? String(metrics.u) : null,
-          r: metrics.r !== undefined && metrics.r !== null ? String(metrics.r) : null,
+          q:    metrics.q    != null ? String(metrics.q)    : null,
+          dq:   metrics.dq   != null ? String(metrics.dq)   : null,
+          ddcr: metrics.ddcr != null ? String(metrics.ddcr) : null,
+          cdcr: metrics.cdcr != null ? String(metrics.cdcr) : null,
+          u:    metrics.u    != null ? String(metrics.u)    : null,
+          r:    metrics.r    != null ? String(metrics.r)    : null,
+          // computed fields filled in second pass below
+          qRetention:  null,
+          qRecovery:   null,
+          ddcrGrowth:  null,
+          cdcrGrowth:  null,
+          uGrowth:     null,
+          rGrowth:     null,
         });
       }
+
+      // ─── Second pass: compute derived metrics relative to day=0 ──────────
+      const day0Row = cellRows.find((r) => r.dayCount === 0);
+      if (day0Row) {
+        const q0    = day0Row.q    != null ? Number(day0Row.q)    : null;
+        const ddcr0 = day0Row.ddcr != null ? Number(day0Row.ddcr) : null;
+        const cdcr0 = day0Row.cdcr != null ? Number(day0Row.cdcr) : null;
+        const u0    = day0Row.u    != null ? Number(day0Row.u)    : null;
+        const r0    = day0Row.r    != null ? Number(day0Row.r)    : null;
+
+        for (const r of cellRows) {
+          const dqVal   = r.dq   != null ? Number(r.dq)   : null;
+          const qVal    = r.q    != null ? Number(r.q)    : null;
+          const ddcrVal = r.ddcr != null ? Number(r.ddcr) : null;
+          const cdcrVal = r.cdcr != null ? Number(r.cdcr) : null;
+          const uVal    = r.u    != null ? Number(r.u)    : null;
+          const rVal    = r.r    != null ? Number(r.r)    : null;
+
+          if (r.dayCount === 0) {
+            // Baseline day: ratios are 100 / growth is 0
+            r.qRetention = q0 != null ? '100.000000' : null;
+            r.qRecovery  = q0 != null ? '100.000000' : null;
+            r.ddcrGrowth = '0.000000';
+            r.cdcrGrowth = '0.000000';
+            r.uGrowth    = '0.000000';
+            r.rGrowth    = '0.000000';
+          } else {
+            r.qRetention = (dqVal != null && q0)   ? ((dqVal / q0) * 100).toFixed(6)             : null;
+            r.qRecovery  = (qVal  != null && q0)   ? ((qVal  / q0) * 100).toFixed(6)             : null;
+            r.ddcrGrowth = (ddcrVal != null && ddcr0) ? ((ddcrVal / ddcr0 - 1) * 100).toFixed(6) : null;
+            r.cdcrGrowth = (cdcrVal != null && cdcr0) ? ((cdcrVal / cdcr0 - 1) * 100).toFixed(6) : null;
+            r.uGrowth    = (uVal  != null && u0)   ? ((uVal    / u0   - 1) * 100).toFixed(6)     : null;
+            r.rGrowth    = (rVal  != null && r0)   ? ((rVal    / r0   - 1) * 100).toFixed(6)     : null;
+          }
+        }
+      }
+
+      allRows.push(...cellRows);
     });
 
     return allRows;
@@ -138,7 +195,7 @@ export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
       }
     }
 
-    // Rule 4: missing dq_Xd -> compute ((q_Xd - q_0d) / q_0d) * 100.
+    // Rule 4: missing dq_Xd -> compute as ((q_Xd - q_0d) / q_0d) * 100.
     const q0 = byDay.get(sortedDays[0])?.q;
     if (!isEmpty(q0)) {
       for (const day of sortedDays) {

@@ -6,6 +6,11 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm'
  * time axis with one column per cell; this is transposed so each row is
  * one cycle, with a JSONB dict keyed by batteryId (capacity) and
  * `${batteryId}_ret` (retention %).
+ *
+ * Computed field (stored inside `caps` at parse time):
+ *   caps[bId + "_ret"] = (cap / baseCap) * 100    容量保持率 (%)
+ *   where baseCap = capacity at the first (lowest) cycle.
+ *   Skipped when the source sheet already contains an explicit _ret column.
  */
 @Entity('htCycle', { comment: '高温循环数据表' })
 export class HtCycle {

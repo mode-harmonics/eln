@@ -6,6 +6,10 @@ import { DataParser, readHeaderRow, toNumberOrNull, toStringOrNull } from './par
 /**
  * energyEfficiency — flat one-row-per-cell sheet: discharge energy (de),
  * charge energy (ce), and an optional anomaly note.
+ *
+ * Computed fields written at parse time:
+ *   ee    = de / ce           能量效率 (ratio)
+ *   eePct = (de / ce) * 100   能量效率 (%)
  */
 export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficiency>> {
   readonly tableName = 'energyEfficiency';
@@ -33,13 +37,19 @@ export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficien
       const de = deCol >= 0 ? toNumberOrNull(row.getCell(deCol).value) : null;
       const ce = ceCol >= 0 ? toNumberOrNull(row.getCell(ceCol).value) : null;
 
+      // ─── Compute derived fields ─────────────────────────────────────────────
+      const ee    = (de != null && ce != null && ce !== 0) ? de / ce                  : null;
+      const eePct = (de != null && ce != null && ce !== 0) ? (de / ce) * 100          : null;
+
       rows.push({
         id: uuid(),
         experimentId,
         cellName,
-        de: de !== null ? String(de) : null,
-        ce: ce !== null ? String(ce) : null,
+        de:    de    != null ? String(de)            : null,
+        ce:    ce    != null ? String(ce)            : null,
         notes: notesCol >= 0 ? toStringOrNull(row.getCell(notesCol).value) : null,
+        ee:    ee    != null ? ee.toFixed(6)         : null,
+        eePct: eePct != null ? eePct.toFixed(6)     : null,
       });
     });
 

@@ -9,6 +9,14 @@ import { DataParser, readHeaderRow, toNumberOrNull } from './parser.interface';
  * "retention" column per cell (e.g. "A001" and "A001_ret"). This parser
  * keeps the row-per-cycle shape but folds all per-cell columns into a
  * single JSONB `caps` dict: { "A001": 2.15, "A001_ret": 99.5, ... }.
+ *
+ * Computed field (stored in `caps` at parse time):
+ *   caps[bId + "_ret"] = (cap / baseCap) * 100    容量保持率 (%)
+ *   where baseCap = the capacity at the first (lowest) cycle number.
+ *
+ * If the source sheet already includes an explicit `_ret` column for a
+ * battery, that measured value is kept as-is; the fallback computation
+ * only fills in missing retention values.
  */
 export class HtCycleParser implements DataParser<Partial<HtCycle>> {
   readonly tableName = 'htCycle';
@@ -23,7 +31,7 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
     const lowerHeaders = rawHeaders.map((h) => h.trim().toLowerCase());
     const cycleCol = lowerHeaders.indexOf('cycle');
 
-    // Every other column is a per-cell capacity or "<id>_ret" retention value.
+    // Split columns: raw capacity columns vs explicit _ret columns (case-insensitive)
     const capColumns: Array<{ colIndex: number; key: string }> = [];
     rawHeaders.forEach((header, colIndex) => {
       if (colIndex === cycleCol) return;
@@ -33,6 +41,14 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
       }
     });
 
+    // Identify which battery IDs have explicit _ret columns in the source
+    const retKeysInSource = new Set(
+      capColumns
+        .filter(({ key }) => key.toLowerCase().endsWith('_ret'))
+        .map(({ key }) => key.replace(/_ret$/i, '').toLowerCase()),
+    );
+
+    // Collect all rows first (sorted by cycle ascending for base-row lookup)
     const rows: Partial<HtCycle>[] = [];
 
     sheet.eachRow((row, rowNumber) => {
@@ -56,6 +72,34 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
         caps,
       });
     });
+
+    // ─── Second pass: compute missing _ret values from first-cycle baseline ─
+    if (rows.length > 0) {
+      rows.sort((a, b) => (a.cycle ?? 0) - (b.cycle ?? 0));
+
+      const baseRow = rows[0];
+      const baseCaps = baseRow.caps ?? {};
+
+      // Identify battery IDs that need computed retention (no explicit _ret column)
+      const batteryIds = Object.keys(baseCaps).filter((k) => !k.endsWith('_ret'));
+
+      for (const row of rows) {
+        const caps = row.caps!;
+        for (const bId of batteryIds) {
+          const retKey = `${bId}_ret`;
+          // Skip if already provided by the source sheet
+          if (retKeysInSource.has(bId.toLowerCase())) continue;
+          // Skip if already populated
+          if (caps[retKey] !== undefined) continue;
+
+          const baseCap = baseCaps[bId];
+          const curCap = caps[bId];
+          if (baseCap != null && baseCap !== 0 && curCap != null) {
+            caps[retKey] = Number(((curCap / baseCap) * 100).toFixed(6));
+          }
+        }
+      }
+    }
 
     return rows;
   }

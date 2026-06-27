@@ -4,6 +4,17 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm'
  * processData — 制程数据表
  * Pre-shipment manufacturing process parameters per cell (weight, voltage,
  * internal resistance across formation/aging/grading stages).
+ *
+ * Computed fields (stored, not calculated at query time):
+ *   mIn     = m1 - m0                    注液量
+ *   mLoss   = m1 - m2                    失液量
+ *   mHold   = m4 - m0                    保液量
+ *   fq      = fq1 + fq2                  化成充总容量
+ *   qdFirst = gqd1                       首次放电容量
+ *   fvg     = (v1 - v0) / qdFirst        化成产气量 (mL/Ah)
+ *   ku      = fu1 - fu2                  老化电压降
+ *   qcFirst = fq + gqc1                  首次充电容量
+ *   ceFirst = qdFirst / qcFirst * 100    首圈库比效率 (%)
  */
 @Entity('processData', { comment: '制程数据表' })
 export class ProcessData {
@@ -94,6 +105,48 @@ export class ProcessData {
 
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '分容后电阻(gr1)' })
   gr1!: string | null;
+
+  // ─── Derived / computed fields (计算字段，解析时写入，直接入库) ───────────────
+
+  /** 注液量 = m1 - m0 (g) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '注液量 mIn=m1-m0 (g)' })
+  mIn!: string | null;
+
+  /** 失液量 = m1 - m2 (g) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '失液量 mLoss=m1-m2 (g)' })
+  mLoss!: string | null;
+
+  /** 保液量 = m4 - m0 (g) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '保液量 mHold=m4-m0 (g)' })
+  mHold!: string | null;
+
+  /** 化成充总容量 = fq1 + fq2 (Ah) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '化成充总容量 fq=fq1+fq2 (Ah)' })
+  fq!: string | null;
+
+  /** 首次放电容量 = gqd1 (Ah) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '首次放电容量 qdFirst=gqd1 (Ah)' })
+  qdFirst!: string | null;
+
+  /** 化成产气量 = (v1 - v0) / qdFirst (mL/Ah) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '化成产气量 fvg=(v1-v0)/qdFirst (mL/Ah)' })
+  fvg!: string | null;
+
+  /** 老化电压降 = fu1 - fu2 (V) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '老化电压降 ku=fu1-fu2 (V)' })
+  ku!: string | null;
+
+  /** 首次充电容量 = fq + gqc1 (Ah) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '首次充电容量 qcFirst=fq+gqc1 (Ah)' })
+  qcFirst!: string | null;
+
+  /** 首圈库比效率 = qdFirst / qcFirst * 100 (%) */
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '首圈库比效率 ceFirst=qdFirst/qcFirst*100 (%)' })
+  ceFirst!: string | null;
+
+  /** 是否挑选为良品 */
+  @Column({ type: 'boolean', default: false, comment: '是否挑选为良品' })
+  picked!: boolean;
 
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;
