@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { ApiError } from '@eln/shared';
+import { ApiErrorResponse } from '@eln/shared';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -45,7 +45,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.error('Unknown exception', exception as object);
     }
 
-    const body: ApiError = {
+    const body: ApiErrorResponse & { details?: unknown } = {
       success: false,
       statusCode: status,
       message,

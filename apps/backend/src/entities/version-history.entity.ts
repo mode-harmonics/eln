@@ -7,27 +7,27 @@ import {
 } from 'typeorm';
 
 @Entity('versionHistory')
-export class VersionHistoryEntity {
+export class VersionHistory {
   @PrimaryColumn({ type: 'uuid' })
-  id: string;
+  id!: string;
 
   @Index()
   @Column({ name: 'experimentId', type: 'uuid' })
-  experimentId: string;
+  experimentId!: string;
 
   @Column({ name: 'versionNumber', type: 'int' })
-  versionNumber: number;
+  versionNumber!: number;
 
   @Column({ name: 'changeSummary', type: 'varchar', length: 255, nullable: true })
-  changeSummary: string | null;
+  changeSummary!: string | null;
 
   @Column({ type: 'jsonb', nullable: true })
-  snapshot: Record<string, unknown> | null;
+  snapshot!: Record<string, unknown> | null;
 
   @Index()
   @Column({ name: 'updatedBy', type: 'uuid' })
-  updatedBy: string;
+  updatedBy!: string;
 
   @CreateDateColumn({ name: 'updatedAt' })
-  updatedAt: Date;
+  updatedAt!: Date;
 }

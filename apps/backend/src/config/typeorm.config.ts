@@ -18,7 +18,7 @@ export class TypeOrmConfigService implements TypeOrmOptionsFactory {
   constructor(private readonly configService: ConfigService) {}
 
   createTypeOrmOptions(): TypeOrmModuleOptions {
-    const db = this.configService.get<AppConfig['db']>('app.db')!;
+    const db = this.configService.get<AppConfig['database']>('database')!;
 
     const base = db.url
       ? { url: db.url }
@@ -37,7 +37,9 @@ export class TypeOrmConfigService implements TypeOrmOptionsFactory {
       migrations: [__dirname + '/../migrations/*{.ts,.js}'],
       synchronize: false,
       migrationsRun: false,
-      logging: this.configService.get<string>('app.nodeEnv') === 'development',
+      retryAttempts: 100,
+      retryDelay: 3000,
+      logging: this.configService.get<string>('nodeEnv') === 'development',
     };
   }
 }

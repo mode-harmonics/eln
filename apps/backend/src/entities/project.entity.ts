@@ -6,24 +6,24 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity('projects')
-export class ProjectEntity {
+@Entity('project')
+export class Project {
   @PrimaryColumn({ type: 'uuid' })
-  id: string;
+  id!: string;
 
   @Column({ type: 'varchar', length: 128 })
-  name: string;
+  name!: string;
 
   @Column({ type: 'text', nullable: true })
-  description: string | null;
+  description!: string | null;
 
   @Column({ type: 'varchar', length: 32, default: 'Active' })
-  status: string;
+  status!: string;
 
   @Index()
   @Column({ name: 'createdBy', type: 'uuid' })
-  createdBy: string;
+  createdBy!: string;
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
 }

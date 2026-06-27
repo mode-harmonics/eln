@@ -6,7 +6,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Repository } from 'typeorm';
 import { User } from '../../entities/user.entity';
 import { Role } from '../../entities/role.entity';
-import { JwtPayload } from '../jwt-payload.interface';
+import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { RequestUser } from '../../common/decorators/current-user.decorator';
 
 @Injectable()
@@ -19,7 +19,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('app.jwt.secret')!,
+      secretOrKey: configService.get<string>('jwt.secret')!
     });
   }
 

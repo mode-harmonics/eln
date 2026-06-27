@@ -24,7 +24,7 @@ export const validationSchema = Joi.object({
   UPLOAD_DIR: Joi.string().default('./uploads'),
 });
 
-export default () => ({
+const configFactory = () => ({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parseInt(process.env.PORT || '3000', 10),
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
@@ -43,3 +43,7 @@ export default () => ({
   },
   uploadDir: process.env.UPLOAD_DIR || './uploads',
 });
+
+export type AppConfig = ReturnType<typeof configFactory>;
+
+export default configFactory;

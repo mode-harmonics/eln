@@ -5,7 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { Repository } from 'typeorm';
 import { Role } from '../entities/role.entity';
 import { User } from '../entities/user.entity';
-import { JwtPayload } from './jwt-payload.interface';
+import { JwtPayload } from './interfaces/jwt-payload.interface';
 
 export interface LoginResult {
   accessToken: string;

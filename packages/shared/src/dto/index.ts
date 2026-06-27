@@ -1,4 +1,4 @@
-export * from './auth';
+export * from './auth.dto';
 export * from './role.dto';
 export * from './project.dto';
 export * from './experiment.dto';

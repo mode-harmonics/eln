@@ -7,40 +7,40 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity('experiments')
-export class ExperimentEntity {
+@Entity('experiment')
+export class Experiment {
   @PrimaryColumn({ type: 'uuid' })
-  id: string;
+  id!: string;
 
   @Index()
   @Column({ name: 'projectId', type: 'uuid' })
-  projectId: string;
+  projectId!: string;
 
   @Column({ type: 'varchar', length: 255 })
-  title: string;
+  title!: string;
 
   @Column({ type: 'text', nullable: true })
-  content: string | null;
+  content!: string | null;
 
   @Column({ type: 'varchar', length: 32, default: 'Draft' })
-  status: string;
+  status!: string;
 
   @Column({ type: 'jsonb', nullable: true })
-  metadata: Record<string, unknown> | null;
+  metadata!: Record<string, unknown> | null;
 
   @Column({ name: 'aiAnalysisOutput', type: 'text', nullable: true })
-  aiAnalysisOutput: string | null;
+  aiAnalysisOutput!: string | null;
 
   @Column({ name: 'versionNo', type: 'int', default: 1 })
-  versionNo: number;
+  versionNo!: number;
 
   @Index()
   @Column({ name: 'createdBy', type: 'uuid' })
-  createdBy: string;
+  createdBy!: string;
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ name: 'updatedAt' })
-  updatedAt: Date;
+  updatedAt!: Date;
 }

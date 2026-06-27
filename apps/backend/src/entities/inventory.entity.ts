@@ -7,34 +7,34 @@ import {
 } from 'typeorm';
 
 @Entity('inventory')
-export class InventoryEntity {
+export class Inventory {
   @PrimaryColumn({ type: 'uuid' })
-  id: string;
+  id!: string;
 
   @Column({ type: 'varchar', length: 128 })
-  name: string;
+  name!: string;
 
   @Column({ type: 'varchar', length: 64 })
-  type: string;
+  type!: string;
 
   @Column({ name: 'lotNumber', type: 'varchar', length: 64, nullable: true })
-  lotNumber: string | null;
+  lotNumber!: string | null;
 
   @Column({ type: 'varchar', length: 64, nullable: true })
-  quantity: string | null;
+  quantity!: string | null;
 
   @Column({ name: 'storageLocation', type: 'varchar', length: 128, nullable: true })
-  storageLocation: string | null;
+  storageLocation!: string | null;
 
   @Column({ type: 'varchar', length: 64, nullable: true })
-  purity: string | null;
+  purity!: string | null;
 
   @Column({ type: 'varchar', length: 32, default: 'In Stock' })
-  status: string;
+  status!: string;
 
   @Column({ name: 'lastUsedAt', type: 'timestamp', nullable: true })
-  lastUsedAt: Date | null;
+  lastUsedAt!: Date | null;
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
 }

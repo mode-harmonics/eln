@@ -36,5 +36,3 @@ const connectionOptions: DataSourceOptions = dbUrl
  * Also imported by src/seed.ts to populate initial data.
  */
 export const AppDataSource = new DataSource(connectionOptions);
-
-export default AppDataSource;

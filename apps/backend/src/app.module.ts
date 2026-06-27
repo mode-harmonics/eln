@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { configuration, validationSchema } from './config/configuration';
+import configuration, { validationSchema } from './config/configuration';
 import { TypeOrmConfigService } from './config/typeorm.config';
+import { DatabaseModule } from './config/database.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
@@ -30,4 +31,4 @@ import { AiModule } from './ai/ai.module';
   ],
   providers: [ConfigService],
 })
-export class AppModule {}
+export class AppModule { }

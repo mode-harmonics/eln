@@ -1,16 +1,16 @@
 import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm';
 
-@Entity('roles')
-export class RoleEntity {
+@Entity('role')
+export class Role {
   @PrimaryColumn({ type: 'uuid' })
-  id: string;
+  id!: string;
 
   @Column({ type: 'varchar', length: 64 })
-  name: string;
+  name!: string;
 
   @Column({ name: 'permissionList', type: 'jsonb', nullable: true })
-  permissionList: string[] | null;
+  permissionList!: string[] | null;
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
 }

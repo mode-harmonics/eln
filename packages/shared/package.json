@@ -2,6 +2,11 @@
   "name": "@eln/shared",
   "version": "0.1.0",
   "private": true,
+  "exports": {
+    ".": "./dist/index.js",
+    "./dto": "./dist/dto.js",
+    "./enums": "./dist/enums.js"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {

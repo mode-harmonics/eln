@@ -6,31 +6,31 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity('attachments')
-export class AttachmentEntity {
+@Entity('attachment')
+export class Attachment {
   @PrimaryColumn({ type: 'uuid' })
-  id: string;
+  id!: string;
 
   @Index()
   @Column({ name: 'experimentId', type: 'uuid' })
-  experimentId: string;
+  experimentId!: string;
 
   @Column({ name: 'fileName', type: 'varchar', length: 255 })
-  fileName: string;
+  fileName!: string;
 
   @Column({ name: 'filePath', type: 'varchar', length: 512 })
-  filePath: string;
+  filePath!: string;
 
   @Column({ name: 'fileSize', type: 'int' })
-  fileSize: number;
+  fileSize!: number;
 
   @Column({ name: 'mimeType', type: 'varchar', length: 128 })
-  mimeType: string;
+  mimeType!: string;
 
   @Index()
   @Column({ name: 'uploadedBy', type: 'uuid' })
-  uploadedBy: string;
+  uploadedBy!: string;
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
 }

@@ -6,34 +6,34 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity('users')
-export class UserEntity {
+@Entity('user')
+export class User {
   @PrimaryColumn({ type: 'uuid' })
-  id: string;
+  id!: string;
 
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 128 })
-  email: string;
+  email!: string;
 
   @Column({ name: 'passwordHash', type: 'varchar', length: 255 })
-  passwordHash: string;
+  passwordHash!: string;
 
   @Column({ name: 'fullName', type: 'varchar', length: 64 })
-  fullName: string;
+  fullName!: string;
 
   @Column({ type: 'varchar', length: 512, nullable: true })
-  avatar: string | null;
+  avatar!: string | null;
 
   @Index()
   @Column({ name: 'roleId', type: 'uuid', nullable: true })
-  roleId: string | null;
+  roleId!: string | null;
 
   @Column({ name: 'departmentId', type: 'uuid', nullable: true })
-  departmentId: string | null;
+  departmentId!: string | null;
 
   @Column({ name: 'isActive', type: 'boolean', default: true })
-  isActive: boolean;
+  isActive!: boolean;
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
 }

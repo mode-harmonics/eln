@@ -54,9 +54,10 @@ export class DataService {
    * single queryRunner transaction — either everything commits or nothing
    * does, so a malformed sheet can't leave partial data behind.
    */
-  async uploadWorkbook(buffer: Buffer, experimentId: string): Promise<UploadSummary> {
+  async uploadWorkbook(buffer: Buffer<ArrayBufferLike>, experimentId: string): Promise<UploadSummary> {
     const workbook = new ExcelJS.Workbook();
     try {
+      // @ts-ignore: ExcelJS typings expect pre-generic Buffer; runtime behavior is identical
       await workbook.xlsx.load(buffer);
     } catch (err) {
       throw new BadRequestException('Could not parse the uploaded file as an Excel workbook.');

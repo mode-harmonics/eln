@@ -10,8 +10,8 @@
     "sourceMap": true,
     "inlineSources": true,
     "paths": {
-      "@eln/shared": ["../../packages/shared/src"],
-      "@eln/shared/*": ["../../packages/shared/src/*"]
+      "@eln/shared": ["../../packages/shared/dist"],
+      "@eln/shared/*": ["../../packages/shared/dist/*"]
     }
   },
   "include": ["src/**/*", "data-source.ts"],

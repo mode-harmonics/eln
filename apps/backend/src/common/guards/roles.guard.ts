@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { RoleName } from '@eln/shared';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { JwtPayload } from '../decorators/current-user.decorator';
+import { RequestUser } from '../decorators/current-user.decorator';
 
 /**
  * Checks the current user's role against the @Roles() metadata.
@@ -25,15 +25,15 @@ export class RolesGuard implements CanActivate {
     if (!required || required.length === 0) {
       return true;
     }
-    const request = ctx.switchToHttp().getRequest<{ user?: JwtPayload }>();
+    const request = ctx.switchToHttp().getRequest<{ user?: RequestUser }>();
     const user = request.user;
     if (!user) {
       throw new ForbiddenException('No authenticated user');
     }
-    const has = required.includes(user.role as RoleName);
+    const has = required.includes(user.roleName as RoleName);
     if (!has) {
       throw new ForbiddenException(
-        `Role '${user.role}' is not permitted. Required: ${required.join(', ')}`,
+        `Role '${user.roleName}' is not permitted. Required: ${required.join(', ')}`,
       );
     }
     return true;

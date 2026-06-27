@@ -6,23 +6,23 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity('experimentCollaborators')
+@Entity('experimentCollaborator')
 @Index(['experimentId', 'userId'], { unique: true })
-export class ExperimentCollaboratorEntity {
+export class ExperimentCollaborator {
   @PrimaryColumn({ type: 'uuid' })
-  id: string;
+  id!: string;
 
   @Index()
   @Column({ name: 'experimentId', type: 'uuid' })
-  experimentId: string;
+  experimentId!: string;
 
   @Index()
   @Column({ name: 'userId', type: 'uuid' })
-  userId: string;
+  userId!: string;
 
   @Column({ type: 'varchar', length: 32 })
-  role: string;
+  role!: string;
 
   @CreateDateColumn({ name: 'createdAt' })
-  createdAt: Date;
+  createdAt!: Date;
 }
