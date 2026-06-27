@@ -7,40 +7,43 @@ import {
   Index,
 } from 'typeorm';
 
-@Entity('experiment')
+/**
+ * experiment — 实验表
+ */
+@Entity('experiment', { comment: '实验表' })
 export class Experiment {
-  @PrimaryColumn({ type: 'uuid' })
+  @PrimaryColumn({ type: 'uuid', comment: '主键ID' })
   id!: string;
 
   @Index()
-  @Column({ name: 'projectId', type: 'uuid' })
+  @Column({ name: 'projectId', type: 'uuid', comment: '项目ID' })
   projectId!: string;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ type: 'varchar', length: 255, comment: '实验标题' })
   title!: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', nullable: true, comment: '实验内容' })
   content!: string | null;
 
-  @Column({ type: 'varchar', length: 32, default: 'Draft' })
+  @Column({ type: 'varchar', length: 32, default: 'Draft', comment: '状态' })
   status!: string;
 
-  @Column({ type: 'jsonb', nullable: true })
+  @Column({ type: 'jsonb', nullable: true, comment: '元数据' })
   metadata!: Record<string, unknown> | null;
 
-  @Column({ name: 'aiAnalysisOutput', type: 'text', nullable: true })
+  @Column({ name: 'aiAnalysisOutput', type: 'text', nullable: true, comment: 'AI分析输出' })
   aiAnalysisOutput!: string | null;
 
-  @Column({ name: 'versionNo', type: 'int', default: 1 })
+  @Column({ name: 'versionNo', type: 'int', default: 1, comment: '版本号' })
   versionNo!: number;
 
   @Index()
-  @Column({ name: 'createdBy', type: 'uuid' })
+  @Column({ name: 'createdBy', type: 'uuid', comment: '创建者ID' })
   createdBy!: string;
 
-  @CreateDateColumn({ name: 'createdAt' })
+  @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updatedAt' })
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
   updatedAt!: Date;
 }

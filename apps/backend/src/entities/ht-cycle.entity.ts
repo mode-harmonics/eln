@@ -7,28 +7,28 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm'
  * one cycle, with a JSONB dict keyed by batteryId (capacity) and
  * `${batteryId}_ret` (retention %).
  */
-@Entity('htCycle')
+@Entity('htCycle', { comment: '高温循环数据表' })
 export class HtCycle {
-  @PrimaryColumn({ type: 'uuid' })
+  @PrimaryColumn({ type: 'uuid', comment: '主键ID' })
   id!: string;
 
   /** Logical FK -> experiments.id */
   @Index()
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uuid', comment: '实验ID' })
   experimentId!: string;
 
   /** Cycle number (100, 200, ...). Primary retrieval key alongside experimentId. */
   @Index()
-  @Column({ type: 'int' })
+  @Column({ type: 'int', comment: '循环次数' })
   cycle!: number;
 
   /**
    * Dictionary keyed by batteryId -> capacity, and `${batteryId}_ret` ->
    * retention %, e.g. { "A001": 2.15, "A001_ret": 99.5 }.
    */
-  @Column({ type: 'jsonb' })
+  @Column({ type: 'jsonb', comment: '容量字典数据' })
   caps!: Record<string, number>;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;
 }
