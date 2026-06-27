@@ -1,0 +1,17 @@
+{
+  "name": "@eln/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && echo \"(placeholder) apps/frontend has no real build yet\"",
+    "dev": "echo \"(placeholder) apps/frontend is not implemented yet — see apps/backend\"",
+    "lint": "echo \"(no-op) lint @eln/frontend\"",
+    "test": "echo \"(no-op) test @eln/frontend\""
+  },
+  "dependencies": {
+    "@eln/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,140 @@
+### ============================================================================
+### ELN API — REST Client collection
+### Use with the VS Code REST Client extension (humao.rest-client).
+### Start the backend first:  pnpm --filter @eln/backend start:dev
+### ============================================================================
+
+@baseUrl = http://localhost:3000/api/v1
+@token = {{login.response.body.data.accessToken}}
+
+### ============================================================================
+# @name login
+# 🔐 Login — returns JWT token (stored as @token for subsequent requests)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@eln.local",
+  "password": "Demo@123456"
+}
+
+### ============================================================================
+# @name getMe
+# 👤 Get current user profile (with role + permissions)
+GET {{baseUrl}}/users/me
+Authorization: Bearer {{token}}
+
+### ============================================================================
+# @name listRoles
+# 📋 List all system roles
+GET {{baseUrl}}/roles
+Authorization: Bearer {{token}}
+
+### ============================================================================
+# @name createProject
+# 📁 Create a new project
+POST {{baseUrl}}/projects
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "NCM-811 Long Cycle Test",
+  "description": "Evaluating NCM-811 cathode cycle life at 1C rate with 4.3V cutoff."
+}
+
+### ============================================================================
+# @name listProjects
+# 📁 List all accessible projects
+GET {{baseUrl}}/projects
+Authorization: Bearer {{token}}
+
+### ============================================================================
+# @name updateProjectMembers
+# 👥 Bulk-upsert project members (fans out to all experiments in the project)
+PUT {{baseUrl}}/projects/{{projectId}}/members
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "members": [
+    { "userId": "USER_ID_HERE", "role": "Editor" }
+  ]
+}
+
+### ============================================================================
+# @name getExperiment
+# 🔬 Get experiment detail (includes attachments + collaborators)
+GET {{baseUrl}}/experiments/{{experimentId}}
+Authorization: Bearer {{token}}
+
+### ============================================================================
+# @name updateExperiment
+# ✏️ Update experiment (requires versionNo for optimistic locking)
+PUT {{baseUrl}}/experiments/{{experimentId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "Updated: NCM-811 Formation Cycling — Revised",
+  "content": "## Updated protocol\n- Charge to 4.25 V at 0.1C\n- …",
+  "versionNo": 1
+}
+
+### ============================================================================
+# @name submitExperiment
+# 📩 Submit experiment for review
+POST {{baseUrl}}/experiments/{{experimentId}}/submit
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "notes": "Ready for QA review."
+}
+
+### ============================================================================
+# @name uploadData
+# 📤 Upload Excel workbook — sheets are auto-detected and parsed
+POST {{baseUrl}}/data/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=----boundary
+
+------boundary
+Content-Disposition: form-data; name="experimentId"
+
+{{experimentId}}
+------boundary
+Content-Disposition: form-data; name="file"; filename="test-data.xlsx"
+Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+
+< ./path/to/your/test-data.xlsx
+------boundary--
+
+### ============================================================================
+# @name queryData
+# 📊 Query parsed data by type and experiment
+# Types: processData, calendarLife, storageSwelling, energyEfficiency,
+#        dcrTest, fastCharge, htCycle
+GET {{baseUrl}}/data/calendarLife/{{experimentId}}
+Authorization: Bearer {{token}}
+
+### ============================================================================
+# @name aiAnalyzeData
+# 🤖 (stub — 501) AI analysis of experiment data
+POST {{baseUrl}}/ai/analyze-data
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "experimentId": "{{experimentId}}"
+}
+
+### ============================================================================
+# @name aiGenerateInsights
+# 🤖 (stub — 501) AI-generated insights
+POST {{baseUrl}}/ai/generate-insights
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "experimentId": "{{experimentId}}"
+}
