@@ -8,6 +8,19 @@ import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrN
  * Handles both the horizontal (wide) layout where columns represent battery capacities,
  * and the vertical (long) layout where each row represents a single cycle for a single battery.
  */
+function parseIronValue(val: any): number | null {
+  if (val == null) return null;
+  const str = String(val).trim();
+  const num = parseFloat(str);
+  if (!isNaN(num)) return num;
+  const match = str.match(/([\d.]+)/);
+  if (match) {
+    const parsed = parseFloat(match[1]);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return null;
+}
+
 export class HtCycleParser implements DataParser<Partial<HtCycle>> {
   readonly tableName = 'htCycle';
 
@@ -24,18 +37,22 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['cycle', '循环圈数']);
     const headers = normalizeHeaders(rawHeaders);
     
-    // Check if there is a battery ID column (which indicates a vertical layout)
     const cellIdCol = headers.findIndex((h) => ['cellid', 'batteryid', 'cellname'].includes(h));
     const cycleCol = headers.indexOf('cycle');
-    const notesCol = headers.findIndex((h) => ['notes', 'remark'].includes(h));
+    const ironCol = headers.findIndex((h) => ['iron', 'fe', '铁溶出量', '铁溶出', '铁', 'notes', 'remark', '备注'].includes(h));
+
+    const rawRecords: Array<{
+      cellName: string;
+      cycle: number;
+      dischargeCapacity: number | null;
+      capacityRetention: number | null;
+      ironDissolution: number | null;
+    }> = [];
 
     if (cellIdCol >= 0) {
-      // VERTICAL LAYOUT: each row is a single (battery, cycle, capacity) record
+      // VERTICAL LAYOUT: each row represents a cell's cycle record
       const capCol = headers.indexOf('capacity');
       const retCol = headers.indexOf('retention');
-
-      const cycleMap = new Map<number, Record<string, number>>();
-      const notesMap = new Map<number, string>();
 
       sheet.eachRow((row, rowNum) => {
         if (rowNum <= rowNumber) return;
@@ -46,76 +63,26 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
 
         const capVal = capCol >= 0 ? toNumberOrNull(row.getCell(capCol).value) : null;
         const retVal = retCol >= 0 ? toNumberOrNull(row.getCell(retCol).value) : null;
-        const noteVal = notesCol >= 0 ? toStringOrNull(row.getCell(notesCol).value) : null;
+        const ironVal = ironCol >= 0 ? parseIronValue(row.getCell(ironCol).value) : null;
 
-        const caps = cycleMap.get(cycleVal) ?? {};
-        if (capVal !== null) {
-          caps[cellName] = capVal;
-        }
-        if (retVal !== null) {
-          caps[`${cellName}_ret`] = retVal;
-        }
-        cycleMap.set(cycleVal, caps);
-
-        if (noteVal) {
-          notesMap.set(cycleVal, noteVal);
-        }
-      });
-
-      const rows: Partial<HtCycle>[] = [];
-      for (const [cycle, caps] of cycleMap.entries()) {
-        rows.push({
-          id: uuid(),
-          experimentId,
-          cycle,
-          caps,
-          notes: notesMap.get(cycle) ?? null,
+        rawRecords.push({
+          cellName,
+          cycle: cycleVal,
+          dischargeCapacity: capVal,
+          capacityRetention: retVal,
+          ironDissolution: ironVal,
         });
-      }
-
-      // Sort to ensure the base baseline (first cycle) is at rows[0]
-      rows.sort((a, b) => (a.cycle ?? 0) - (b.cycle ?? 0));
-
-      if (rows.length > 0) {
-        const baseRow = rows[0];
-        const baseCaps = baseRow.caps ?? {};
-        const batteryIds = Object.keys(baseCaps).filter((k) => !k.endsWith('_ret'));
-
-        for (const row of rows) {
-          const caps = row.caps!;
-          for (const bId of batteryIds) {
-            const retKey = `${bId}_ret`;
-            if (caps[retKey] !== undefined) continue;
-
-            const baseCap = baseCaps[bId];
-            const curCap = caps[bId];
-            if (baseCap != null && baseCap !== 0 && curCap != null) {
-              caps[retKey] = Number(((curCap / baseCap) * 100).toFixed(6));
-            }
-          }
-        }
-      }
-
-      return rows;
+      });
     } else {
-      // HORIZONTAL LAYOUT: each row represents a cycle number, columns represent cells
-      // Split columns: raw capacity columns vs explicit _ret columns
+      // HORIZONTAL LAYOUT: each row is a cycle, columns are cells
       const capColumns: Array<{ colIndex: number; key: string }> = [];
       rawHeaders.forEach((header, colIndex) => {
-        if (colIndex === cycleCol || colIndex === notesCol) return;
+        if (colIndex === cycleCol || colIndex === ironCol) return;
         const key = header.trim();
         if (key) {
           capColumns.push({ colIndex, key });
         }
       });
-
-      const retKeysInSource = new Set(
-        capColumns
-          .filter(({ key }) => key.toLowerCase().endsWith('_ret'))
-          .map(({ key }) => key.replace(/_ret$/i, '').toLowerCase()),
-      );
-
-      const rows: Partial<HtCycle>[] = [];
 
       sheet.eachRow((row, rowNumberCurrent) => {
         if (rowNumberCurrent <= rowNumber) return;
@@ -123,47 +90,63 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
         const cycleValue = toNumberOrNull(row.getCell(cycleCol).value);
         if (cycleValue === null) return;
 
-        const caps: Record<string, number> = {};
-        for (const { colIndex, key } of capColumns) {
-          const value = toNumberOrNull(row.getCell(colIndex).value);
-          if (value !== null) {
-            caps[key] = value;
+        const ironVal = ironCol >= 0 ? parseIronValue(row.getCell(ironCol).value) : null;
+
+        const cellNames = Array.from(new Set(
+          capColumns.map(({ key }) => key.replace(/_ret$/i, ''))
+        ));
+
+        for (const cellName of cellNames) {
+          const capColIndex = capColumns.find(({ key }) => key.toLowerCase() === cellName.toLowerCase())?.colIndex;
+          const retColIndex = capColumns.find(({ key }) => key.toLowerCase() === `${cellName.toLowerCase()}_ret`)?.colIndex;
+
+          const capVal = capColIndex !== undefined ? toNumberOrNull(row.getCell(capColIndex).value) : null;
+          const retVal = retColIndex !== undefined ? toNumberOrNull(row.getCell(retColIndex).value) : null;
+
+          if (capVal !== null || retVal !== null) {
+            rawRecords.push({
+              cellName,
+              cycle: cycleValue,
+              dischargeCapacity: capVal,
+              capacityRetention: retVal,
+              ironDissolution: ironVal,
+            });
           }
         }
+      });
+    }
 
-        rows.push({
+    // Now calculate missing retention relative to cycle baseline
+    const cellGroups = new Map<string, typeof rawRecords>();
+    for (const rec of rawRecords) {
+      const list = cellGroups.get(rec.cellName) ?? [];
+      list.push(rec);
+      cellGroups.set(rec.cellName, list);
+    }
+
+    const finalRecords: Partial<HtCycle>[] = [];
+    for (const [cellName, records] of cellGroups.entries()) {
+      records.sort((a, b) => a.cycle - b.cycle);
+      const baseCap = records.find(r => r.dischargeCapacity != null)?.dischargeCapacity ?? 0;
+
+      for (const rec of records) {
+        let ret = rec.capacityRetention;
+        if (rec.dischargeCapacity != null && ret === null && baseCap !== 0) {
+          ret = Number(((rec.dischargeCapacity / baseCap) * 100).toFixed(6));
+        }
+
+        finalRecords.push({
           id: uuid(),
           experimentId,
-          cycle: cycleValue,
-          caps,
-          notes: notesCol >= 0 ? toStringOrNull(row.getCell(notesCol).value) : null,
+          cycle: rec.cycle,
+          cellName: rec.cellName,
+          ironDissolution: rec.ironDissolution != null ? String(rec.ironDissolution) : null,
+          dischargeCapacity: rec.dischargeCapacity != null ? String(rec.dischargeCapacity) : null,
+          capacityRetention: ret != null ? String(ret) : null,
         });
-      });
-
-      if (rows.length > 0) {
-        rows.sort((a, b) => (a.cycle ?? 0) - (b.cycle ?? 0));
-
-        const baseRow = rows[0];
-        const baseCaps = baseRow.caps ?? {};
-        const batteryIds = Object.keys(baseCaps).filter((k) => !k.endsWith('_ret'));
-
-        for (const row of rows) {
-          const caps = row.caps!;
-          for (const bId of batteryIds) {
-            const retKey = `${bId}_ret`;
-            if (retKeysInSource.has(bId.toLowerCase())) continue;
-            if (caps[retKey] !== undefined) continue;
-
-            const baseCap = baseCaps[bId];
-            const curCap = caps[bId];
-            if (baseCap != null && baseCap !== 0 && curCap != null) {
-              caps[retKey] = Number(((curCap / baseCap) * 100).toFixed(6));
-            }
-          }
-        }
       }
-
-      return rows;
     }
+
+    return finalRecords;
   }
 }

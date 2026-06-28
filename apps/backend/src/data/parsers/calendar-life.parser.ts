@@ -95,7 +95,6 @@ export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
           id: uuid(),
           experimentId,
           cellName,
-          isHorizontal: true,
           dayCount,
           q:    metrics.q    != null ? String(metrics.q)    : null,
           dq:   metrics.dq   != null ? String(metrics.dq)   : null,

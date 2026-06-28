@@ -39,7 +39,6 @@ export interface ProcessDataDto {
   ku: string | null;
   qcFirst: string | null;
   ceFirst: string | null;
-  picked: boolean;
   createdAt: string;
 }
 
@@ -47,7 +46,6 @@ export interface CalendarLifeDto {
   id: string;
   experimentId: string;
   cellName: string;
-  isHorizontal: boolean;
   dayCount: number;
   q: string | null;
   dq: string | null;
@@ -81,9 +79,7 @@ export interface EnergyEfficiencyDto {
   cellName: string;
   de: string | null;
   ce: string | null;
-  notes: string | null;
   ee: string | null;
-  eePct: string | null;
   createdAt: string;
 }
 
@@ -131,7 +127,9 @@ export interface HtCycleDto {
   id: string;
   experimentId: string;
   cycle: number;
-  caps: Record<string, number>;
-  notes: string | null;
+  cellName: string;
+  ironDissolution: string | null;
+  dischargeCapacity: string | null;
+  capacityRetention: string | null;
   createdAt: string;
 }

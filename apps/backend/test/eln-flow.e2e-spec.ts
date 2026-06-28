@@ -93,8 +93,8 @@ describe('ELN full flow (e2e)', () => {
     const workbook = new ExcelJS.Workbook();
 
     const process = workbook.addWorksheet('ProcessData');
-    process.addRow(['cellId', 'm0', 'fu0', 'fq1', 'gu0', 'gqc1', 'picked']);
-    process.addRow(['A001', 1.1, 3.5, 0.9, 3.6, 1.1, true]);
+    process.addRow(['cellId', 'm0', 'fu0', 'fq1', 'gu0', 'gqc1']);
+    process.addRow(['A001', 1.1, 3.5, 0.9, 3.6, 1.1]);
 
     const calendar = workbook.addWorksheet('CalendarLife');
     calendar.addRow(['cellName', 'q_0d', 'q_7d']);

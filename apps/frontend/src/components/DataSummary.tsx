@@ -367,29 +367,29 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
       addMetric(g, "fc_time", d.cellName, parseFloat(d.computedFastChargeTime || d.fcTime || "0"));
     });
 
-    // HtCycle — caps is a Record<string, number> keyed by cellName
+    // HtCycle
     const htByCell: Record<string, any[]> = {};
     props.htCycle.forEach((d: any) => {
-      const cellNames = d.caps ? Object.keys(d.caps).filter((k: string) => !k.endsWith("_ret")) : [];
-      cellNames.forEach((cn: string) => {
-        if (!htByCell[cn]) htByCell[cn] = [];
-        htByCell[cn].push(d);
-      });
+      if (d.cellName) {
+        if (!htByCell[d.cellName]) htByCell[d.cellName] = [];
+        htByCell[d.cellName].push(d);
+      }
     });
     Object.keys(htByCell).forEach((cellName) => {
       const g = getGroupName(cellName, groupingStrategy, customGrouping);
       const sorted = htByCell[cellName].sort((a: any, b: any) => a.cycle - b.cycle);
       const latest = sorted[sorted.length - 1];
       if (latest && latest.cycle > 0) {
-        const retentionKey = cellName + "_ret";
-        const retention = latest.caps?.[retentionKey];
+        const retention = latest.capacityRetention != null ? parseFloat(latest.capacityRetention) : null;
         if (retention != null) {
           addMetric(g, "cycle_retention", cellName, retention);
         }
       }
       sorted.forEach((d) => {
-        const match = d.notes?.match(/iron-dissolution:\s*([\d.]+)ppm/);
-        if (match && match[1]) addMetric(g, "iron_ppm", cellName, parseFloat(match[1]));
+        const fe = d.ironDissolution != null ? parseFloat(d.ironDissolution) : null;
+        if (fe != null) {
+          addMetric(g, "iron_ppm", cellName, fe);
+        }
       });
     });
 

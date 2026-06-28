@@ -11,6 +11,7 @@ import { ProcessData } from '../entities/process-data.entity';
 import { StorageSwelling } from '../entities/storage-swelling.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { ParserRegistry } from './parsers/parser.registry';
+import { computeFastChargeTime } from './parsers/fast-charge.parser';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
@@ -47,7 +48,7 @@ export class DataService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly parserRegistry: ParserRegistry,
-  ) {}
+  ) { }
 
   async getExperiment(id: string): Promise<Experiment | null> {
     return this.dataSource.getRepository(Experiment).findOne({ where: { id } });
@@ -149,6 +150,23 @@ export class DataService {
     for (const [key, value] of Object.entries(body)) {
       if (allowedFields.includes(key)) {
         (row as Record<string, unknown>)[key] = value;
+      }
+    }
+
+    if (type === 'fastcharge' || type === 'fastCharge') {
+      const fc = row as any;
+      const c0 = parseFloat(fc.c0 || '3.0');
+      let cumulativeSoc = 0;
+      if (fc.steps && Array.isArray(fc.steps)) {
+        fc.steps.sort((a: any, b: any) => a.stepNo - b.stepNo);
+        fc.steps.forEach((s: any) => {
+          const capAh = (s.stepCapacity !== null && s.stepCapacity > 15) ? s.stepCapacity / 1000 : s.stepCapacity;
+          s.stepSoc = (capAh !== null && c0 > 0) ? Number((capAh / c0).toFixed(6)) : null;
+          cumulativeSoc += s.stepSoc ?? 0;
+          s.cumulativeSoc = Number(cumulativeSoc.toFixed(6));
+        });
+        const finalTime = computeFastChargeTime(c0, fc.steps);
+        fc.computedFastChargeTime = finalTime !== null ? finalTime.toFixed(6) : null;
       }
     }
 

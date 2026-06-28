@@ -7,17 +7,17 @@ describe('ProcessDataParser', () => {
   describe('detect', () => {
     it('returns true for a sheet with batteryId + formation fields', () => {
       const ws = buildWorksheet([
-        ['batteryId', 'm0',       'fu0', 'fr0', 'fq1', 'fq2', 'picked'],
-        ['C001',      45.234,     3.85,  12.5,  2.15,  2.10,  '是'],
-        ['C002',      45.112,     3.82,  13.1,  2.09,  2.04,  '是'],
+        ['batteryId', 'm0',       'fu0', 'fr0', 'fq1', 'fq2'],
+        ['C001',      45.234,     3.85,  12.5,  2.15,  2.10],
+        ['C002',      45.112,     3.82,  13.1,  2.09,  2.04],
       ]);
       assertDetected(parser, ws);
     });
 
     it('returns true using cellId header variant', () => {
       const ws = buildWorksheet([
-        ['cellId', 'fu0', 'fr0', 'fq1', 'picked'],
-        ['C001',   3.85,  12.5,  2.15,  '是'],
+        ['cellId', 'fu0', 'fr0', 'fq1'],
+        ['C001',   3.85,  12.5,  2.15],
       ]);
       assertDetected(parser, ws);
     });
@@ -34,9 +34,9 @@ describe('ProcessDataParser', () => {
   describe('parse', () => {
     it('converts rows into Partial<ProcessData> objects', () => {
       const ws = buildWorksheet([
-        ['batteryId', 'm0',       'fu0', 'fr0', 'fq1', 'fq2', 'picked'],
-        ['C001',      45.234,     3.85,  12.5,  2.15,  2.10,  '是'],
-        ['C002',      45.112,     3.82,  13.1,  2.09,  2.04,  ''],
+        ['batteryId', 'm0',       'fu0', 'fr0', 'fq1', 'fq2'],
+        ['C001',      45.234,     3.85,  12.5,  2.15,  2.10],
+        ['C002',      45.112,     3.82,  13.1,  2.09,  2.04],
       ]);
       const experimentId = 'exp-001';
       const rows = parser.parse(ws, experimentId);
@@ -52,21 +52,19 @@ describe('ProcessDataParser', () => {
         fr0: '12.5',
         fq1: '2.15',
         fq2: '2.1',
-        picked: true,
       });
       expect(rows[0]).toHaveProperty('id');
 
-      // Row 1 (picked = false)
+      // Row 1
       expect(rows[1]).toMatchObject({
         experimentId,
         cellId: 'C002',
         m0: '45.112',
-        picked: false,
       });
     });
 
     it('handles empty sheets gracefully', () => {
-      const ws = buildWorksheet([['batteryId', 'fu0', 'fr0', 'picked']]);
+      const ws = buildWorksheet([['batteryId', 'fu0', 'fr0']]);
       const rows = parser.parse(ws, 'exp-001');
       expect(rows).toHaveLength(0);
     });

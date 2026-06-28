@@ -27,15 +27,18 @@ export class HtCycle {
   @Column({ type: 'int', comment: '循环次数' })
   cycle!: number;
 
-  /**
-   * Dictionary keyed by batteryId -> capacity, and `${batteryId}_ret` ->
-   * retention %, e.g. { "A001": 2.15, "A001_ret": 99.5 }.
-   */
-  @Column({ type: 'jsonb', comment: '容量字典数据' })
-  caps!: Record<string, number>;
+  @Index()
+  @Column({ type: 'varchar', length: 64, comment: '电芯名称' })
+  cellName!: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true, comment: '备注' })
-  notes!: string | null;
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '铁溶出量' })
+  ironDissolution!: string | null;
+
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '放电容量' })
+  dischargeCapacity!: string | null;
+
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '容量保持率' })
+  capacityRetention!: string | null;
 
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;

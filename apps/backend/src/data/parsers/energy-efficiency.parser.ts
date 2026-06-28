@@ -29,7 +29,6 @@ export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficien
     const cellNameCol = headers.findIndex((h) => ['cellname', 'cellid', 'batteryid'].includes(h));
     const deCol = headers.indexOf('de');
     const ceCol = headers.indexOf('ce');
-    const notesCol = headers.findIndex((h) => ['notes', 'note', 'remark', 'remarks'].includes(h));
 
     const rows: Partial<EnergyEfficiency>[] = [];
 
@@ -44,7 +43,6 @@ export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficien
 
       // ─── Compute derived fields ─────────────────────────────────────────────
       const ee    = (de != null && ce != null && ce !== 0) ? de / ce                  : null;
-      const eePct = (de != null && ce != null && ce !== 0) ? (de / ce) * 100          : null;
 
       rows.push({
         id: uuid(),
@@ -52,9 +50,7 @@ export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficien
         cellName,
         de:    de    != null ? String(de)            : null,
         ce:    ce    != null ? String(ce)            : null,
-        notes: notesCol >= 0 ? toStringOrNull(row.getCell(notesCol).value) : null,
         ee:    ee    != null ? ee.toFixed(6)         : null,
-        eePct: eePct != null ? eePct.toFixed(6)     : null,
       });
     });
 

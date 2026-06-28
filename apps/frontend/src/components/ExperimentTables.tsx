@@ -36,6 +36,18 @@ function TableShell({ loading, error, children }: { loading: boolean; error: str
 // ─── Shared Row Edit / Delete Components ──────────────────────────────────────
 
 const SYSTEM_FIELDS = new Set(["id", "experimentId", "createdAt"]);
+const EXCLUDED_FIELDS = new Set([
+  "id",
+  "experimentId",
+  "createdAt",
+  "originalRow",
+  "computedFastChargeTime",
+  "providedFastChargeTime",
+  "isFirstStep",
+  "totalSteps",
+  "stepSoc",
+  "cumulativeSoc"
+]);
 
 interface EditRowModalProps {
   open: boolean;
@@ -51,10 +63,10 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    // Initialize form from row data, skipping system fields
+    // Initialize form from row data, skipping system fields and layout helpers
     const init: Record<string, string> = {};
     for (const [key, val] of Object.entries(row)) {
-      if (!SYSTEM_FIELDS.has(key)) {
+      if (!EXCLUDED_FIELDS.has(key)) {
         init[key] = val == null ? "" : String(val);
       }
     }
@@ -65,16 +77,41 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
     e.preventDefault();
     setSaving(true);
     try {
-      // Convert numeric strings back to appropriate types
-      const body: Record<string, unknown> = {};
-      for (const [key, val] of Object.entries(form)) {
-        if (key === "picked" || key === "isHorizontal") {
-          body[key] = val === "true" || val === "Yes";
-        } else {
-          body[key] = val === "" ? null : val;
+      if (type === "fastcharge") {
+        const parent = row.originalRow as any;
+        const updatedSteps = (parent.steps || []).map((s: any) => {
+          if (s.stepNo === Number(form.stepNo)) {
+            return {
+              ...s,
+              rate: form.rate === "" ? null : form.rate,
+              cutOffVoltage: form.cutOffVoltage === "" ? null : Number(form.cutOffVoltage),
+              current: form.current === "" ? null : Number(form.current),
+              stepCapacity: form.stepCapacity === "" ? null : Number(form.stepCapacity),
+              stepTime: form.stepTime === "" ? null : Number(form.stepTime),
+            };
+          }
+          return s;
+        });
+
+        const body = {
+          cellName: form.cellName,
+          c0: form.c0 === "" ? null : form.c0,
+          steps: updatedSteps,
+        };
+
+        await api.put(`/api/v1/data/fastcharge/${parent.id}`, body);
+      } else {
+        // Convert numeric strings back to appropriate types
+        const body: Record<string, unknown> = {};
+        for (const [key, val] of Object.entries(form)) {
+          if (key === "isHorizontal") {
+            body[key] = val === "true" || val === "Yes";
+          } else {
+            body[key] = val === "" ? null : val;
+          }
         }
+        await api.put(`/api/v1/data/${type}/${row.id}`, body);
       }
-      await api.put(`/api/v1/data/${type}/${row.id}`, body);
       onSaved();
       onClose();
     } catch (err: any) {
@@ -84,7 +121,7 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
     }
   };
 
-  const editableFields = Object.keys(form).filter((key) => !SYSTEM_FIELDS.has(key));
+  const editableFields = Object.keys(form).filter((key) => !EXCLUDED_FIELDS.has(key));
 
   return (
     <Modal open={open} onClose={onClose} title={`${t("edit_row")} - ${row.cellId || row.cellName || row.id}`} maxWidth="2xl">
@@ -94,7 +131,7 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
             {editableFields.map((key) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{key}</label>
-                {key === "picked" || key === "isHorizontal" ? (
+                {key === "isHorizontal" ? (
                   <select
                     value={form[key]}
                     onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
@@ -109,8 +146,8 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
                     type="text"
                     value={form[key] ?? ""}
                     onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm font-mono text-xs"
-                    disabled={saving}
+                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm font-mono text-xs disabled:bg-gray-50 disabled:text-gray-400"
+                    disabled={saving || (type === "fastcharge" && key === "stepNo")}
                   />
                 )}
               </div>
@@ -182,6 +219,8 @@ function RowActions({ row, type, onRefresh }: RowActionsProps) {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const rowId = (type === 'fastcharge' ? (row.originalRow as any).id : row.id) as string;
+
   return (
     <>
       <div className="flex items-center gap-1">
@@ -201,7 +240,7 @@ function RowActions({ row, type, onRefresh }: RowActionsProps) {
         </button>
       </div>
       <EditRowModal open={editOpen} onClose={() => setEditOpen(false)} row={row} type={type} onSaved={onRefresh} />
-      <DeleteRowConfirm open={deleteOpen} onClose={() => setDeleteOpen(false)} rowId={row.id as string} type={type} onDeleted={onRefresh} />
+      <DeleteRowConfirm open={deleteOpen} onClose={() => setDeleteOpen(false)} rowId={rowId} type={type} onDeleted={onRefresh} />
     </>
   );
 }
@@ -227,11 +266,14 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_m2")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-              {t("col_v0")}
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Injection Mass = m1 - m0">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_mIn")}</span>
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Hold Mass = m4 - m0">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_mHold")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-              {t("col_v1")}
+              {t("col_v0")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_fu0")}
@@ -245,6 +287,15 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_fq2")}
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Formation Charge Capacity = fq1 + fq2">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_fq")}</span>
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              {t("col_v1")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Formation Gas Volume = (v1 - v0) / qdFirst">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_fvg")}</span>
+            </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_fu1")}
             </th>
@@ -257,11 +308,17 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_fr2")}
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Aging Voltage Drop = fu1 - fu2">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ku")}</span>
+            </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_m3")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_m4")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Loss Mass = m1 - m2">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_mLoss")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_gu0")}
@@ -284,81 +341,14 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_gr1")}
             </th>
-            {/* Computed fields */}
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Injection Mass = m1 - m0"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_mIn")}
-              </span>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="1st Charge Capacity = fq + gqc1">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_qcFirst")}</span>
             </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Loss Mass = m1 - m2"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_mLoss")}
-              </span>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="1st Discharge Capacity = gqd1">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_qdFirst")}</span>
             </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Hold Mass = m4 - m0"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_mHold")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Formation Charge Capacity = fq1 + fq2"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_fq")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="1st Discharge Capacity = gqd1"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_qdFirst")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Formation Gas Volume = (v1 - v0) / qdFirst"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_fvg")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Aging Voltage Drop = fu1 - fu2"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_ku")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="1st Charge Capacity = fq + gqc1"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_qcFirst")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="1st Coulombic Efficiency = qdFirst / qcFirst * 100"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_ceFirst")}
-              </span>
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-              {t("col_picked")}
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="1st Coulombic Efficiency = qdFirst / qcFirst * 100">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ceFirst")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
@@ -380,11 +370,14 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.m2}
               </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.v0}
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.mIn}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.mHold}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.v1}
+                {d.v0}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.fu0}
@@ -398,6 +391,15 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.fq2}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.fq}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {d.v1}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.fvg}
+              </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.fu1}
               </td>
@@ -410,11 +412,17 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.fr2}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.ku}
+              </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.m3}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.m4}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.mLoss}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.gu0}
@@ -438,42 +446,13 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
                 {d.gr1}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.mIn}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.mLoss}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.mHold}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.fq}
+                {d.qcFirst}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.qdFirst}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.fvg}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.ku}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.qcFirst}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.ceFirst}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.picked ? (
-                  <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-[#f0f9f4] text-[#1e8b4e]">
-                    Yes
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
-                    No
-                  </span>
-                )}
               </td>
               <td className="px-4 py-2 whitespace-nowrap">
                 <RowActions row={d} type="process" onRefresh={refresh} />
@@ -500,77 +479,43 @@ export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
               {t("col_cell_name")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {t("col_is_horizontal")}
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_day")}
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {t("col_q_cap")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_dq_loss")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {t("col_q_cap")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Capacity Retention = (dq / q_0d) * 100">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_qRetention")}</span>
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Capacity Recovery = (q / q_0d) * 100">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_qRecovery")}</span>
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_ddcr")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="D-DCR Increase = (ddcr / ddcr_0d - 1) * 100">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ddcrGrowth")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_cdcr")}
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="C-DCR Increase = (cdcr / cdcr_0d - 1) * 100">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_cdcrGrowth")}</span>
+            </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_u_voltage")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Voltage Increase = (u / u_0d - 1) * 100">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_uGrowth")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_r_acir")}
             </th>
-            {/* Computed fields */}
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Capacity Retention = (dq / q_0d) * 100"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_qRetention")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Capacity Recovery = (q / q_0d) * 100"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_qRecovery")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="D-DCR Increase = (ddcr / ddcr_0d - 1) * 100"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_ddcrGrowth")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="C-DCR Increase = (cdcr / cdcr_0d - 1) * 100"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_cdcrGrowth")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Voltage Increase = (u / u_0d - 1) * 100"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_uGrowth")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Internal Resistance Increase = (r / r_0d - 1) * 100"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_rGrowth")}
-              </span>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Internal Resistance Increase = (r / r_0d - 1) * 100">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_rGrowth")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
@@ -584,28 +529,13 @@ export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
                 {d.cellName}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.isHorizontal ? "Yes" : "No"}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.dayCount}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.q}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.dq}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.ddcr}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.cdcr}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.u}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.r}
+                {d.q}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.qRetention}
@@ -613,14 +543,26 @@ export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.qRecovery}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {d.ddcr}
+              </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.ddcrGrowth}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {d.cdcr}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.cdcrGrowth}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {d.u}
+              </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.uGrowth}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {d.r}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.rGrowth}
@@ -720,25 +662,9 @@ export function EnergyEfficiencyTable({ experimentId }: { experimentId: string }
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_ce")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {t("col_notes")}
-            </th>
             {/* Computed fields */}
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Energy Efficiency Ratio = de / ce"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_ee")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Energy Efficiency = (de / ce) * 100 (%)"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_eePct")}
-              </span>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Energy Efficiency Ratio = de / ce">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ee")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
@@ -757,14 +683,8 @@ export function EnergyEfficiencyTable({ experimentId }: { experimentId: string }
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.ce}
               </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.notes}
-              </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.ee}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.eePct}
               </td>
               <td className="px-4 py-2 whitespace-nowrap">
                 <RowActions row={d} type="efficiency" onRefresh={refresh} />
@@ -802,6 +722,9 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_di")}
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Discharge DCR = |du1 - du0| / di (Ω)">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ddcr")}</span>
+            </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_cu0")}
             </th>
@@ -811,38 +734,14 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_ci")}
             </th>
-            {/* Computed fields */}
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Discharge DCR = |du1 - du0| / di (Ω)"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_ddcr")}
-              </span>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Charge DCR = |cu1 - cu0| / ci (Ω)">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_cdcr")}</span>
             </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Charge DCR = |cu1 - cu0| / ci (Ω)"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_cdcr")}
-              </span>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Discharge R-C Product = q0 * ddcr (Ah·Ω)">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_dRcProduct")}</span>
             </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Discharge R-C Product = q0 * ddcr (Ah·Ω)"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_dRcProduct")}
-              </span>
-            </th>
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Charge R-C Product = q0 * cdcr (Ah·Ω)"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_cRcProduct")}
-              </span>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Charge R-C Product = q0 * cdcr (Ah·Ω)">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_cRcProduct")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
@@ -867,6 +766,9 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.di}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.ddcr}
+              </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.cu0}
               </td>
@@ -875,9 +777,6 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.ci}
-              </td>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.ddcr}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.cdcr}
@@ -903,32 +802,75 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
 export function FastChargeTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
   const { data, loading, error, refresh } = useTableData<any>('fastcharge', experimentId);
+
+  const flatRows = data.flatMap((d: any) => {
+    const steps = d.steps || [];
+    if (steps.length === 0) {
+      return [{
+        cellName: d.cellName,
+        c0: d.c0,
+        providedFastChargeTime: d.providedFastChargeTime,
+        computedFastChargeTime: d.computedFastChargeTime,
+        originalRow: d,
+        isFirstStep: true,
+        totalSteps: 1,
+        stepNo: "-",
+        cutOffVoltage: "-",
+        current: "-",
+        rate: "-",
+        stepCapacity: "-",
+        stepSoc: "-",
+        cumulativeSoc: "-",
+        stepTime: "-",
+      }];
+    }
+    return steps.map((step: any, index: number) => ({
+      cellName: d.cellName,
+      c0: d.c0,
+      providedFastChargeTime: d.providedFastChargeTime,
+      computedFastChargeTime: d.computedFastChargeTime,
+      originalRow: d,
+      isFirstStep: index === 0,
+      totalSteps: steps.length,
+      ...step,
+    }));
+  });
+
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+      <table className="min-w-full divide-y divide-gray-200 border-collapse">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_cell_name")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {t("col_c0")}
+              {t("col_step_no")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {t("col_time_provided")}
+              {t("col_cutoff_voltage")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {t("col_steps")}
+              {t("col_current")}
             </th>
-            {/* Computed fields */}
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="10%-80% SOC Fast Charge Time (min)"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_computedTime")}
-              </span>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {t("col_rate")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {t("col_step_capacity")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider">
+              {t("col_step_soc")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider">
+              {t("col_cumulative_soc")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {t("col_step_time")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="10%-80% SOC Fast Charge Time (min)">
+              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_computedTime")}</span>
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
@@ -936,29 +878,40 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {data.map((d: any) => (
-            <tr key={d.id}>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                {d.cellName}
+          {flatRows.map((r: any, idx: number) => (
+            <tr key={`${r.originalRow.id}-${idx}`}>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100 font-medium">
+                {r.cellName}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.c0}
+                {r.stepNo}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.providedFastChargeTime
-                  ? `${d.providedFastChargeTime} min`
-                  : "N/A"}
+                {r.cutOffVoltage}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {d.steps?.length || 0}
+                {r.current}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {r.rate}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {r.stepCapacity}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
-                {d.computedFastChargeTime
-                  ? `${d.computedFastChargeTime} min`
-                  : "N/A"}
+                {r.stepSoc != null && r.stepSoc !== "-" ? (typeof r.stepSoc === 'number' ? r.stepSoc.toFixed(4) : r.stepSoc) : "-"}
               </td>
-              <td className="px-4 py-2 whitespace-nowrap">
-                <RowActions row={d} type="fastcharge" onRefresh={refresh} />
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {r.cumulativeSoc != null && r.cumulativeSoc !== "-" ? (typeof r.cumulativeSoc === 'number' ? r.cumulativeSoc.toFixed(4) : r.cumulativeSoc) : "-"}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                {r.stepTime}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc] border-l border-gray-100 font-medium">
+                {r.computedFastChargeTime ? `${r.computedFastChargeTime} min` : "N/A"}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap border-l border-gray-100">
+                <RowActions row={r} type="fastcharge" onRefresh={refresh} />
               </td>
             </tr>
           ))}
@@ -972,17 +925,35 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
 export function HtCycleTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
   const { data, loading, error, refresh } = useTableData<any>('htcycle', experimentId);
+
+  // Sort by cellName, then cycle number
+  const sortedData = [...data].sort((a: any, b: any) => {
+    if (a.cellName !== b.cellName) {
+      return a.cellName.localeCompare(b.cellName);
+    }
+    return a.cycle - b.cycle;
+  });
+
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
+      <table className="min-w-full divide-y divide-gray-200 border-collapse">
         <thead className="bg-gray-50">
           <tr>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              {t("col_cell_name")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider">
+              {t("col_iron_ppm")}
+            </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_cycle")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              {t("col_caps")}
+              {t("col_capacity")}
+            </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider">
+              {t("col_retention")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
@@ -990,13 +961,22 @@ export function HtCycleTable({ experimentId }: { experimentId: string }) {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {data.map((d: any) => (
+          {sortedData.map((d: any) => (
             <tr key={d.id}>
-              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-medium">
+                {d.cellName}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.ironDissolution != null ? `${d.ironDissolution} ppm` : "-"}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {d.cycle}
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                {JSON.stringify(d.caps)}
+                {d.dischargeCapacity}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
+                {d.capacityRetention != null ? (typeof d.capacityRetention === 'number' ? `${d.capacityRetention.toFixed(4)}%` : `${d.capacityRetention}%`) : "-"}
               </td>
               <td className="px-4 py-2 whitespace-nowrap">
                 <RowActions row={d} type="htcycle" onRefresh={refresh} />

@@ -38,7 +38,6 @@ export class ProcessDataParser implements DataParser<Partial<ProcessData>> {
     const headers = normalizeHeaders(rawHeaders);
     const colIndex = (name: string) => headers.indexOf(name);
     const cellIdCol = colIndex('cellid') >= 0 ? colIndex('cellid') : (colIndex('batteryid') >= 0 ? colIndex('batteryid') : colIndex('cellname'));
-    const pickedCol = colIndex('picked');
 
     const rows: Partial<ProcessData>[] = [];
 
@@ -53,7 +52,6 @@ export class ProcessDataParser implements DataParser<Partial<ProcessData>> {
         id: uuid(),
         experimentId,
         cellId,
-        picked: pickedCol >= 0 ? toBooleanOrFalse(row.getCell(pickedCol).value) : false,
       };
 
       for (const field of NUMERIC_FIELDS) {

@@ -29,9 +29,7 @@ export class CalendarLife {
   @Column({ type: 'varchar', length: 64, comment: '电芯名称' })
   cellName!: string;
 
-  /** True if the source sheet laid this cell's days out horizontally. */
-  @Column({ type: 'boolean', default: true, comment: '是否水平布局' })
-  isHorizontal!: boolean;
+
 
   /** Measurement day (0, 7, 14, 21, 28, 35, 42, ...). */
   @Index()

@@ -26,7 +26,7 @@ const FIELD_TO_KEY: Record<string, keyof FastChargeStep> = {
  *   2. Linearly interpolate to find t10 and t80.
  *   3. Return max(0, t80 - t10).
  */
-function computeFastChargeTime(c0: number, steps: FastChargeStep[]): number | null {
+export function computeFastChargeTime(c0: number, steps: FastChargeStep[]): number | null {
   if (c0 <= 0 || !steps || steps.length === 0) return null;
 
   const points: { soc: number; time: number }[] = [{ soc: 0, time: 0 }];
@@ -72,11 +72,12 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
     }
     const { headers } = findHeaderRow(sheet, ['step1_rate', '工步号', '倍率', '电池编号', 'batteryid', 'cellid']);
     const normalized = normalizeHeaders(headers);
-    return normalized.some((h) => STEP_HEADER_RE.test(h.trim())) || (normalized.includes('cellid') && normalized.includes('rate'));
+    return normalized.some((h) => STEP_HEADER_RE.test(h.trim())) || 
+      (normalized.includes('cellid') && normalized.some((h) => ['stepno', 'step_no', '工步号'].includes(h)));
   }
 
   parse(sheet: Worksheet, experimentId: string): Partial<FastCharge>[] {
-    const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['step1_rate', '工步号', '倍率', '电池编号', 'batteryid', 'cellid']);
+    const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['工步号', 'stepno', 'step_no']);
     const headers = normalizeHeaders(rawHeaders);
 
     const cellIdCol = headers.findIndex((h) => ['cellid', 'batteryid', 'cellname'].includes(h));
@@ -86,19 +87,25 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
     const rateCol = headers.findIndex((h) => ['rate', '倍率'].includes(h));
     const stepCapacityCol = headers.findIndex((h) => ['stepcapacity', 'step_capacity', '单步容量'].includes(h));
     const stepTimeCol = headers.findIndex((h) => ['steptime', 'step_time', '单步时间(min)', '单步时间'].includes(h));
+    const providedTimeCol = headers.findIndex((h) =>
+      ['providedfastchargetime', 'fastchargetime', '10%-80%soc(min)', '10%-80%soc'].includes(h.toLowerCase())
+    );
 
     const isVertical = cellIdCol >= 0 && stepNoCol >= 0;
 
     if (isVertical) {
       // VERTICAL LAYOUT: each row represents a single step of a battery
-      const cellMap = new Map<string, Array<{
-        stepNo: number;
-        rate: string | number | null;
-        cutOffVoltage: number | null;
-        current: number | null;
-        stepCapacity: number | null;
-        stepTime: number | null;
-      }>>();
+      const cellMap = new Map<string, {
+        providedTime: number | null;
+        steps: Array<{
+          stepNo: number;
+          rate: string | number | null;
+          cutOffVoltage: number | null;
+          current: number | null;
+          stepCapacity: number | null;
+          stepTime: number | null;
+        }>;
+      }>();
 
       sheet.eachRow((row, rowNum) => {
         if (rowNum <= rowNumber) return;
@@ -111,14 +118,18 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
         const cutOffVoltageVal = cutOffVoltageCol >= 0 ? toNumberOrNull(row.getCell(cutOffVoltageCol).value) : null;
         const currentVal = currentCol >= 0 ? toNumberOrNull(row.getCell(currentCol).value) : null;
         const stepCapacityVal = stepCapacityCol >= 0 ? toNumberOrNull(row.getCell(stepCapacityCol).value) : null;
+        const providedTimeVal = providedTimeCol >= 0 ? toNumberOrNull(row.getCell(providedTimeCol).value) : null;
         
         let stepTimeVal: number | null = null;
         if (stepTimeCol >= 0) {
           stepTimeVal = toNumberOrNull(row.getCell(stepTimeCol).value);
         }
 
-        const steps = cellMap.get(cellName) ?? [];
-        steps.push({
+        const record = cellMap.get(cellName) ?? { providedTime: null, steps: [] };
+        if (providedTimeVal !== null) {
+          record.providedTime = providedTimeVal;
+        }
+        record.steps.push({
           stepNo: stepNoVal,
           rate: rateVal,
           cutOffVoltage: cutOffVoltageVal,
@@ -126,12 +137,13 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
           stepCapacity: stepCapacityVal,
           stepTime: stepTimeVal,
         });
-        cellMap.set(cellName, steps);
+        cellMap.set(cellName, record);
       });
 
       const rows: Partial<FastCharge>[] = [];
 
-      for (const [cellName, rawSteps] of cellMap.entries()) {
+      for (const [cellName, record] of cellMap.entries()) {
+        const rawSteps = record.steps;
         rawSteps.sort((a, b) => a.stepNo - b.stepNo);
 
         const c0 = 3.0; // default nominal capacity fallback
@@ -139,7 +151,9 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
 
         const steps: FastChargeStep[] = rawSteps.map((s) => {
           const stepCapacity = s.stepCapacity ?? null;
-          const stepSoc = (stepCapacity !== null && c0 > 0) ? stepCapacity / c0 : null;
+          // Normalize capacity if in mAh (greater than 15)
+          const capAh = (stepCapacity !== null && stepCapacity > 15) ? stepCapacity / 1000 : stepCapacity;
+          const stepSoc = (capAh !== null && c0 > 0) ? capAh / c0 : null;
           cumulativeSoc += stepSoc ?? 0;
           return {
             stepNo:       s.stepNo,
@@ -154,14 +168,15 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
         });
 
         const computedTime = computeFastChargeTime(c0, steps);
+        const finalTime = record.providedTime ?? computedTime;
 
         rows.push({
           id: uuid(),
           experimentId,
           cellName,
           c0: String(c0),
-          providedFastChargeTime: null,
-          computedFastChargeTime: computedTime !== null ? computedTime.toFixed(6) : null,
+          providedFastChargeTime: record.providedTime !== null ? String(record.providedTime) : null,
+          computedFastChargeTime: finalTime !== null ? finalTime.toFixed(6) : null,
           steps,
         });
       }

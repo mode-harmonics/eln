@@ -234,10 +234,10 @@ export const MOCK_FAST_CHARGE: FastCharge[] = [
 ] as any;
 
 export const MOCK_HT_CYCLE: HtCycle[] = [
-  { id: "hc-0", experimentId: "e2", cycle: 100, caps: { "A-1": 3.0, "A-1_ret": 92.17336493987005 }, notes: "iron-dissolution: 29ppm", createdAt: "2024-02-01T14:00:00Z" },
-  { id: "hc-1", experimentId: "e2", cycle: 100, caps: { "A-2": 3.0, "A-2_ret": 92.69709794800254 }, notes: "iron-dissolution: 28ppm", createdAt: "2024-02-01T14:00:00Z" },
-  { id: "hc-2", experimentId: "e2", cycle: 100, caps: { "A-3": 3.0, "A-3_ret": 92.2412498204416 }, notes: "iron-dissolution: 28ppm", createdAt: "2024-02-01T14:00:00Z" },
-  { id: "hc-3", experimentId: "e2", cycle: 100, caps: { "B-1": 3.0, "B-1_ret": 96.20241215573449 }, notes: "iron-dissolution: 17ppm", createdAt: "2024-02-01T14:00:00Z" },
-  { id: "hc-4", experimentId: "e2", cycle: 100, caps: { "B-2": 3.0, "B-2_ret": 96.38828791996437 }, notes: "iron-dissolution: 19ppm", createdAt: "2024-02-01T14:00:00Z" },
-  { id: "hc-5", experimentId: "e2", cycle: 100, caps: { "B-3": 3.0, "B-3_ret": 95.98655489934906 }, notes: "iron-dissolution: 17ppm", createdAt: "2024-02-01T14:00:00Z" }
+  { id: "hc-0", experimentId: "e2", cycle: 100, cellName: "A-1", ironDissolution: "29.000000", dischargeCapacity: "3.000000", capacityRetention: "92.173365", createdAt: "2024-02-01T14:00:00Z" },
+  { id: "hc-1", experimentId: "e2", cycle: 100, cellName: "A-2", ironDissolution: "28.000000", dischargeCapacity: "3.000000", capacityRetention: "92.697098", createdAt: "2024-02-01T14:00:00Z" },
+  { id: "hc-2", experimentId: "e2", cycle: 100, cellName: "A-3", ironDissolution: "28.000000", dischargeCapacity: "3.000000", capacityRetention: "92.241250", createdAt: "2024-02-01T14:00:00Z" },
+  { id: "hc-3", experimentId: "e2", cycle: 100, cellName: "B-1", ironDissolution: "17.000000", dischargeCapacity: "3.000000", capacityRetention: "96.202412", createdAt: "2024-02-01T14:00:00Z" },
+  { id: "hc-4", experimentId: "e2", cycle: 100, cellName: "B-2", ironDissolution: "19.000000", dischargeCapacity: "3.000000", capacityRetention: "96.388288", createdAt: "2024-02-01T14:00:00Z" },
+  { id: "hc-5", experimentId: "e2", cycle: 100, cellName: "B-3", ironDissolution: "17.000000", dischargeCapacity: "3.000000", capacityRetention: "95.986555", createdAt: "2024-02-01T14:00:00Z" }
 ] as any;

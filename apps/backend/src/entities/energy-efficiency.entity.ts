@@ -30,18 +30,11 @@ export class EnergyEfficiency {
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '充电能量(ce)' })
   ce!: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true, comment: '备注' })
-  notes!: string | null;
-
   // ─── Derived / computed fields (计算字段，解析时写入) ────────────────────
 
   /** 能量效率比 = de / ce */
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '能量效率比 ee=de/ce' })
   ee!: string | null;
-
-  /** 能量效率百分比 = (de / ce) * 100 (%) */
-  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '能量效率 eePct=de/ce*100 (%)' })
-  eePct!: string | null;
 
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;

@@ -11,23 +11,23 @@ const dbUrl = process.env.DATABASE_URL;
 
 const connectionOptions: DataSourceOptions = dbUrl
   ? {
-      type: 'postgres',
-      url: dbUrl,
-      entities: entityList,
-      migrations: ['src/migrations/*{.ts,.js}'],
-      synchronize: false,
-    }
+    type: 'postgres',
+    url: dbUrl,
+    entities: entityList,
+    migrations: ['src/migrations/*{.ts,.js}'],
+    synchronize: false,
+  }
   : {
-      type: 'postgres',
-      host: process.env.DB_HOST ?? 'localhost',
-      port: parseInt(process.env.DB_PORT ?? '5432', 10),
-      username: process.env.DB_USERNAME ?? 'eln',
-      password: process.env.DB_PASSWORD ?? 'eln',
-      database: process.env.DB_NAME ?? 'eln',
-      entities: entityList,
-      migrations: ['src/migrations/*{.ts,.js}'],
-      synchronize: false,
-    };
+    type: 'postgres',
+    host: process.env.DB_HOST ?? 'localhost',
+    port: parseInt(process.env.DB_PORT ?? '5432', 10),
+    username: process.env.DB_USERNAME ?? 'eln',
+    password: process.env.DB_PASSWORD ?? 'eln',
+    database: process.env.DB_NAME ?? 'eln',
+    entities: entityList,
+    migrations: ['src/migrations/*{.ts,.js}'],
+    synchronize: false,
+  };
 
 /**
  * Standalone DataSource used only by the TypeORM CLI:

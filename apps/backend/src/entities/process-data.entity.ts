@@ -144,9 +144,7 @@ export class ProcessData {
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '首圈库比效率 ceFirst=qdFirst/qcFirst*100 (%)' })
   ceFirst!: string | null;
 
-  /** 是否挑选为良品 */
-  @Column({ type: 'boolean', default: false, comment: '是否挑选为良品' })
-  picked!: boolean;
+
 
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;
