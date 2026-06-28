@@ -76,7 +76,7 @@ export function normalizeHeaders(headers: string[]): string[] {
   const result: string[] = [];
   for (let i = 0; i < headers.length; i++) {
     const header = headers[i];
-    let h = String(header ?? '').trim().toLowerCase();
+    const h = String(header ?? '').trim().toLowerCase();
     
     // Direct Chinese -> English translations
     if (h === '电池编号' || h === '电芯编号' || h === '电芯id' || h === '电池id' || h === '电芯名称' || h === '电池名称') {

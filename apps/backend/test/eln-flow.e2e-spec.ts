@@ -19,7 +19,6 @@ describe('ELN full flow (e2e)', () => {
   let app: INestApplication;
   let accessToken: string;
   let projectId: string;
-  let experimentId: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({

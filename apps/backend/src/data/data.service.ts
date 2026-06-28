@@ -62,7 +62,7 @@ export class DataService {
   async uploadWorkbook(buffer: Buffer<ArrayBufferLike>, experimentId: string): Promise<UploadSummary> {
     const workbook = new ExcelJS.Workbook();
     try {
-      // @ts-ignore: ExcelJS typings expect pre-generic Buffer; runtime behavior is identical
+      // @ts-expect-error: ExcelJS typings expect pre-generic Buffer; runtime behavior is identical
       await workbook.xlsx.load(buffer);
     } catch (err) {
       throw new BadRequestException('Could not parse the uploaded file as an Excel workbook.');

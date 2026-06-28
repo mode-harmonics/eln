@@ -74,9 +74,9 @@ async function seed(): Promise<void> {
   }
 
   const editorPasswordHash = await bcrypt.hash('Password123!', 10);
-  let editorUser = await usersRepo.findOne({ where: { email: 'editor@eln.local' } });
-  if (!editorUser) {
-    editorUser = await usersRepo.save(
+  const existingEditor = await usersRepo.findOne({ where: { email: 'editor@eln.local' } });
+  if (!existingEditor) {
+    await usersRepo.save(
       usersRepo.create({
         id: uuid(),
         username: 'editor',

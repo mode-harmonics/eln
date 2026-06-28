@@ -69,7 +69,7 @@ export async function syncSchemaForDevOnly(): Promise<void> {
   });
 
   await ds.initialize();
-  // eslint-disable-next-line no-console
+   
   console.log('Dev schema sync complete (synchronize:true). Destroying connection.');
   await ds.destroy();
 }
