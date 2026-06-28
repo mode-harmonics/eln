@@ -12,6 +12,7 @@ import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { DataSummary } from "../components/DataSummary";
 import { Breadcrumb } from "../components/Breadcrumb";
+import { SkeletonCard } from "../components/Skeleton";
 import { api, ApiError } from "../lib/api";
 import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle } from "../types";
 
@@ -48,16 +49,31 @@ export function ProjectDetail() {
   const [dcrTest, setDcrTest] = useState<DcrTest[]>([]);
   const [fastCharge, setFastCharge] = useState<FastCharge[]>([]);
   const [htCycle, setHtCycle] = useState<HtCycle[]>([]);
+  const [loadedTypes, setLoadedTypes] = useState<string[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
+
+  const recordOptions = React.useMemo(() => [
+    { value: "ProcessData", label: t("process_data"), permission: "data_process:write" },
+    { value: "CalendarLife", label: t("calendar_life"), permission: "data_calendar:write" },
+    { value: "StorageSwelling", label: t("storage_swelling"), permission: "data_swelling:write" },
+    { value: "EnergyEfficiency", label: t("energy_efficiency"), permission: "data_efficiency:write" },
+    { value: "DcrTest", label: t("dcr_test"), permission: "data_dcr:write" },
+    { value: "FastCharge", label: t("fast_charge"), permission: "data_fastcharge:write" },
+    { value: "HtCycle", label: t("ht_cycle"), permission: "data_htcycle:write" },
+  ].filter((opt) => hasPermission("experiments:write") || hasPermission("data:write") || hasPermission(opt.permission)), [t, hasPermission]);
 
   useEffect(() => {
     if (!projectId) return;
+    let cancelled = false;
     api.get<Project>(`/api/v1/projects/${projectId}`)
-      .then(setProject)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载项目详情失败"));
+      .then((data) => { if (!cancelled) setProject(data); })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载项目详情失败"); });
+    return () => { cancelled = true; };
   }, [projectId]);
 
   useEffect(() => {
     if (!projectId) return;
+    let cancelled = false;
     setLoading(true);
     setProcessData([]);
     setCalendarLife([]);
@@ -66,6 +82,8 @@ export function ProjectDetail() {
     setDcrTest([]);
     setFastCharge([]);
     setHtCycle([]);
+    setLoadedTypes([]);
+    setDataLoading(true);
 
     const queryParams = new URLSearchParams();
     queryParams.append("page", String(currentPage));
@@ -73,14 +91,19 @@ export function ProjectDetail() {
 
     api.get<{ items: Experiment[]; total: number }>(`/api/v1/projects/${projectId}/experiments?${queryParams.toString()}`)
       .then((res) => {
+        if (cancelled) return;
         const exps = res.items;
         setExperiments(exps);
         setTotalItems(res.total);
 
         const expIds = exps.map((e) => e.id);
-        if (expIds.length === 0) return;
+        if (expIds.length === 0) {
+          setLoadedTypes(["process", "calendar", "swelling", "efficiency", "dcr", "fastcharge", "htcycle"]);
+          setDataLoading(false);
+          return;
+        }
 
-        const dataTypes: Array<{ type: string; setter: (d: any) => void }> = [
+        const dataTypes = [
           { type: "process", setter: setProcessData as any },
           { type: "calendar", setter: setCalendarLife as any },
           { type: "swelling", setter: setStorageSwelling as any },
@@ -90,16 +113,29 @@ export function ProjectDetail() {
           { type: "htcycle", setter: setHtCycle as any },
         ];
 
-        expIds.forEach((expId) => {
-          dataTypes.forEach(({ type, setter }) => {
-            api.get<any[]>(`/api/v1/data/${type}/${expId}`)
-              .then((rows) => setter((prev: any[]) => [...prev, ...rows]))
-              .catch(() => {});
+        let completed = 0;
+        dataTypes.forEach(({ type, setter }) => {
+          Promise.all(
+            expIds.map((expId) =>
+              api.get<any[]>(`/api/v1/data/${type}/${expId}`).catch(() => [] as any[])
+            )
+          ).then((results) => {
+            if (cancelled) return;
+            const allRows = results.flat();
+            setter(allRows);
+            setLoadedTypes((prev) => [...prev, type]);
+            completed++;
+            if (completed === dataTypes.length) {
+              setDataLoading(false);
+            }
           });
         });
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载实验数据失败"))
-      .finally(() => setLoading(false));
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "加载实验数据失败");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [projectId, currentPage, pageSize, refetchTrigger]);
 
   const closeModal = () => {
@@ -189,15 +225,20 @@ export function ProjectDetail() {
       </div>
 
       {activeTab === "summary" ? (
-        <DataSummary
-          processData={processData}
-          calendarLife={calendarLife}
-          storageSwelling={storageSwelling}
-          energyEfficiency={energyEfficiency}
-          dcrTest={dcrTest}
-          fastCharge={fastCharge}
-          htCycle={htCycle}
-        />
+        dataLoading ? (
+          <SkeletonCard rows={5} />
+        ) : (
+          <DataSummary
+            loadedTypes={loadedTypes}
+            processData={processData}
+            calendarLife={calendarLife}
+            storageSwelling={storageSwelling}
+            energyEfficiency={energyEfficiency}
+            dcrTest={dcrTest}
+            fastCharge={fastCharge}
+            htCycle={htCycle}
+          />
+        )
       ) : (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -210,10 +251,15 @@ export function ProjectDetail() {
                 setViewMode={setViewMode}
                 className="hidden sm:flex"
               />
-              {hasPermission("projects:write") && hasPermission("data:write") && (
+              {hasPermission("projects:write") && recordOptions.length > 0 && (
                 <Button
                   size="sm"
-                  onClick={() => setIsModalOpen(true)}
+                  onClick={() => {
+                    setIsModalOpen(true);
+                    if (recordOptions.length > 0) {
+                      setModalRecordType(recordOptions[0].value);
+                    }
+                  }}
                 >
                   {t("new_record")}
                 </Button>
@@ -353,13 +399,9 @@ export function ProjectDetail() {
               className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
               disabled={submitting}
             >
-              <option value="ProcessData">{t("process_data")}</option>
-              <option value="CalendarLife">{t("calendar_life")}</option>
-              <option value="StorageSwelling">{t("storage_swelling")}</option>
-              <option value="EnergyEfficiency">{t("energy_efficiency")}</option>
-              <option value="DcrTest">{t("dcr_test")}</option>
-              <option value="FastCharge">{t("fast_charge")}</option>
-              <option value="HtCycle">{t("ht_cycle")}</option>
+              {recordOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           </div>
 

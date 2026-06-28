@@ -14,12 +14,32 @@ import {
   Settings2,
   X,
   HelpCircle,
+  Loader2,
 } from "lucide-react";
+import { usePermissions } from "../hooks/usePermissions";
 
 interface HeatmapCellProps {
   value: number;
   isPositiveGood: boolean;
 }
+
+// Maps metric keys to the data type string used in loadedTypes tracking
+const METRIC_TO_TYPE: Record<string, string> = {
+  qc_1st: "process",
+  qd_1st: "process",
+  ce_1st: "process",
+  cal_retention: "calendar",
+  cal_recovery: "calendar",
+  cal_ddcr_pct: "calendar",
+  cal_cdcr_pct: "calendar",
+  gas_volume: "swelling",
+  energy_eff: "efficiency",
+  dcr_discharge: "dcr",
+  dcr_charge: "dcr",
+  fc_time: "fastcharge",
+  cycle_retention: "htcycle",
+  iron_ppm: "htcycle",
+};
 
 const HeatmapCell: React.FC<HeatmapCellProps> = ({ value, isPositiveGood }) => {
   const isPositive = value > 0;
@@ -196,6 +216,7 @@ const ExpandedRowDetails: React.FC<{
 
 export const DataSummary: React.FC<SummaryDataProps> = (props) => {
   const { t } = useTranslation();
+  const { hasPermission } = usePermissions();
   const [baseGroup, setBaseGroup] = useState<string>("");
   const [groupingStrategy, setGroupingStrategy] = useState<"prefix" | "custom">(
     "prefix",
@@ -326,122 +347,95 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
       const items = ssByCell[cellName].sort((a, b) => a.dayCount - b.dayCount);
       const latest = items[items.length - 1];
       if (latest && latest.dayCount > 0) {
-        addMetric(g, "gas_volume", cellName, parseFloat(latest.vg || "0"));
+        addMetric(g, "gas_volume", cellName, parseFloat(latest.gasVolume || "0"));
       }
     });
 
-    // 4. Energy Efficiency
-    props.energyEfficiency.forEach((d) => {
+    props.energyEfficiency.forEach((d: any) => {
       const g = getGroupName(d.cellName, groupingStrategy, customGrouping);
-      addMetric(g, "energy_eff", d.cellName, parseFloat(d.eePct || "0"));
+      addMetric(g, "energy_eff", d.cellName, parseFloat(d.eePct || d.ee || "0"));
     });
 
-    // 5. DCR Test
-    props.dcrTest.forEach((d) => {
+    props.dcrTest.forEach((d: any) => {
       const g = getGroupName(d.cellName, groupingStrategy, customGrouping);
-      addMetric(
-        g,
-        "dcr_discharge",
-        d.cellName,
-        parseFloat(d.ddcr || "0") * 1000,
-      );
-      addMetric(g, "dcr_charge", d.cellName, parseFloat(d.cdcr || "0") * 1000);
+      if (d.ddcr) addMetric(g, "dcr_discharge", d.cellName, parseFloat(d.ddcr));
+      if (d.cdcr) addMetric(g, "dcr_charge", d.cellName, parseFloat(d.cdcr));
     });
 
-    // 6. Fast Charge
-    props.fastCharge.forEach((d) => {
+    props.fastCharge.forEach((d: any) => {
       const g = getGroupName(d.cellName, groupingStrategy, customGrouping);
-      addMetric(
-        g,
-        "fc_time",
-        d.cellName,
-        parseFloat(d.computedFastChargeTime || d.providedFastChargeTime || "0"),
-      );
+      addMetric(g, "fc_time", d.cellName, parseFloat(d.computedFastChargeTime || d.fcTime || "0"));
     });
 
-    // 7. HT Cycle
-    props.htCycle.forEach((d) => {
-      if (!d.caps) return;
-      const cellNames = Object.keys(d.caps).filter((k) => !k.endsWith("_ret"));
-      cellNames.forEach((cellName) => {
-        const g = getGroupName(cellName, groupingStrategy, customGrouping);
-        const retKey = `${cellName}_ret`;
-        if (d.caps[retKey] !== undefined) {
-          addMetric(g, "cycle_retention", cellName, d.caps[retKey]);
+    // HtCycle — caps is a Record<string, number> keyed by cellName
+    const htByCell: Record<string, any[]> = {};
+    props.htCycle.forEach((d: any) => {
+      const cellNames = d.caps ? Object.keys(d.caps).filter((k: string) => !k.endsWith("_ret")) : [];
+      cellNames.forEach((cn: string) => {
+        if (!htByCell[cn]) htByCell[cn] = [];
+        htByCell[cn].push(d);
+      });
+    });
+    Object.keys(htByCell).forEach((cellName) => {
+      const g = getGroupName(cellName, groupingStrategy, customGrouping);
+      const sorted = htByCell[cellName].sort((a: any, b: any) => a.cycle - b.cycle);
+      const latest = sorted[sorted.length - 1];
+      if (latest && latest.cycle > 0) {
+        const retentionKey = cellName + "_ret";
+        const retention = latest.caps?.[retentionKey];
+        if (retention != null) {
+          addMetric(g, "cycle_retention", cellName, retention);
         }
-
-        if (d.notes && d.notes.includes("iron-dissolution")) {
-          const match = d.notes.match(/iron-dissolution:\s*([\d.]+)ppm/);
-          if (match && match[1]) {
-            addMetric(g, "iron_ppm", cellName, parseFloat(match[1]));
-          }
-        }
+      }
+      sorted.forEach((d) => {
+        const match = d.notes?.match(/iron-dissolution:\s*([\d.]+)ppm/);
+        if (match && match[1]) addMetric(g, "iron_ppm", cellName, parseFloat(match[1]));
       });
     });
 
     const computedMetrics: Record<string, Record<string, MetricStat>> = {};
     const groupsSet = new Set<string>();
-
     Object.keys(rawMetrics).forEach((metricKey) => {
       computedMetrics[metricKey] = {};
       Object.keys(rawMetrics[metricKey]).forEach((group) => {
         groupsSet.add(group);
         const stat = calculateCFR21(rawMetrics[metricKey][group]);
-        if (stat) {
-          computedMetrics[metricKey][group] = stat;
-        }
+        if (stat) computedMetrics[metricKey][group] = stat;
       });
     });
-
-    const groups = Array.from(groupsSet).sort();
-    return { computedMetrics, groups };
+    return { computedMetrics, groups: Array.from(groupsSet).sort() };
   }, [props, groupingStrategy, customGrouping]);
 
-  const activeBaseGroup =
-    baseGroup || (metrics.groups.length > 0 ? metrics.groups[0] : "");
+  const groupsToUse = useMemo(() => {
+    if (metrics.groups.length > 0) return metrics.groups;
+    const groupsSet = new Set<string>();
+    allCellNames.forEach((name) => groupsSet.add(getGroupName(name, groupingStrategy, customGrouping)));
+    return Array.from(groupsSet).sort();
+  }, [metrics.groups, allCellNames, groupingStrategy, customGrouping]);
+
+  const activeBaseGroup = baseGroup || (groupsToUse.length > 0 ? groupsToUse[0] : "");
 
   const metricDefs = [
     { key: "qc_1st", label: t("metric_qc_1st"), isPositiveGood: true },
     { key: "qd_1st", label: t("metric_qd_1st"), isPositiveGood: true },
     { key: "ce_1st", label: t("metric_ce_1st"), isPositiveGood: true },
-    {
-      key: "cal_retention",
-      label: t("metric_cal_retention"),
-      isPositiveGood: true,
-    },
-    {
-      key: "cal_recovery",
-      label: t("metric_cal_recovery"),
-      isPositiveGood: true,
-    },
-    {
-      key: "cal_ddcr_pct",
-      label: t("metric_cal_ddcr_pct"),
-      isPositiveGood: false,
-    },
-    {
-      key: "cal_cdcr_pct",
-      label: t("metric_cal_cdcr_pct"),
-      isPositiveGood: false,
-    },
+    { key: "cal_retention", label: t("metric_cal_retention"), isPositiveGood: true },
+    { key: "cal_recovery", label: t("metric_cal_recovery"), isPositiveGood: true },
+    { key: "cal_ddcr_pct", label: t("metric_cal_ddcr_pct"), isPositiveGood: false },
+    { key: "cal_cdcr_pct", label: t("metric_cal_cdcr_pct"), isPositiveGood: false },
     { key: "gas_volume", label: t("metric_gas_volume"), isPositiveGood: false },
     { key: "energy_eff", label: t("metric_energy_eff"), isPositiveGood: true },
-    {
-      key: "dcr_discharge",
-      label: t("metric_dcr_discharge"),
-      isPositiveGood: false,
-    },
+    { key: "dcr_discharge", label: t("metric_dcr_discharge"), isPositiveGood: false },
     { key: "dcr_charge", label: t("metric_dcr_charge"), isPositiveGood: false },
     { key: "fc_time", label: t("metric_fc_time"), isPositiveGood: false },
-    {
-      key: "cycle_retention",
-      label: t("metric_cycle_retention"),
-      isPositiveGood: true,
-    },
+    { key: "cycle_retention", label: t("metric_cycle_retention"), isPositiveGood: true },
     { key: "iron_ppm", label: t("metric_iron_ppm"), isPositiveGood: false },
-  ];
+  ].filter((def) => {
+    const type = METRIC_TO_TYPE[def.key];
+    return hasPermission("experiments:read") || hasPermission("data:read") || hasPermission(`data_${type}:read`);
+  });
 
-  if (metrics.groups.length === 0) return null;
+  if (groupsToUse.length === 0) return null;
 
   return (
     <div className="bg-white border border-gray-200 rounded shadow-sm mb-8 overflow-hidden">
@@ -460,19 +454,14 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
             <select
               className="text-xs border-none bg-transparent font-medium text-gray-900 focus:ring-0 cursor-pointer p-0 pr-4"
               value={groupingStrategy}
-              onChange={handleStrategyChange}
+              onChange={(e) => {
+                setGroupingStrategy(e.target.value as "prefix" | "custom");
+                if (e.target.value === "custom") setIsGroupModalOpen(true);
+              }}
             >
               <option value="prefix">By Prefix</option>
               <option value="custom">Custom</option>
             </select>
-            {groupingStrategy === "custom" && (
-              <button
-                onClick={() => setIsGroupModalOpen(true)}
-                className="ml-2 px-2 py-1 text-[10px] font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors uppercase"
-              >
-                {t("edit_groups")}
-              </button>
-            )}
           </div>
           <div className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-200 rounded-md shadow-sm w-full sm:w-auto">
             <label className="text-[10px] font-medium text-gray-500 whitespace-nowrap uppercase">
@@ -483,7 +472,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
               value={activeBaseGroup}
               onChange={(e) => setBaseGroup(e.target.value)}
             >
-              {metrics.groups.map((g) => (
+              {groupsToUse.map((g) => (
                 <option key={g} value={g}>
                   {g}
                 </option>
@@ -495,96 +484,85 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
 
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-white">
-            <tr>
-              <th className="w-8 px-2 py-3 border-r border-gray-100"></th>
-              <th className="px-6 py-3 text-left text-[10px] font-semibold text-gray-900 uppercase tracking-wider border-r border-gray-100">
-                {t("metric")}
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="w-8"></th>
+              <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider border-r border-gray-100">
+                {t("metric_name")}
               </th>
-              <th className="px-6 py-3 text-center text-[10px] font-semibold text-gray-900 uppercase tracking-wider border-r border-gray-100 bg-[#f8fafc]">
-                {t("base")}: {activeBaseGroup} ({t("mean")})
+              <th className="px-6 py-3 text-center text-[10px] font-bold text-[#1d74f5] uppercase tracking-wider border-r border-gray-100 bg-[#f0f7ff]/50">
+                {activeBaseGroup} ({t("baseline")})
               </th>
-              {metrics.groups
+              {groupsToUse
                 .filter((g) => g !== activeBaseGroup)
                 .map((g) => (
                   <th
                     key={g}
-                    className="px-6 py-3 text-center text-[10px] font-semibold text-gray-900 uppercase tracking-wider border-r border-gray-100"
+                    className="px-6 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider border-r border-gray-100"
                   >
-                    {g} vs {activeBaseGroup}
+                    {g} ({t("deviation")})
                   </th>
                 ))}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {metricDefs.map((def) => {
-              const baseStat =
-                metrics.computedMetrics[def.key]?.[activeBaseGroup];
-              const hasAnyData =
-                Object.keys(metrics.computedMetrics[def.key] || {}).length > 0;
+              const baseStat = metrics.computedMetrics[def.key]?.[activeBaseGroup];
+              const dataType = METRIC_TO_TYPE[def.key];
+              const isRowLoading = props.loadedTypes ? !props.loadedTypes.includes(dataType) : false;
+              const hasAnyData = Object.keys(metrics.computedMetrics[def.key] || {}).length > 0;
 
-              if (!hasAnyData) return null;
-
+              if (!hasAnyData && !isRowLoading) return null;
               const isExpanded = expandedRows.has(def.key);
 
               return (
                 <React.Fragment key={def.key}>
                   <tr
                     className="hover:bg-gray-50 transition-colors cursor-pointer group"
-                    onClick={() => toggleRow(def.key)}
+                    onClick={() => setExpandedRows((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(def.key)) next.delete(def.key); else next.add(def.key);
+                      return next;
+                    })}
                   >
-                    <td className="px-2 py-3 border-r border-gray-100 text-gray-400 group-hover:text-gray-600 transition-colors text-center w-8">
-                      {isExpanded ? (
-                        <ChevronDown className="w-4 h-4 mx-auto" />
-                      ) : (
-                        <ChevronRight className="w-4 h-4 mx-auto" />
-                      )}
+                    <td className="px-2 py-3 border-r border-gray-100 text-gray-400 text-center">
+                      {isExpanded ? <ChevronDown className="w-4 h-4 mx-auto" /> : <ChevronRight className="w-4 h-4 mx-auto" />}
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap text-xs font-medium text-gray-900 border-r border-gray-100">
                       {def.label}
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap text-xs text-center text-[#1d74f5] font-mono font-semibold border-r border-gray-100 bg-[#f8fafc]">
-                      {baseStat ? baseStat.finalMean.toFixed(2) : "-"}
+                      {isRowLoading ? (
+                        <div className="w-12 h-4 bg-gray-200 animate-pulse rounded mx-auto"></div>
+                      ) : baseStat ? (
+                        baseStat.finalMean.toFixed(2)
+                      ) : (
+                        "-"
+                      )}
                     </td>
-                    {metrics.groups
+                    {groupsToUse
                       .filter((g) => g !== activeBaseGroup)
                       .map((g) => {
-                        const targetStat =
-                          metrics.computedMetrics[def.key]?.[g];
-                        if (!targetStat || !baseStat) {
+                        if (isRowLoading) {
                           return (
-                            <td
-                              key={g}
-                              className="px-6 py-3 whitespace-nowrap text-xs text-center text-gray-400 border-r border-gray-100"
-                            >
-                              -
+                            <td key={g} className="px-6 py-3 whitespace-nowrap text-xs text-center border-r border-gray-100 bg-gray-50">
+                              <div className="w-12 h-4 bg-gray-100 animate-pulse rounded mx-auto"></div>
                             </td>
                           );
                         }
-                        const dev = calculateRelativeDeviation(
-                          targetStat.finalMean,
-                          baseStat.finalMean,
-                        );
-                        return (
-                          <HeatmapCell
-                            key={g}
-                            value={dev}
-                            isPositiveGood={def.isPositiveGood}
-                          />
-                        );
+                        const targetStat = metrics.computedMetrics[def.key]?.[g];
+                        if (!targetStat || !baseStat) {
+                          return <td key={g} className="px-6 py-3 text-center text-gray-400 border-r border-gray-100">-</td>;
+                        }
+                        return <HeatmapCell key={g} value={calculateRelativeDeviation(targetStat.finalMean, baseStat.finalMean)} isPositiveGood={def.isPositiveGood} />;
                       })}
                   </tr>
                   {isExpanded && (
                     <tr>
-                      <td
-                        colSpan={metrics.groups.length + 2}
-                        className="p-0 border-b border-gray-200"
-                      >
+                      <td colSpan={groupsToUse.length + 2} className="p-0 border-b border-gray-200">
                         <ExpandedRowDetails
-                          groups={metrics.groups}
-                          computedMetrics={
-                            metrics.computedMetrics[def.key] || {}
-                          }
+                          groups={groupsToUse}
+                          computedMetrics={metrics.computedMetrics[def.key] || {}}
                         />
                       </td>
                     </tr>

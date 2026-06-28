@@ -9,10 +9,12 @@ export function Profile() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     api.get<any>("/api/v1/users/me")
-      .then(setProfile)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载个人资料失败"))
-      .finally(() => setLoading(false));
+      .then((data) => { if (!cancelled) setProfile(data); })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载个人资料失败"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   if (loading) {

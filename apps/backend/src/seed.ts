@@ -22,7 +22,10 @@ const ROLE_DEFS: Array<{ name: string; permissionList: string[] }> = [
   },
   {
     name: 'Editor',
-    permissionList: ['projects:read', 'experiments:read', 'experiments:write', 'data:read', 'data:write'],
+    permissionList: [
+      'projects:read', 'experiments:read', 'experiments:write',
+      'data:read', 'data:write',
+    ],
   },
   {
     name: 'Viewer',

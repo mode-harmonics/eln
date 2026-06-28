@@ -54,6 +54,7 @@ export function Users() {
   };
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     const queryParams = new URLSearchParams();
     queryParams.append("page", String(currentPage));
@@ -64,12 +65,10 @@ export function Users() {
     }
 
     api.get<{ items: any[]; total: number }>(`/api/v1/users?${queryParams.toString()}`)
-      .then((res) => {
-        setUsers(res.items);
-        setTotalItems(res.total);
-      })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载用户数据失败"))
-      .finally(() => setLoading(false));
+      .then((res) => { if (!cancelled) { setUsers(res.items); setTotalItems(res.total); } })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载用户数据失败"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [currentPage, pageSize, searchQuery, refetchTrigger]);
 
   const handleCreateUser = async (e: React.FormEvent) => {

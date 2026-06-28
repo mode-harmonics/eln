@@ -8,6 +8,7 @@ export interface SummaryDataProps {
   dcrTest: DcrTest[];
   fastCharge: FastCharge[];
   htCycle: HtCycle[];
+  loadedTypes?: string[];
 }
 
 export function getGroupName(

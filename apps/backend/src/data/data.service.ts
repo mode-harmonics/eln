@@ -9,6 +9,7 @@ import { FastCharge } from '../entities/fast-charge.entity';
 import { HtCycle } from '../entities/ht-cycle.entity';
 import { ProcessData } from '../entities/process-data.entity';
 import { StorageSwelling } from '../entities/storage-swelling.entity';
+import { Experiment } from '../entities/experiment.entity';
 import { ParserRegistry } from './parsers/parser.registry';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
@@ -47,6 +48,10 @@ export class DataService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly parserRegistry: ParserRegistry,
   ) {}
+
+  async getExperiment(id: string): Promise<Experiment | null> {
+    return this.dataSource.getRepository(Experiment).findOne({ where: { id } });
+  }
 
   /**
    * Loads the uploaded workbook with ExcelJS, runs every sheet through the

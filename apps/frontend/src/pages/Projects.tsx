@@ -42,6 +42,7 @@ export function Projects() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     const queryParams = new URLSearchParams();
     queryParams.append("page", String(currentPage));
@@ -51,12 +52,10 @@ export function Projects() {
     }
 
     api.get<PaginatedProjects>(`/api/v1/projects?${queryParams.toString()}`)
-      .then((res) => {
-        setProjects(res.items);
-        setTotalItems(res.total);
-      })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载失败"))
-      .finally(() => setLoading(false));
+      .then((res) => { if (!cancelled) { setProjects(res.items); setTotalItems(res.total); } })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载失败"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [currentPage, searchQuery, refetchTrigger]);
 
   const handleCreateProject = async (e: React.FormEvent) => {

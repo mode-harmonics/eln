@@ -17,14 +17,26 @@ import { Breadcrumb } from "../components/Breadcrumb";
 import { Button } from "../components/Button";
 import { api, ApiError } from "../lib/api";
 import type { Experiment } from "../types";
+import { usePermissions } from "../hooks/usePermissions";
 
 interface ExperimentDetail extends Experiment {
   attachments?: unknown[];
   collaborators?: unknown[];
 }
 
+const ASSAY_TYPE_TO_PERMISSION: Record<string, string> = {
+  ProcessData: "process",
+  CalendarLife: "calendar",
+  StorageSwelling: "swelling",
+  EnergyEfficiency: "efficiency",
+  DcrTest: "dcr",
+  FastCharge: "fastcharge",
+  HtCycle: "htcycle",
+};
+
 export function ExperimentDetail() {
   const { t } = useTranslation();
+  const { hasPermission } = usePermissions();
   const { experimentId } = useParams<{ experimentId: string }>();
   const [experiment, setExperiment] = useState<ExperimentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,10 +44,12 @@ export function ExperimentDetail() {
 
   useEffect(() => {
     if (!experimentId) return;
+    let cancelled = false;
     api.get<ExperimentDetail>(`/api/v1/experiments/${experimentId}`)
-      .then(setExperiment)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载失败"))
-      .finally(() => setLoading(false));
+      .then((data) => { if (!cancelled) setExperiment(data); })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载失败"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [experimentId]);
 
   if (loading) {
@@ -51,16 +65,21 @@ export function ExperimentDetail() {
   }
 
   const assayType = experiment.metadata?.assayType || experiment.metadata?.recordType;
+  const permissionType = assayType ? ASSAY_TYPE_TO_PERMISSION[assayType] : null;
+  const hasReadPermission =
+    !permissionType ||
+    hasPermission("experiments:read") ||
+    hasPermission(`data_${permissionType}:read`);
 
   const renderTable = () => {
     switch (assayType) {
-      case "ProcessData":    return <ProcessDataTable experimentId={experiment.id} />;
-      case "CalendarLife":   return <CalendarLifeTable experimentId={experiment.id} />;
+      case "ProcessData": return <ProcessDataTable experimentId={experiment.id} />;
+      case "CalendarLife": return <CalendarLifeTable experimentId={experiment.id} />;
       case "StorageSwelling": return <StorageSwellingTable experimentId={experiment.id} />;
       case "EnergyEfficiency": return <EnergyEfficiencyTable experimentId={experiment.id} />;
-      case "DcrTest":        return <DcrTestTable experimentId={experiment.id} />;
-      case "FastCharge":     return <FastChargeTable experimentId={experiment.id} />;
-      case "HtCycle":        return <HtCycleTable experimentId={experiment.id} />;
+      case "DcrTest": return <DcrTestTable experimentId={experiment.id} />;
+      case "FastCharge": return <FastChargeTable experimentId={experiment.id} />;
+      case "HtCycle": return <HtCycleTable experimentId={experiment.id} />;
       default:
         return (
           <div className="p-8 text-center text-sm text-gray-500">
@@ -108,20 +127,26 @@ export function ExperimentDetail() {
         <div className="h-px bg-gray-200 w-full mt-6"></div>
       </div>
 
-      <div className="space-y-8">
-        <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} />
+      {hasReadPermission ? (
+        <div className="space-y-8">
+          <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} />
 
-        {/* Data Table Section */}
-        <div className="bg-white border border-gray-200 rounded shadow-sm">
-          <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="text-[15px] font-semibold text-gray-900">Data Table</h2>
-            <Button variant="text">
-              <Download className="w-4 h-4" />
-            </Button>
+          {/* Data Table Section */}
+          <div className="bg-white border border-gray-200 rounded shadow-sm">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+              <h2 className="text-[15px] font-semibold text-gray-900">Data Table</h2>
+              <Button variant="text">
+                <Download className="w-4 h-4" />
+              </Button>
+            </div>
+            {renderTable()}
           </div>
-          {renderTable()}
         </div>
-      </div>
+      ) : (
+        <div className="p-8 text-center text-sm text-red-500 bg-red-50/50 rounded-lg border border-red-100">
+          You do not have permission to view this battery-science business data.
+        </div>
+      )}
     </div>
   );
 }

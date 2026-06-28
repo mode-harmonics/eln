@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Shield, Loader2 } from "lucide-react";
+import { Shield, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
@@ -28,6 +28,7 @@ export function Roles() {
 
   const [permissionList, setPermissionList] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (editingRole) {
@@ -38,6 +39,7 @@ export function Roles() {
   }, [editingRole]);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     const queryParams = new URLSearchParams();
     queryParams.append("page", String(currentPage));
@@ -47,12 +49,10 @@ export function Roles() {
     }
 
     api.get<{ items: Role[]; total: number }>(`/api/v1/roles?${queryParams.toString()}`)
-      .then((res) => {
-        setRoles(res.items);
-        setTotalItems(res.total);
-      })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载角色列表失败"))
-      .finally(() => setLoading(false));
+      .then((res) => { if (!cancelled) { setRoles(res.items); setTotalItems(res.total); } })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载角色列表失败"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [currentPage, pageSize, searchQuery]);
 
   const handleUpdateRole = async (e: React.FormEvent) => {
@@ -71,6 +71,117 @@ export function Roles() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // ── Permission row helper ──
+  const permRow = (key: string, label: string) => {
+    const isFC = permissionList.includes(`${key}:*`);
+    const isRead = isFC || permissionList.includes(`${key}:read`);
+    const isWrite = isFC || permissionList.includes(`${key}:write`);
+    const toggle = (action: string, checked: boolean) => {
+      const perm = `${key}:${action}`;
+      if (checked) setPermissionList((prev) => [...prev, perm]);
+      else setPermissionList((prev) => prev.filter((p) => p !== perm));
+    };
+    return (
+      <tr key={key} className="hover:bg-gray-50/50">
+        <td className="px-4 py-3 text-sm font-medium text-gray-700">{label}</td>
+        <td className="px-4 py-3 text-center">
+          <input type="checkbox" checked={isRead} disabled={isFC || editingRole?.name === "Owner"} onChange={(e) => toggle("read", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+        </td>
+        <td className="px-4 py-3 text-center">
+          <input type="checkbox" checked={isWrite} disabled={isFC || editingRole?.name === "Owner"} onChange={(e) => toggle("write", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+        </td>
+        <td className="px-4 py-3 text-center">
+          <input type="checkbox" checked={isFC} disabled={editingRole?.name === "Owner"} onChange={(e) => toggle("*", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+        </td>
+      </tr>
+    );
+  };
+
+  // ── Data (7 business tables) — expandable group ──
+  const dataGroup = () => {
+    const groupKey = "data_group";
+    const isExpanded = expandedGroups.has(groupKey);
+    const toggleGroup = () =>
+      setExpandedGroups((prev) => {
+        const next = new Set(prev);
+        if (next.has(groupKey)) next.delete(groupKey);
+        else next.add(groupKey);
+        return next;
+      });
+
+    // Parent row uses "data" key — when checked, auto-sets all child permissions
+    const parentKey = "data";
+    const parentFC = permissionList.includes(`${parentKey}:*`);
+    const parentRead = parentFC || permissionList.includes(`${parentKey}:read`);
+    const parentWrite = parentFC || permissionList.includes(`${parentKey}:write`);
+    const handleParent = (action: string, checked: boolean) => {
+      const perm = `${parentKey}:${action}`;
+      const childKeys = [
+        "data_process", "data_calendar", "data_swelling", "data_efficiency",
+        "data_dcr", "data_fastcharge", "data_htcycle",
+      ];
+      if (checked) {
+        const additions = [perm, ...childKeys.map((c) => `${c}:${action}`)];
+        setPermissionList((prev) => [...new Set([...prev, ...additions])]);
+      } else {
+        setPermissionList((prev) => prev.filter((p) => p !== perm && !childKeys.some((c) => p.startsWith(c))));
+      }
+    };
+
+    const childResources = [
+      { key: "data_process",    label: t("process_data") },
+      { key: "data_calendar",   label: t("calendar_life") },
+      { key: "data_swelling",   label: t("storage_swelling") },
+      { key: "data_efficiency", label: t("energy_efficiency") },
+      { key: "data_dcr",        label: t("dcr_test") },
+      { key: "data_fastcharge", label: t("fast_charge") },
+      { key: "data_htcycle",    label: t("ht_cycle") },
+    ];
+
+    return (
+      <React.Fragment key="data-group">
+        {/* Parent / group header row */}
+        <tr className="bg-blue-50/60 hover:bg-blue-100/50 cursor-pointer select-none" onClick={toggleGroup}>
+          <td className="px-4 py-3 text-sm font-semibold text-[#1d74f5]">
+            <span className="inline-flex items-center gap-1.5">
+              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              {t("data")}
+            </span>
+          </td>
+          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" checked={parentRead} disabled={parentFC || editingRole?.name === "Owner"} onChange={(e) => handleParent("read", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+          </td>
+          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" checked={parentWrite} disabled={parentFC || editingRole?.name === "Owner"} onChange={(e) => handleParent("write", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+          </td>
+          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" checked={parentFC} disabled={editingRole?.name === "Owner"} onChange={(e) => handleParent("*", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+          </td>
+        </tr>
+
+        {/* Child rows */}
+        {isExpanded && childResources.map((r) => {
+          const isFC = permissionList.includes(`${r.key}:*`);
+          const isRead = isFC || permissionList.includes(`${r.key}:read`);
+          const isWrite = isFC || permissionList.includes(`${r.key}:write`);
+          const toggle = (action: string, checked: boolean) => {
+            const perm = `${r.key}:${action}`;
+            if (checked) setPermissionList((prev) => [...prev, perm]);
+            else setPermissionList((prev) => prev.filter((p) => p !== perm));
+          };
+          return (
+            <tr key={r.key} className="bg-gray-50/80 hover:bg-gray-100/60 border-l-2 border-[#1d74f5]/30">
+              <td className="pl-9 pr-4 py-2.5 text-sm text-gray-600">{r.label}</td>
+              <td className="px-4 py-2.5 text-center"><input type="checkbox" checked={isRead} disabled={isFC || editingRole?.name === "Owner"} onChange={(e) => toggle("read", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" /></td>
+              <td className="px-4 py-2.5 text-center"><input type="checkbox" checked={isWrite} disabled={isFC || editingRole?.name === "Owner"} onChange={(e) => toggle("write", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" /></td>
+              <td className="px-4 py-2.5 text-center"><input type="checkbox" checked={isFC} disabled={editingRole?.name === "Owner"} onChange={(e) => toggle("*", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" /></td>
+            </tr>
+          );
+        })}
+      </React.Fragment>
+    );
   };
 
   if (loading) {
@@ -149,7 +260,7 @@ export function Roles() {
                         </div>
                       </td>
                       {hasPermission("roles:write") && (
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <td className="text-[13px] px-6 py-4 whitespace-nowrap text-right">
                           <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                             {t("edit_permissions")}
                           </Button>
@@ -182,7 +293,7 @@ export function Roles() {
                   {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No permissions configured"}
                 </p>
                 {hasPermission("roles:write") && (
-                  <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
+                  <div className="text-[13px] mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
                     <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="ml-auto !text-[#1d74f5] hover:!text-blue-700">
                       {t("edit_permissions")}
                     </Button>
@@ -227,61 +338,16 @@ export function Roles() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-100">
-                      {[
-                        { key: "projects", label: t("projects") },
-                        { key: "experiments", label: t("experiments") },
-                        { key: "data", label: t("data_summary") },
-                        { key: "users", label: t("user_management") },
-                        { key: "roles", label: t("role_management") },
-                      ].map((resource) => {
-                        const isFullControl = permissionList.includes(`${resource.key}:*`);
-                        const isRead = isFullControl || permissionList.includes(`${resource.key}:read`);
-                        const isWrite = isFullControl || permissionList.includes(`${resource.key}:write`);
-
-                        const handleToggle = (action: string, checked: boolean) => {
-                          const perm = `${resource.key}:${action}`;
-                          if (checked) {
-                            setPermissionList((prev) => [...prev, perm]);
-                          } else {
-                            setPermissionList((prev) => prev.filter((p) => p !== perm));
-                          }
-                        };
-
-                        return (
-                          <tr key={resource.key} className="hover:bg-gray-50/50">
-                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-700">
-                              {resource.label}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center">
-                              <input
-                                type="checkbox"
-                                checked={isRead}
-                                disabled={isFullControl || editingRole?.name === "Owner"}
-                                onChange={(e) => handleToggle("read", e.target.checked)}
-                                className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
-                              />
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center">
-                              <input
-                                type="checkbox"
-                                checked={isWrite}
-                                disabled={isFullControl || editingRole?.name === "Owner"}
-                                onChange={(e) => handleToggle("write", e.target.checked)}
-                                className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
-                              />
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-center">
-                              <input
-                                type="checkbox"
-                                checked={isFullControl}
-                                disabled={editingRole?.name === "Owner"}
-                                onChange={(e) => handleToggle("*", e.target.checked)}
-                                className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {/* ── projects ── */}
+                      {permRow("projects", t("projects"))}
+                      {/* ── experiments (simple row) ── */}
+                      {permRow("experiments", t("experiments"))}
+                      {/* ── data (7 business tables, expandable) ── */}
+                      {dataGroup()}
+                      {/* ── users ── */}
+                      {permRow("users", t("user_management"))}
+                      {/* ── roles ── */}
+                      {permRow("roles", t("role_management"))}
                     </tbody>
                   </table>
                 </div>

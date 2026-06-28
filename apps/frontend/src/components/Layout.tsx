@@ -17,6 +17,8 @@ import { cn } from "../lib/utils";
 import { Dropdown } from "./Dropdown";
 import { api } from "../lib/api";
 import { usePermissions } from "../hooks/usePermissions";
+import { Button } from "./Button";
+import { Logo } from "./Logo";
 
 const NAVIGATION = [
   { nameKey: "projects", href: "/projects", icon: Grid, requiredPermission: "projects:read" },
@@ -37,8 +39,10 @@ export function Layout() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
+    let cancelled = false;
     api.get<any>("/api/v1/users/me")
       .then((data) => {
+        if (cancelled) return;
         setCurrentUser(data);
         if (data?.permissionList) {
           localStorage.setItem("permissionList", JSON.stringify(data.permissionList));
@@ -46,6 +50,7 @@ export function Layout() {
         }
       })
       .catch(() => { });
+    return () => { cancelled = true; };
   }, []);
 
   const handleLogout = () => {
@@ -82,20 +87,15 @@ export function Layout() {
       >
         <div className="flex flex-col shrink-0 px-6 pt-6 pb-4 border-b border-transparent relative z-10">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-red-500 font-bold text-xl tracking-tight flex items-center gap-2">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                <path d="M12 2C6.477 2 2 6.477 2 12c0 1.764.455 3.423 1.252 4.88L2 22l5.12-1.252A9.957 9.957 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm-1 13h-2v-2h2v2zm0-4h-2V7h2v4zm4 4h-2v-2h2v2zm0-4h-2V7h2v4z" />
-              </svg>
-              eln.chat
-            </span>
+            <Logo />
             <Dropdown
               trigger={
-                <button
+                <Button
                   title={displayName}
-                  className="bg-[#f27429] text-white px-2.5 h-7 flex items-center justify-center rounded font-semibold text-xs hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-[#f27429] focus:ring-offset-2 relative z-20 truncate max-w-[95px]"
+                  className="!bg-[#f27429] !text-white !w-7 !h-7 !rounded-full !p-0 !text-xs !font-bold hover:!opacity-90 focus:!ring-[#f27429] shrink-0"
                 >
-                  {displayName}
-                </button>
+                  {initial}
+                </Button>
               }
             >
               <div className="flex items-center gap-3 px-4 py-3 bg-gray-50">
@@ -108,10 +108,7 @@ export function Layout() {
 
               </div>
               <div className="border-t border-gray-100 my-1"></div>
-              <button
-                onClick={toggleLanguage}
-                className="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-              >
+              <Button variant="text" onClick={toggleLanguage} className="w-full !justify-between !px-4 !py-2 !text-sm !text-gray-700 hover:!text-gray-900">
                 <div className="flex items-center gap-3">
                   <Globe className="w-4 h-4 text-gray-500" />
                   {t("language", "Language")}
@@ -119,7 +116,7 @@ export function Layout() {
                 <span className="text-xs text-gray-400">
                   {i18n.language === "zh" ? "EN" : "中文"}
                 </span>
-              </button>
+              </Button>
               <Link
                 to="/profile"
                 className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
@@ -127,13 +124,10 @@ export function Layout() {
                 <User className="w-4 h-4 text-gray-500" />
                 {t("my_profile", "My profile")}
               </Link>
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-              >
+              <Button variant="text" onClick={handleLogout} className="w-full !justify-start !px-4 !py-2 !text-sm !text-gray-700 hover:!text-gray-900">
                 <LogOut className="w-4 h-4 text-gray-500" />
                 {t("sign_out", "Sign out")}
-              </button>
+              </Button>
             </Dropdown>
           </div>
         </div>
@@ -217,17 +211,10 @@ export function Layout() {
       <div className="flex flex-1 flex-col overflow-hidden bg-white">
         {/* Mobile Header */}
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 lg:hidden">
-          <button
-            className="text-gray-500"
-            onClick={() => setSidebarOpen(true)}
-          >
+          <Button variant="text" onClick={() => setSidebarOpen(true)}>
             <Menu className="h-6 w-6" />
-          </button>
-          <div className="flex items-center gap-2">
-            <span className="text-red-500 font-bold tracking-tight">
-              eln.chat
-            </span>
-          </div>
+          </Button>
+          <Logo iconOnly />
         </header>
 
         <main className="flex-1 overflow-y-auto">

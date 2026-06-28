@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/Button";
+import { Logo } from "../components/Logo";
 import { api, ApiError } from "../lib/api";
 
 export function Login() {
@@ -36,14 +37,9 @@ export function Login() {
     <div className="flex min-h-screen items-center justify-center bg-[#f7f8fa] px-4">
       <div className="w-full max-w-md bg-white p-10 border border-gray-200 rounded shadow-sm">
         <div className="text-center mb-8 flex flex-col items-center">
-           <div className="flex items-center gap-2 mb-6">
-              <span className="text-red-500 font-bold text-2xl tracking-tight flex items-center gap-1">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.764.455 3.423 1.252 4.88L2 22l5.12-1.252A9.957 9.957 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm-1 13h-2v-2h2v2zm0-4h-2V7h2v4zm4 4h-2v-2h2v2zm0-4h-2V7h2v4z"/></svg>
-                eln.chat
-              </span>
-           </div>
+           <Logo className="text-2xl mb-6 justify-center" />
           <h2 className="text-2xl font-bold text-gray-900">
-            Sign in to your workspace
+            Electronic Lab Notebook
           </h2>
         </div>
         <form className="space-y-5" onSubmit={handleLogin}>
