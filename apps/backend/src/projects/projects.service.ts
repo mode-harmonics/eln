@@ -5,7 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { Experiment } from '../entities/experiment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
 import { Project } from '../entities/project.entity';
-import { CreateProjectDto, UpdateProjectMembersDto } from './dto';
+import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 
 @Injectable()
 export class ProjectsService {
@@ -114,6 +114,24 @@ export class ProjectsService {
     });
 
     return this.projectsRepo.save(project);
+  }
+
+  async update(id: string, dto: UpdateProjectDto): Promise<Project> {
+    const project = await this.projectsRepo.findOne({ where: { id }, relations: ['creator'] });
+    if (!project) throw new NotFoundException('Project not found.');
+
+    if (dto.name !== undefined) project.name = dto.name;
+    if (dto.description !== undefined) project.description = dto.description;
+    if (dto.status !== undefined) project.status = dto.status;
+
+    return this.projectsRepo.save(project);
+  }
+
+  async remove(id: string): Promise<{ deleted: boolean }> {
+    const project = await this.projectsRepo.findOne({ where: { id } });
+    if (!project) throw new NotFoundException('Project not found.');
+    await this.projectsRepo.remove(project);
+    return { deleted: true };
   }
 
   /**

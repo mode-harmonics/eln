@@ -4,7 +4,7 @@ import { api, ApiError } from "../lib/api";
 
 export function Login() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("pi@eln.local");
+  const [username, setUsername] = useState("pi");
   const [password, setPassword] = useState("Password123!");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,13 +14,13 @@ export function Login() {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.post<{ accessToken: string }>("/api/v1/auth/login", { email, password });
+      const data = await api.post<{ accessToken: string }>("/api/v1/auth/login", { username, password });
       localStorage.setItem("token", data.accessToken);
       localStorage.setItem("auth", "true");
       navigate("/projects");
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.status === 401 ? "邮箱或密码不正确" : err.message);
+        setError(err.status === 401 ? "用户名或密码不正确" : err.message);
       } else {
         setError("网络错误，请稍后重试");
       }
@@ -45,16 +45,16 @@ export function Login() {
         </div>
         <form className="space-y-5" onSubmit={handleLogin}>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
-                Email
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="username">
+                Username
               </label>
               <input
-                id="email"
-                type="email"
+                id="username"
+                type="text"
                 required
                 className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
               />
             </div>
             <div>

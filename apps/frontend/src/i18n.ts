@@ -27,6 +27,8 @@ const resources = {
       status: "Status",
       created: "Created",
       create_new_project: "Create New Project",
+      edit_project: "Edit Project",
+      save: "Save",
       description: "Description",
       cancel: "Cancel",
       create_project: "Create Project",

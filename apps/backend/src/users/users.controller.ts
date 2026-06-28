@@ -33,13 +33,13 @@ export class UsersController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new user.' })
-  async create(@Body() dto: { email: string; fullName: string; roleId?: string }) {
+  async create(@Body() dto: { username: string; email: string; fullName: string; roleId?: string }) {
     return this.usersService.create(dto);
   }
 
   @Put(':id')
   @ApiOperation({ summary: 'Update an existing user.' })
-  async update(@Param('id') id: string, @Body() dto: { email?: string; fullName?: string; roleId?: string; isActive?: boolean }) {
+  async update(@Param('id') id: string, @Body() dto: { username?: string; email?: string; fullName?: string; roleId?: string; isActive?: boolean }) {
     return this.usersService.update(id, dto);
   }
 
@@ -48,4 +48,4 @@ export class UsersController {
   async remove(@Param('id') id: string) {
     return this.usersService.remove(id);
   }
-}
+}

@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CreateProjectDto, UpdateProjectMembersDto } from './dto';
+import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 import { ProjectsService } from './projects.service';
 
 @ApiTags('projects')
@@ -48,6 +48,18 @@ export class ProjectsController {
   @ApiOperation({ summary: 'Create a new project, owned by the current user.' })
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateProjectDto) {
     return this.projectsService.create(user.id, dto);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update a project by ID.' })
+  async update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
+    return this.projectsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a project by ID.' })
+  async remove(@Param('id') id: string) {
+    return this.projectsService.remove(id);
   }
 
   @Put(':id/members')

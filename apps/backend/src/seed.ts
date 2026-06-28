@@ -59,6 +59,7 @@ async function seed(): Promise<void> {
     piUser = await usersRepo.save(
       usersRepo.create({
         id: uuid(),
+        username: 'pi',
         email: 'pi@eln.local',
         passwordHash: piPasswordHash,
         fullName: 'Dr. Alice Chen (PI)',
@@ -66,7 +67,7 @@ async function seed(): Promise<void> {
         isActive: true,
       }),
     );
-    console.log('Created demo user: pi@eln.local / Password123!');
+    console.log('Created demo user: pi / Password123!');
   }
 
   const editorPasswordHash = await bcrypt.hash('Password123!', 10);
@@ -75,6 +76,7 @@ async function seed(): Promise<void> {
     editorUser = await usersRepo.save(
       usersRepo.create({
         id: uuid(),
+        username: 'editor',
         email: 'editor@eln.local',
         passwordHash: editorPasswordHash,
         fullName: 'Bob Tanaka (Editor)',
@@ -82,7 +84,7 @@ async function seed(): Promise<void> {
         isActive: true,
       }),
     );
-    console.log('Created demo user: editor@eln.local / Password123!');
+    console.log('Created demo user: editor / Password123!');
   }
 
   // --- 3. Sample project ---

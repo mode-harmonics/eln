@@ -21,6 +21,7 @@ export function Users() {
 
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
+  const [newUserUsername, setNewUserUsername] = useState("");
   const [newUserRole, setNewUserRole] = useState("");
   const [viewMode, setViewMode] = useViewMode("users_view_mode", "list");
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,9 +68,10 @@ export function Users() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserEmail || !newUserName) return;
+    if (!newUserEmail || !newUserName || !newUserUsername) return;
     try {
       await api.post<any>("/api/v1/users", {
+        username: newUserUsername,
         email: newUserEmail,
         fullName: newUserName,
         roleId: newUserRole || undefined,
@@ -77,6 +79,7 @@ export function Users() {
       setIsModalOpen(false);
       setNewUserEmail("");
       setNewUserName("");
+      setNewUserUsername("");
       setSearchQuery("");
       setSearchInput("");
       setCurrentPage(1);
@@ -90,6 +93,7 @@ export function Users() {
     e.preventDefault();
     if (!editingUser) return;
     const form = e.currentTarget as HTMLFormElement;
+    const username = (form.elements.namedItem("edit-username") as HTMLInputElement).value;
     const email = (form.elements.namedItem("edit-email") as HTMLInputElement).value;
     const name = (form.elements.namedItem("edit-name") as HTMLInputElement).value;
     const roleId = (form.elements.namedItem("edit-role") as HTMLSelectElement).value;
@@ -97,6 +101,7 @@ export function Users() {
 
     try {
       await api.put(`/api/v1/users/${editingUser.id}`, {
+        username,
         email,
         fullName: name,
         roleId: roleId || undefined,
@@ -236,23 +241,25 @@ export function Users() {
                             {user.isActive ? t("active") : t("inactive", "Inactive")}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
-                          <button
-                            onClick={() => {
-                              loadRolesIfNeeded();
-                              setEditingUser(user);
-                              setIsEditModalOpen(true);
-                            }}
-                            className="text-[#1d74f5] hover:text-blue-700 font-medium"
-                          >
-                            {t("edit")}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4 inline" />
-                          </button>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="inline-flex items-center gap-3">
+                            <button
+                              onClick={() => {
+                                loadRolesIfNeeded();
+                                setEditingUser(user);
+                                setIsEditModalOpen(true);
+                              }}
+                              className="text-[#1d74f5] hover:text-blue-700 font-medium"
+                            >
+                              {t("edit")}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -341,6 +348,18 @@ export function Users() {
             </div>
             <form onSubmit={handleUpdateUser} className="p-6 space-y-5">
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-username">
+                  Username
+                </label>
+                <input
+                  id="edit-username"
+                  type="text"
+                  required
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                  defaultValue={editingUser.username}
+                />
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-email">
                   {t("email")}
                 </label>
@@ -425,6 +444,20 @@ export function Users() {
               </button>
             </div>
             <form onSubmit={handleCreateUser} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="username">
+                  Username
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  required
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                  placeholder="e.g. johndoe"
+                  value={newUserUsername}
+                  onChange={(e) => setNewUserUsername(e.target.value)}
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
                   {t("email")}

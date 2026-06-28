@@ -18,6 +18,10 @@ export class User {
   id!: string;
 
   @Index({ unique: true })
+  @Column({ type: 'varchar', length: 64, comment: '用户名' })
+  username!: string;
+
+  @Index({ unique: true })
   @Column({ type: 'varchar', length: 128, comment: '邮箱' })
   email!: string;
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { X, Search, Loader2 } from "lucide-react";
+import { X, Search, Loader2, Edit3, Trash2 } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { cn } from "../lib/utils";
@@ -26,6 +26,13 @@ export function Projects() {
   const [totalItems, setTotalItems] = useState(0);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const [pageSize, setPageSize] = useState(6);
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editStatus, setEditStatus] = useState("Active");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -65,6 +72,36 @@ export function Projects() {
       alert(err instanceof ApiError ? err.message : "创建失败");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleUpdateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProject || !editName.trim()) return;
+    setSaving(true);
+    try {
+      await api.put(`/api/v1/projects/${editingProject.id}`, {
+        name: editName,
+        description: editDesc,
+        status: editStatus,
+      });
+      setIsEditModalOpen(false);
+      setEditingProject(null);
+      setRefetchTrigger((prev) => prev + 1);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "更新失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteProject = async (project: Project) => {
+    if (!window.confirm(`确定要删除项目「${project.name}」吗？`)) return;
+    try {
+      await api.delete(`/api/v1/projects/${project.id}`);
+      setRefetchTrigger((prev) => prev + 1);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "删除失败");
     }
   };
 
@@ -158,6 +195,32 @@ export function Projects() {
                       {project.creator?.fullName || project.createdBy}
                     </span>
                   </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleDeleteProject(project);
+                      }}
+                      className="text-gray-400 hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setEditingProject(project);
+                        setEditName(project.name);
+                        setEditDesc(project.description || "");
+                        setEditStatus(project.status);
+                        setIsEditModalOpen(true);
+                      }}
+                      className="text-gray-400 hover:text-[#1d74f5] transition-colors"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </Link>
             ))}
@@ -177,10 +240,16 @@ export function Projects() {
                       {t("project_name")}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      {t("pi")}
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("status")}
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("created")}
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                      {t("actions")}
                     </th>
                   </tr>
                 </thead>
@@ -199,6 +268,9 @@ export function Projects() {
                           {project.description}
                         </div>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-700">
+                        {project.creator?.fullName || project.createdBy}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${project.status === "Active"
@@ -211,6 +283,32 @@ export function Projects() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-500">
                         {format(new Date(project.createdAt), "MMM d, yyyy")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="inline-flex items-center gap-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingProject(project);
+                              setEditName(project.name);
+                              setEditDesc(project.description || "");
+                              setEditStatus(project.status);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="text-[#1d74f5] hover:text-blue-700 font-medium"
+                          >
+                            {t("edit")}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteProject(project);
+                            }}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -287,6 +385,81 @@ export function Projects() {
                   className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors disabled:opacity-70"
                 >
                   {creating ? "创建中..." : t("create_project")}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isEditModalOpen && editingProject && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-[17px] font-bold text-gray-900">
+                {t("edit_project")}
+              </h2>
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateProject} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="editName">
+                  {t("project_name")}
+                </label>
+                <input
+                  id="editName"
+                  type="text"
+                  required
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="editDesc">
+                  {t("description")}
+                </label>
+                <textarea
+                  id="editDesc"
+                  rows={4}
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="editStatus">
+                  {t("status")}
+                </label>
+                <select
+                  id="editStatus"
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value)}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                >
+                  {t("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors disabled:opacity-70"
+                >
+                  {saving ? "Saving..." : t("save")}
                 </button>
               </div>
             </form>

@@ -10,8 +10,8 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Authenticate with email/password, returns a JWT.' })
+  @ApiOperation({ summary: 'Authenticate with username/password, returns a JWT.' })
   async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto.email, dto.password);
+    return this.authService.login(dto.username, dto.password);
   }
 }

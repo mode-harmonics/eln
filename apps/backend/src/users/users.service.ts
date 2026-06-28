@@ -8,6 +8,7 @@ import * as bcrypt from 'bcrypt';
 
 export interface CurrentUserResult {
   id: string;
+  username: string;
   email: string;
   fullName: string;
   avatar: string | null;
@@ -36,6 +37,7 @@ export class UsersService {
 
     return {
       id: user.id,
+      username: user.username,
       email: user.email,
       fullName: user.fullName,
       avatar: user.avatar,
@@ -61,6 +63,7 @@ export class UsersService {
       const roleMap = new Map(roles.map((r) => [r.id, r.name]));
       return users.map((user) => ({
         id: user.id,
+        username: user.username,
         email: user.email,
         fullName: user.fullName,
         avatar: user.avatar,
@@ -83,7 +86,7 @@ export class UsersService {
 
     if (search) {
       query.andWhere(
-        '(LOWER(user.fullName) LIKE :search OR LOWER(user.email) LIKE :search)',
+        '(LOWER(user.fullName) LIKE :search OR LOWER(user.email) LIKE :search OR LOWER(user.username) LIKE :search)',
         { search: `%${search.toLowerCase()}%` },
       );
     }
@@ -97,6 +100,7 @@ export class UsersService {
 
     const items = users.map((user) => ({
       id: user.id,
+      username: user.username,
       email: user.email,
       fullName: user.fullName,
       avatar: user.avatar,
@@ -110,10 +114,14 @@ export class UsersService {
     return { items, total };
   }
 
-  async create(dto: { email: string; fullName: string; roleId?: string; password?: string }): Promise<User> {
-    const existing = await this.usersRepo.findOne({ where: { email: dto.email } });
-    if (existing) {
+  async create(dto: { username: string; email: string; fullName: string; roleId?: string; password?: string }): Promise<User> {
+    const existingEmail = await this.usersRepo.findOne({ where: { email: dto.email } });
+    if (existingEmail) {
       throw new ConflictException('Email already exists.');
+    }
+    const existingUsername = await this.usersRepo.findOne({ where: { username: dto.username } });
+    if (existingUsername) {
+      throw new ConflictException('Username already exists.');
     }
 
     const password = dto.password || 'Password123!';
@@ -121,6 +129,7 @@ export class UsersService {
 
     const user = this.usersRepo.create({
       id: uuid(),
+      username: dto.username,
       email: dto.email,
       fullName: dto.fullName,
       passwordHash,
@@ -131,10 +140,18 @@ export class UsersService {
     return this.usersRepo.save(user);
   }
 
-  async update(id: string, dto: { email?: string; fullName?: string; roleId?: string; isActive?: boolean }): Promise<User> {
+  async update(id: string, dto: { username?: string; email?: string; fullName?: string; roleId?: string; isActive?: boolean }): Promise<User> {
     const user = await this.usersRepo.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('User not found.');
+    }
+
+    if (dto.username && dto.username !== user.username) {
+      const existing = await this.usersRepo.findOne({ where: { username: dto.username } });
+      if (existing) {
+        throw new ConflictException('Username already exists.');
+      }
+      user.username = dto.username;
     }
 
     if (dto.email && dto.email !== user.email) {
@@ -159,4 +176,4 @@ export class UsersService {
     }
     await this.usersRepo.remove(user);
   }
-}
+}

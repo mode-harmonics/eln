@@ -14,8 +14,8 @@ POST {{baseUrl}}/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@eln.local",
-  "password": "Demo@123456"
+  "username": "pi",
+  "password": "Password123!"
 }
 
 ### ============================================================================

@@ -11,6 +11,7 @@ export interface LoginResult {
   accessToken: string;
   user: {
     id: string;
+    username: string;
     email: string;
     fullName: string;
     role: string | null;
@@ -26,32 +27,33 @@ export class AuthService {
   ) {}
 
   /**
-   * Looks up the user by email and verifies the password hash.
+   * Looks up the user by username and verifies the password hash.
    * Throws UnauthorizedException on any mismatch (account not found,
    * wrong password, or deactivated account) — deliberately the same
    * error for all cases to avoid leaking which part failed.
    */
-  async validateUser(email: string, password: string): Promise<User> {
-    const user = await this.usersRepo.findOne({ where: { email } });
+  async validateUser(username: string, password: string): Promise<User> {
+    const user = await this.usersRepo.findOne({ where: { username } });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Invalid email or password.');
+      throw new UnauthorizedException('Invalid username or password.');
     }
 
     const passwordMatches = await bcrypt.compare(password, user.passwordHash);
     if (!passwordMatches) {
-      throw new UnauthorizedException('Invalid email or password.');
+      throw new UnauthorizedException('Invalid username or password.');
     }
 
     return user;
   }
 
-  async login(email: string, password: string): Promise<LoginResult> {
-    const user = await this.validateUser(email, password);
+  async login(username: string, password: string): Promise<LoginResult> {
+    const user = await this.validateUser(username, password);
     const role = user.roleId ? await this.rolesRepo.findOne({ where: { id: user.roleId } }) : null;
 
     const payload: JwtPayload = {
       sub: user.id,
+      username: user.username,
       email: user.email,
       roleId: user.roleId,
       roleName: role?.name,
@@ -61,6 +63,7 @@ export class AuthService {
       accessToken: this.jwtService.sign(payload),
       user: {
         id: user.id,
+        username: user.username,
         email: user.email,
         fullName: user.fullName,
         role: role?.name ?? null,
