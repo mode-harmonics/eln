@@ -19,10 +19,10 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "typeorm": "typeorm-ts-node-commonjs",
-    "typeorm:generate": "typeorm-ts-node-commonjs migration:generate -d data-source.ts",
+    "typeorm:generate": "typeorm-ts-node-commonjs migration:generate -d src/data-source.ts",
     "typeorm:create": "typeorm-ts-node-commonjs migration:create",
-    "typeorm:run": "typeorm-ts-node-commonjs migration:run -d data-source.ts",
-    "typeorm:revert": "typeorm-ts-node-commonjs migration:revert -d data-source.ts",
+    "typeorm:run": "typeorm-ts-node-commonjs migration:run -d src/data-source.ts",
+    "typeorm:revert": "typeorm-ts-node-commonjs migration:revert -d src/data-source.ts",
     "seed": "ts-node src/seed.ts"
   },
   "dependencies": {

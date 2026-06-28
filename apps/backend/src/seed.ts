@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuid } from 'uuid';
-import { AppDataSource } from '../data-source';
+import { AppDataSource } from './data-source';
 import { Experiment } from './entities/experiment.entity';
 import { Project } from './entities/project.entity';
 import { Role } from './entities/role.entity';

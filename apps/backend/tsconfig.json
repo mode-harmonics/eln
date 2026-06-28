@@ -6,7 +6,7 @@
     "target": "ES2022",
 
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "src",
     "baseUrl": "./",
     "incremental": true,
     "sourceMap": true,
@@ -16,6 +16,6 @@
       "@eln/shared/*": ["../../packages/shared/dist/*"]
     }
   },
-  "include": ["src/**/*", "data-source.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "test", "dist"]
 }

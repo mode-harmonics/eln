@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { config } from 'dotenv';
 import { DataSource, DataSourceOptions } from 'typeorm';
-import * as entities from './src/entities';
+import * as entities from './entities';
 
 config(); // load apps/backend/.env
 
