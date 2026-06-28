@@ -16,53 +16,91 @@ export class ProjectsService {
     private readonly collaboratorsRepo: Repository<ExperimentCollaborator>,
   ) {}
 
-  /**
-   * Returns projects visible to the user: ones they created, or ones where
-   * they collaborate on at least one experiment within the project.
-   */
-  async findVisibleToUser(userId: string): Promise<Project[]> {
-    const ownedQuery = this.projectsRepo
-      .createQueryBuilder('project')
-      .where('project.createdBy = :userId', { userId });
-
-    const collaboratingQuery = this.projectsRepo
-      .createQueryBuilder('project')
-      .innerJoin(Experiment, 'experiment', 'experiment.projectId = project.id')
+  async findVisibleToUser(
+    userId: string,
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ): Promise<{ items: Project[]; total: number }> {
+    const subQuery = this.projectsRepo.manager
+      .createQueryBuilder(Experiment, 'experiment')
+      .select('experiment.projectId')
       .innerJoin(
         ExperimentCollaborator,
         'collaborator',
-        'collaborator.experimentId = experiment.id AND collaborator.userId = :userId',
+        'collaborator.experimentId = experiment.id',
+      )
+      .where('collaborator.userId = :userId', { userId });
+
+    const query = this.projectsRepo
+      .createQueryBuilder('project')
+      .leftJoinAndSelect('project.creator', 'creator')
+      .where(
+        '(project.createdBy = :userId OR project.id IN (' + subQuery.getQuery() + '))',
         { userId },
       );
 
-    const [owned, collaborating] = await Promise.all([
-      ownedQuery.getMany(),
-      collaboratingQuery.getMany(),
-    ]);
-
-    const byId = new Map<string, Project>();
-    for (const p of [...owned, ...collaborating]) {
-      byId.set(p.id, p);
+    if (search && search.trim() !== '') {
+      const searchPattern = `%${search.trim().toLowerCase()}%`;
+      query.andWhere(
+        '(LOWER(project.name) LIKE :searchPattern OR LOWER(project.description) LIKE :searchPattern)',
+        { searchPattern },
+      );
     }
 
-    return Array.from(byId.values()).sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-    );
+    query
+      .orderBy('project.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
+
+    const [items, total] = await query.getManyAndCount();
+    return { items, total };
   }
 
   async findOne(id: string): Promise<Project> {
-    const project = await this.projectsRepo.findOne({ where: { id } });
+    const project = await this.projectsRepo.findOne({
+      where: { id },
+      relations: ['creator'],
+    });
     if (!project) throw new NotFoundException('Project not found.');
     return project;
   }
 
-  async findExperiments(projectId: string): Promise<Experiment[]> {
+  async findExperiments(
+    projectId: string,
+    page?: number,
+    limit?: number,
+    search?: string,
+  ): Promise<any> {
     const project = await this.projectsRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found.');
-    return this.experimentsRepo.find({
-      where: { projectId },
-      order: { updatedAt: 'DESC' },
-    });
+
+    if (page === undefined && limit === undefined) {
+      return this.experimentsRepo.find({
+        where: { projectId },
+        order: { updatedAt: 'DESC' },
+      });
+    }
+
+    const pageNum = page ? parseInt(page as any, 10) : 1;
+    const limitNum = limit ? parseInt(limit as any, 10) : 10;
+
+    const query = this.experimentsRepo.createQueryBuilder('experiment')
+      .where('experiment.projectId = :projectId', { projectId });
+
+    if (search) {
+      query.andWhere('LOWER(experiment.title) LIKE :search', {
+        search: `%${search.toLowerCase()}%`,
+      });
+    }
+
+    query.orderBy('experiment.updatedAt', 'DESC');
+
+    const skip = (pageNum - 1) * limitNum;
+    query.skip(skip).take(limitNum);
+
+    const [items, total] = await query.getManyAndCount();
+    return { items, total };
   }
 
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {

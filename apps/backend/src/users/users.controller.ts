@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -19,8 +19,16 @@ export class UsersController {
 
   @Get()
   @ApiOperation({ summary: 'Get list of all users.' })
-  async findAll() {
-    return this.usersService.findAll();
+  async findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('withRole') withRole?: string,
+  ) {
+    const pageNum = page ? parseInt(page as any, 10) : undefined;
+    const limitNum = limit ? parseInt(limit as any, 10) : undefined;
+    const isWithRole = withRole === 'true';
+    return this.usersService.findAll(pageNum, limitNum, search, isWithRole);
   }
 
   @Post()

@@ -15,13 +15,29 @@ export function Roles() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [viewMode, setViewMode] = useViewMode("roles_view_mode", "grid");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
-    api.get<Role[]>("/api/v1/roles")
-      .then(setRoles)
+    setLoading(true);
+    const queryParams = new URLSearchParams();
+    queryParams.append("page", String(currentPage));
+    queryParams.append("limit", String(pageSize));
+    if (searchQuery.trim()) {
+      queryParams.append("search", searchQuery.trim());
+    }
+
+    api.get<{ items: Role[]; total: number }>(`/api/v1/roles?${queryParams.toString()}`)
+      .then((res) => {
+        setRoles(res.items);
+        setTotalItems(res.total);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "加载角色列表失败"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [currentPage, pageSize, searchQuery]);
 
   const handleUpdateRole = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,14 +68,25 @@ export function Roles() {
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearchQuery(searchInput);
+              setCurrentPage(1);
+            }}
+            className="relative w-full max-w-sm flex items-center"
+          >
+            <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+              <Search className="h-4 w-4" />
+            </button>
             <input
               type="text"
               placeholder={t("search_roles")}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full rounded border border-gray-300 pl-9 pr-4 py-1.5 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
             />
-          </div>
+          </form>
           <div className="flex items-center gap-4">
             <ViewToggle
               viewMode={viewMode}
@@ -156,7 +183,14 @@ export function Roles() {
             ))}
           </div>
         )}
-        <Pagination className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""} />
+        <Pagination
+          currentPage={currentPage}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""}
+        />
       </div>
 
       {isEditModalOpen && editingRole && (

@@ -23,6 +23,11 @@ export function ProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
+
   // Business data for DataSummary tab
   const [processData, setProcessData] = useState<ProcessData[]>([]);
   const [calendarLife, setCalendarLife] = useState<CalendarLife[]>([]);
@@ -34,16 +39,32 @@ export function ProjectDetail() {
 
   useEffect(() => {
     if (!projectId) return;
-    setLoading(true);
-    Promise.all([
-      api.get<Project>(`/api/v1/projects/${projectId}`),
-      api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`),
-    ])
-      .then(([proj, exps]) => {
-        setProject(proj);
-        setExperiments(exps);
+    api.get<Project>(`/api/v1/projects/${projectId}`)
+      .then(setProject)
+      .catch((err) => setError(err instanceof ApiError ? err.message : "加载项目详情失败"));
+  }, [projectId]);
 
-        // Load business data for all experiments in this project
+  useEffect(() => {
+    if (!projectId) return;
+    setLoading(true);
+    setProcessData([]);
+    setCalendarLife([]);
+    setStorageSwelling([]);
+    setEnergyEfficiency([]);
+    setDcrTest([]);
+    setFastCharge([]);
+    setHtCycle([]);
+
+    const queryParams = new URLSearchParams();
+    queryParams.append("page", String(currentPage));
+    queryParams.append("limit", String(pageSize));
+
+    api.get<{ items: Experiment[]; total: number }>(`/api/v1/projects/${projectId}/experiments?${queryParams.toString()}`)
+      .then((res) => {
+        const exps = res.items;
+        setExperiments(exps);
+        setTotalItems(res.total);
+
         const expIds = exps.map((e) => e.id);
         if (expIds.length === 0) return;
 
@@ -57,18 +78,17 @@ export function ProjectDetail() {
           { type: "htcycle", setter: setHtCycle as any },
         ];
 
-        // Fetch data for each experiment × data-type pair in parallel, then flatten
         expIds.forEach((expId) => {
           dataTypes.forEach(({ type, setter }) => {
             api.get<any[]>(`/api/v1/data/${type}/${expId}`)
               .then((rows) => setter((prev: any[]) => [...prev, ...rows]))
-              .catch(() => {}); // silence 404s for experiment/type combos with no data
+              .catch(() => {});
           });
         });
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载失败"))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "加载实验数据失败"))
       .finally(() => setLoading(false));
-  }, [projectId]);
+  }, [projectId, currentPage, pageSize, refetchTrigger]);
 
   const handleCreateRecord = (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,7 +228,14 @@ export function ProjectDetail() {
                 )}
               </div>
               {experiments.length > 0 && (
-                <Pagination className="border-t border-gray-200" />
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={totalItems}
+                  pageSize={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setPageSize}
+                  className="border-t border-gray-200"
+                />
               )}
             </div>
           ) : (
@@ -250,7 +277,15 @@ export function ProjectDetail() {
               ))}
             </div>
           )}
-          {viewMode === "grid" && experiments.length > 0 && <Pagination />}
+          {viewMode === "grid" && experiments.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={setPageSize}
+            />
+          )}
         </div>
       )}
 

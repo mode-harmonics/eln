@@ -48,22 +48,66 @@ export class UsersService {
     };
   }
 
-  async findAll(): Promise<any[]> {
-    const users = await this.usersRepo.find({ order: { createdAt: 'DESC' } });
-    const roles = await this.rolesRepo.find();
-    const roleMap = new Map(roles.map((r) => [r.id, r.name]));
+  async findAll(
+    page?: number,
+    limit?: number,
+    search?: string,
+    withRole?: boolean,
+  ): Promise<any> {
+    if (page === undefined && limit === undefined) {
+      // Fallback for non-paginated queries (e.g. dropdown list requests)
+      const users = await this.usersRepo.find({ order: { createdAt: 'DESC' } });
+      const roles = await this.rolesRepo.find();
+      const roleMap = new Map(roles.map((r) => [r.id, r.name]));
+      return users.map((user) => ({
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        avatar: user.avatar,
+        roleId: user.roleId,
+        roleName: user.roleId ? roleMap.get(user.roleId) ?? null : null,
+        departmentId: user.departmentId,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+      }));
+    }
 
-    return users.map((user) => ({
+    const pageNum = page ? parseInt(page as any, 10) : 1;
+    const limitNum = limit ? parseInt(limit as any, 10) : 10;
+
+    const query = this.usersRepo.createQueryBuilder('user');
+
+    if (withRole) {
+      query.leftJoinAndSelect('user.role', 'role');
+    }
+
+    if (search) {
+      query.andWhere(
+        '(LOWER(user.fullName) LIKE :search OR LOWER(user.email) LIKE :search)',
+        { search: `%${search.toLowerCase()}%` },
+      );
+    }
+
+    query.orderBy('user.createdAt', 'DESC');
+
+    const skip = (pageNum - 1) * limitNum;
+    query.skip(skip).take(limitNum);
+
+    const [users, total] = await query.getManyAndCount();
+
+    const items = users.map((user) => ({
       id: user.id,
       email: user.email,
       fullName: user.fullName,
       avatar: user.avatar,
       roleId: user.roleId,
-      roleName: user.roleId ? roleMap.get(user.roleId) ?? null : null,
+      roleName: user.roleId && withRole ? user.role?.name ?? null : null,
       departmentId: user.departmentId,
       isActive: user.isActive,
       createdAt: user.createdAt,
     }));
+
+    return { items, total };
   }
 
   async create(dto: { email: string; fullName: string; roleId?: string; password?: string }): Promise<User> {

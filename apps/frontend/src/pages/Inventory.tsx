@@ -12,6 +12,11 @@ export function Inventory() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -20,12 +25,22 @@ export function Inventory() {
 
   useEffect(() => {
     fetchInventory();
-  }, []);
+  }, [currentPage, pageSize, searchQuery]);
 
   const fetchInventory = () => {
     setLoading(true);
-    api.get<any[]>("/api/v1/inventory")
-      .then(setItems)
+    const queryParams = new URLSearchParams();
+    queryParams.append("page", String(currentPage));
+    queryParams.append("limit", String(pageSize));
+    if (searchQuery.trim()) {
+      queryParams.append("search", searchQuery.trim());
+    }
+
+    api.get<{ items: any[]; total: number }>(`/api/v1/inventory?${queryParams.toString()}`)
+      .then((res) => {
+        setItems(res.items);
+        setTotalItems(res.total);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "加载库存失败"))
       .finally(() => setLoading(false));
   };
@@ -93,7 +108,7 @@ export function Inventory() {
     if (!window.confirm("确定要删除该物品吗？")) return;
     try {
       await api.delete(`/api/v1/inventory/${id}`);
-      setItems((prev) => prev.filter((item) => item.id !== id));
+      fetchInventory();
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "删除失败");
     }
@@ -120,14 +135,25 @@ export function Inventory() {
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearchQuery(searchInput);
+              setCurrentPage(1);
+            }}
+            className="relative w-full max-w-sm flex items-center"
+          >
+            <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+              <Search className="h-4 w-4" />
+            </button>
             <input
               type="text"
               placeholder="Search inventory..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full rounded border border-gray-300 pl-9 pr-4 py-1.5 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
             />
-          </div>
+          </form>
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} className="hidden sm:flex" />
             <button
@@ -269,7 +295,14 @@ export function Inventory() {
             ))}
           </div>
         )}
-        <Pagination className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""} />
+        <Pagination
+          currentPage={currentPage}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""}
+        />
       </div>
 
       {isModalOpen && (

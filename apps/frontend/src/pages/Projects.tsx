@@ -8,7 +8,7 @@ import { ViewToggle } from "../components/ViewToggle";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { api, ApiError } from "../lib/api";
-import type { Project } from "../types";
+import type { Project, PaginatedProjects } from "../types";
 
 export function Projects() {
   const { t } = useTranslation();
@@ -20,27 +20,47 @@ export function Projects() {
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [creating, setCreating] = useState(false);
   const [viewMode, setViewMode] = useViewMode("projects_view_mode", "grid");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [totalItems, setTotalItems] = useState(0);
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
+  const [pageSize, setPageSize] = useState(6);
 
   useEffect(() => {
-    api.get<Project[]>("/api/v1/projects")
-      .then(setProjects)
+    setLoading(true);
+    const queryParams = new URLSearchParams();
+    queryParams.append("page", String(currentPage));
+    queryParams.append("limit", String(pageSize));
+    if (searchQuery.trim()) {
+      queryParams.append("search", searchQuery.trim());
+    }
+
+    api.get<PaginatedProjects>(`/api/v1/projects?${queryParams.toString()}`)
+      .then((res) => {
+        setProjects(res.items);
+        setTotalItems(res.total);
+      })
       .catch((err) => setError(err instanceof ApiError ? err.message : "加载失败"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [currentPage, searchQuery, refetchTrigger]);
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProjectName.trim()) return;
     setCreating(true);
     try {
-      const created = await api.post<Project>("/api/v1/projects", {
+      await api.post<Project>("/api/v1/projects", {
         name: newProjectName,
         description: newProjectDesc,
       });
-      setProjects((prev) => [created, ...prev]);
       setIsModalOpen(false);
       setNewProjectName("");
       setNewProjectDesc("");
+      setSearchQuery("");
+      setSearchInput("");
+      setCurrentPage(1);
+      setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "创建失败");
     } finally {
@@ -71,16 +91,25 @@ export function Projects() {
 
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <div className="relative w-72">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
-            </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearchQuery(searchInput);
+              setCurrentPage(1);
+            }}
+            className="relative w-72 flex items-center"
+          >
+            <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+              <Search className="h-4 w-4" />
+            </button>
             <input
               type="text"
               placeholder={t("search_projects")}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="block w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-[#1d74f5] focus:border-[#1d74f5] sm:text-sm transition-colors"
             />
-          </div>
+          </form>
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} />
             <button
@@ -111,11 +140,10 @@ export function Projects() {
                     </p>
                   </div>
                   <span
-                    className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
-                      project.status === "Active"
+                    className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${project.status === "Active"
                         ? "bg-[#f0f9f4] text-[#1e8b4e]"
                         : "bg-gray-100 text-gray-600"
-                    }`}
+                      }`}
                   >
                     {project.status}
                   </span>
@@ -127,7 +155,7 @@ export function Projects() {
                   <span className="text-[13px] text-gray-500">
                     {t("pi")}:{" "}
                     <span className="font-medium text-gray-700">
-                      {project.createdBy}
+                      {project.creator?.fullName || project.createdBy}
                     </span>
                   </span>
                 </div>
@@ -173,11 +201,10 @@ export function Projects() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
-                            project.status === "Active"
+                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${project.status === "Active"
                               ? "bg-[#f0f9f4] text-[#1e8b4e]"
                               : "bg-gray-100 text-gray-600"
-                          }`}
+                            }`}
                         >
                           {project.status}
                         </span>
@@ -192,7 +219,16 @@ export function Projects() {
             </div>
           </div>
         )}
-        <Pagination />
+        <Pagination
+          currentPage={currentPage}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrentPage(1);
+          }}
+        />
       </div>
 
       {isModalOpen && (

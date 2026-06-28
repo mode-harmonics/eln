@@ -2,6 +2,7 @@ import type {
   RoleDto,
   UserDto,
   ProjectDto,
+  PaginatedProjectsDto,
   ExperimentDto,
   InventoryDto,
   ProcessDataDto,
@@ -17,6 +18,7 @@ import type {
 export type Role = RoleDto;
 export type User = UserDto & { roleId?: string | null; roleName?: string | null };
 export type Project = ProjectDto;
+export type PaginatedProjects = PaginatedProjectsDto;
 export type Experiment = ExperimentDto;
 export type InventoryItem = InventoryDto;
 

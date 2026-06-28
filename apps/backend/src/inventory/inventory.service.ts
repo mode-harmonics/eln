@@ -11,8 +11,30 @@ export class InventoryService {
     private readonly inventoryRepo: Repository<Inventory>,
   ) {}
 
-  async findAll(): Promise<Inventory[]> {
-    return this.inventoryRepo.find({ order: { createdAt: 'DESC' } });
+  async findAll(page?: number, limit?: number, search?: string): Promise<any> {
+    if (page === undefined && limit === undefined) {
+      return this.inventoryRepo.find({ order: { createdAt: 'DESC' } });
+    }
+
+    const pageNum = page ? parseInt(page as any, 10) : 1;
+    const limitNum = limit ? parseInt(limit as any, 10) : 10;
+
+    const query = this.inventoryRepo.createQueryBuilder('inventory');
+
+    if (search) {
+      query.andWhere(
+        '(LOWER(inventory.name) LIKE :search OR LOWER(inventory.type) LIKE :search OR LOWER(inventory.lotNumber) LIKE :search OR LOWER(inventory.storageLocation) LIKE :search)',
+        { search: `%${search.toLowerCase()}%` },
+      );
+    }
+
+    query.orderBy('inventory.createdAt', 'DESC');
+
+    const skip = (pageNum - 1) * limitNum;
+    query.skip(skip).take(limitNum);
+
+    const [items, total] = await query.getManyAndCount();
+    return { items, total };
   }
 
   async findOne(id: string): Promise<Inventory> {

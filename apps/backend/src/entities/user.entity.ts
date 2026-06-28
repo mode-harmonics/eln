@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { Role } from './role.entity';
 
 /**
  * user — 用户表
@@ -30,6 +33,10 @@ export class User {
   @Index()
   @Column({ name: 'roleId', type: 'uuid', nullable: true, comment: '角色ID' })
   roleId!: string | null;
+
+  @ManyToOne(() => Role, { nullable: true })
+  @JoinColumn({ name: 'roleId' })
+  role?: Role | null;
 
   @Column({ name: 'departmentId', type: 'uuid', nullable: true, comment: '部门ID' })
   departmentId!: string | null;

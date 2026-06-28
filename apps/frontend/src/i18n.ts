@@ -103,7 +103,7 @@ const resources = {
       previous: "Previous",
       next: "Next",
       showing_results:
-        "Showing <num1>1</num1> to <num2>10</num2> of <num3>20</num3> results",
+        "Showing <num1>{{from}}</num1> to <num2>{{to}}</num2> of <num3>{{total}}</num3> results",
       metric_qc_1st: "1st Charge (Ah)",
       metric_qd_1st: "1st Discharge (Ah)",
       metric_ce_1st: "1st CE (%)",
@@ -272,7 +272,7 @@ const resources = {
       previous: "上一页",
       next: "下一页",
       showing_results:
-        "显示 <num1>1</num1> 到 <num2>10</num2> 条，共 <num3>20</num3> 条结果",
+        "显示 <num1>{{from}}</num1> 到 <num2>{{to}}</num2> 条，共 <num3>{{total}}</num3> 条结果",
       metric_qc_1st: "首次充电容量 (Ah)",
       metric_qd_1st: "首次放电容量 (Ah)",
       metric_ce_1st: "首次库仑效率 (%)",

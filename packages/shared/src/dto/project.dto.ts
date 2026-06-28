@@ -7,6 +7,10 @@ export interface ProjectDto {
   status: ProjectStatus | string;
   createdBy: string;
   createdAt: string;
+  creator?: {
+    fullName: string;
+    email: string;
+  };
 }
 
 export interface CreateProjectDto {
@@ -20,4 +24,9 @@ export interface UpdateProjectMembersDto {
     userId: string;
     role: RoleName | string;
   }>;
+}
+
+export interface PaginatedProjectsDto {
+  items: ProjectDto[];
+  total: number;
 }

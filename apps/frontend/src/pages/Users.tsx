@@ -23,39 +23,64 @@ export function Users() {
   const [newUserName, setNewUserName] = useState("");
   const [newUserRole, setNewUserRole] = useState("");
   const [viewMode, setViewMode] = useViewMode("users_view_mode", "list");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [pageSize, setPageSize] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
+
+  const [rolesLoaded, setRolesLoaded] = useState(false);
+
+  const loadRolesIfNeeded = async () => {
+    if (rolesLoaded) return;
+    try {
+      const data = await api.get<Role[]>("/api/v1/roles");
+      setRoles(data);
+      setRolesLoaded(true);
+      if (data.length > 0 && !newUserRole) {
+        setNewUserRole(data[0].id);
+      }
+    } catch (err) {
+      console.error("加载角色失败", err);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      api.get<any[]>("/api/v1/users"),
-      api.get<Role[]>("/api/v1/roles"),
-    ])
-      .then(([userData, roleData]) => {
-        setUsers(userData);
-        setRoles(roleData);
-        if (roleData.length > 0) {
-          setNewUserRole(roleData[0].id);
-        }
+    const queryParams = new URLSearchParams();
+    queryParams.append("page", String(currentPage));
+    queryParams.append("limit", String(pageSize));
+    queryParams.append("withRole", "true");
+    if (searchQuery.trim()) {
+      queryParams.append("search", searchQuery.trim());
+    }
+
+    api.get<{ items: any[]; total: number }>(`/api/v1/users?${queryParams.toString()}`)
+      .then((res) => {
+        setUsers(res.items);
+        setTotalItems(res.total);
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : "加载用户数据失败"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [currentPage, pageSize, searchQuery, refetchTrigger]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserEmail || !newUserName) return;
     try {
-      const created = await api.post<any>("/api/v1/users", {
+      await api.post<any>("/api/v1/users", {
         email: newUserEmail,
         fullName: newUserName,
         roleId: newUserRole || undefined,
       });
-      // Refresh user list
-      const updatedList = await api.get<any[]>("/api/v1/users");
-      setUsers(updatedList);
       setIsModalOpen(false);
       setNewUserEmail("");
       setNewUserName("");
+      setSearchQuery("");
+      setSearchInput("");
+      setCurrentPage(1);
+      setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "创建用户失败");
     }
@@ -77,10 +102,9 @@ export function Users() {
         roleId: roleId || undefined,
         isActive,
       });
-      const updatedList = await api.get<any[]>("/api/v1/users");
-      setUsers(updatedList);
       setIsEditModalOpen(false);
       setEditingUser(null);
+      setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "更新用户失败");
     }
@@ -90,7 +114,7 @@ export function Users() {
     if (!window.confirm("确定要删除此用户吗？")) return;
     try {
       await api.delete(`/api/v1/users/${userId}`);
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "删除用户失败");
     }
@@ -119,14 +143,25 @@ export function Users() {
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              setSearchQuery(searchInput);
+              setCurrentPage(1);
+            }}
+            className="relative w-full max-w-sm flex items-center"
+          >
+            <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
+              <Search className="h-4 w-4" />
+            </button>
             <input
               type="text"
               placeholder={t("search_users")}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               className="w-full rounded border border-gray-300 pl-9 pr-4 py-1.5 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
             />
-          </div>
+          </form>
           <div className="flex items-center gap-4">
             <ViewToggle
               viewMode={viewMode}
@@ -134,7 +169,10 @@ export function Users() {
               className="hidden sm:flex"
             />
             <button
-              onClick={() => setIsModalOpen(true)}
+              onClick={() => {
+                loadRolesIfNeeded();
+                setIsModalOpen(true);
+              }}
               className="px-4 py-1.5 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors whitespace-nowrap"
             >
               {t("add_user")}
@@ -201,6 +239,7 @@ export function Users() {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                           <button
                             onClick={() => {
+                              loadRolesIfNeeded();
                               setEditingUser(user);
                               setIsEditModalOpen(true);
                             }}
@@ -262,6 +301,7 @@ export function Users() {
                   <div className="mt-auto w-full pt-4 border-t border-gray-100">
                     <button
                       onClick={() => {
+                        loadRolesIfNeeded();
                         setEditingUser(user);
                         setIsEditModalOpen(true);
                       }}
@@ -275,7 +315,14 @@ export function Users() {
             })}
           </div>
         )}
-        <Pagination className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""} />
+        <Pagination
+          currentPage={currentPage}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+          className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""}
+        />
       </div>
 
       {isEditModalOpen && editingUser && (

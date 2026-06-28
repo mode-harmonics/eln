@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesService } from './roles.service';
@@ -12,7 +12,13 @@ export class RolesController {
 
   @Get()
   @ApiOperation({ summary: 'List the global RBAC role matrix (for Admin config UIs).' })
-  async findAll() {
-    return this.rolesService.findAll();
+  async findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    const pageNum = page ? parseInt(page as any, 10) : undefined;
+    const limitNum = limit ? parseInt(limit as any, 10) : undefined;
+    return this.rolesService.findAll(pageNum, limitNum, search);
   }
 }

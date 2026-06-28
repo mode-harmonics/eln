@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -14,8 +14,15 @@ export class ProjectsController {
 
   @Get()
   @ApiOperation({ summary: "List projects visible to the current user's membership/ownership." })
-  async findAll(@CurrentUser() user: RequestUser) {
-    return this.projectsService.findVisibleToUser(user.id);
+  async findAll(
+    @CurrentUser() user: RequestUser,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    const pageNum = page ? parseInt(page as any, 10) : 1;
+    const limitNum = limit ? parseInt(limit as any, 10) : 10;
+    return this.projectsService.findVisibleToUser(user.id, pageNum, limitNum, search);
   }
 
   @Get(':id')
@@ -26,8 +33,15 @@ export class ProjectsController {
 
   @Get(':id/experiments')
   @ApiOperation({ summary: 'List all experiments belonging to this project.' })
-  async findExperiments(@Param('id') id: string) {
-    return this.projectsService.findExperiments(id);
+  async findExperiments(
+    @Param('id') id: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    const pageNum = page ? parseInt(page as any, 10) : undefined;
+    const limitNum = limit ? parseInt(limit as any, 10) : undefined;
+    return this.projectsService.findExperiments(id, pageNum, limitNum, search);
   }
 
   @Post()

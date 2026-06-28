@@ -5,10 +5,11 @@ interface DropdownProps {
   trigger: ReactNode;
   children: ReactNode;
   align?: "left" | "right";
+  position?: "up" | "down";
   className?: string;
 }
 
-export function Dropdown({ trigger, children, align = "right", className }: DropdownProps) {
+export function Dropdown({ trigger, children, align = "right", position = "down", className }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -24,14 +25,15 @@ export function Dropdown({ trigger, children, align = "right", className }: Drop
 
   return (
     <div className="relative" ref={dropdownRef}>
-      <div onClick={() => setIsOpen(!isOpen)} className="cursor-pointer inline-block">
+      <div onClick={() => setIsOpen(!isOpen)} className="cursor-pointer inline-block w-full">
         {trigger}
       </div>
 
       {isOpen && (
         <div
           className={cn(
-            "absolute mt-2 rounded bg-white py-1 shadow-2xl z-50 min-w-[12rem]",
+            "absolute rounded bg-white py-1 shadow-2xl z-50 min-w-[12rem]",
+            position === "up" ? "bottom-full mb-2" : "top-full mt-2",
             align === "right" ? "right-0" : "left-0",
             className
           )}

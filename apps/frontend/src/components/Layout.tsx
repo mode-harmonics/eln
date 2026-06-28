@@ -38,7 +38,7 @@ export function Layout() {
   useEffect(() => {
     api.get<any>("/api/v1/users/me")
       .then((data) => setCurrentUser(data))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleLogout = () => {
@@ -81,7 +81,10 @@ export function Layout() {
             </span>
             <Dropdown
               trigger={
-                <button className="bg-[#f27429] text-white px-2.5 h-7 flex items-center justify-center rounded font-semibold text-xs hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-[#f27429] focus:ring-offset-2 relative z-20">
+                <button
+                  title={displayName}
+                  className="bg-[#f27429] text-white px-2.5 h-7 flex items-center justify-center rounded font-semibold text-xs hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-[#f27429] focus:ring-offset-2 relative z-20 truncate max-w-[95px]"
+                >
                   {displayName}
                 </button>
               }

@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   Index,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { User } from './user.entity';
 
 /**
  * project — 项目表
@@ -26,6 +29,10 @@ export class Project {
   @Index()
   @Column({ name: 'createdBy', type: 'uuid', comment: '创建者ID' })
   createdBy!: string;
+
+  @ManyToOne(() => User)
+  @JoinColumn({ name: 'createdBy' })
+  creator!: User;
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;

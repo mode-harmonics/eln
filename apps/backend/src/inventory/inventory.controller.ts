@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { InventoryService } from './inventory.service';
@@ -13,8 +13,14 @@ export class InventoryController {
 
   @Get()
   @ApiOperation({ summary: 'List all inventory items.' })
-  async findAll() {
-    return this.inventoryService.findAll();
+  async findAll(
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+  ) {
+    const pageNum = page ? parseInt(page as any, 10) : undefined;
+    const limitNum = limit ? parseInt(limit as any, 10) : undefined;
+    return this.inventoryService.findAll(pageNum, limitNum, search);
   }
 
   @Get(':id')
