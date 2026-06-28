@@ -4,7 +4,13 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": true,
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "paths": {
+      "@/*": [
+        "./*"
+      ],
       "@eln/shared": ["../../packages/shared/src/index.ts"],
       "@eln/shared/*": ["../../packages/shared/src/*"]
     }

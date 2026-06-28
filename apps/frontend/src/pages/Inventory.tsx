@@ -1,0 +1,308 @@
+import React, { useState } from "react";
+import { Search, X } from "lucide-react";
+import { format } from "date-fns";
+import { MOCK_INVENTORY } from "../mockData";
+import { Pagination } from "../components/Pagination";
+import { ViewToggle } from "../components/ViewToggle";
+import { cn } from "../lib/utils";
+import { useViewMode } from "../hooks/useViewMode";
+
+export function Inventory() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [viewMode, setViewMode] = useViewMode("inventory_view_mode", "list");
+
+  const handleAddItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsModalOpen(false);
+  };
+
+  const handleUpdateItem = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsEditModalOpen(false);
+    setEditingItem(null);
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Inventory</h1>
+        <div className="h-px bg-gray-200 w-full mb-6"></div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+           <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search inventory..."
+                className="w-full rounded border border-gray-300 pl-9 pr-4 py-1.5 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
+              />
+           </div>
+          <div className="flex items-center gap-4">
+            <ViewToggle viewMode={viewMode} setViewMode={setViewMode} className="hidden sm:flex" />
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="px-4 py-1.5 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors whitespace-nowrap"
+            >
+              Add Item
+            </button>
+          </div>
+        </div>
+
+        {viewMode === "list" ? (
+          <div className="border border-gray-200 rounded bg-white overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Item</th>
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Type</th>
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Lot / Purity</th>
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Location</th>
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Used</th>
+                    <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {MOCK_INVENTORY.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50/50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-[13px] font-medium text-gray-900">{item.name}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-[13px] text-gray-500">{item.type}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                         <div className="text-[13px] text-gray-900">{item.lotNumber}</div>
+                         <div className="text-[11px] text-gray-500">{item.purity}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-[13px] text-gray-900">{item.quantity}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-[13px] text-gray-500">{item.storageLocation}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
+                          item.status === 'In Stock' ? 'bg-[#f0f9f4] text-[#1e8b4e]' :
+                          item.status === 'Low Stock' ? 'bg-[#fff8e6] text-[#b28200]' :
+                          'bg-[#fbeef0] text-[#cb202d]'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-500">
+                        {format(new Date(item.lastUsedAt), "MMM d, yyyy")}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <button 
+                          onClick={() => {
+                            setEditingItem(item);
+                            setIsEditModalOpen(true);
+                          }}
+                          className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {MOCK_INVENTORY.map((item) => (
+              <div key={item.id} className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="font-semibold text-[17px] text-gray-900">{item.name}</h3>
+                    <p className="text-[13px] text-gray-500 mt-1">{item.type}</p>
+                  </div>
+                  <span className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
+                    item.status === 'In Stock' ? 'bg-[#f0f9f4] text-[#1e8b4e]' :
+                    item.status === 'Low Stock' ? 'bg-[#fff8e6] text-[#b28200]' :
+                    'bg-[#fbeef0] text-[#cb202d]'
+                  }`}>
+                    {item.status}
+                  </span>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-[13px] text-gray-600 flex-1 mt-2 mb-6">
+                  <div>
+                    <div className="text-gray-400 text-xs mb-1">Lot / Purity</div>
+                    <div className="font-medium text-gray-800">{item.lotNumber} <span className="text-gray-500 font-normal">({item.purity})</span></div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs mb-1">Quantity</div>
+                    <div className="font-medium text-gray-800">{item.quantity}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs mb-1">Location</div>
+                    <div>{item.storageLocation}</div>
+                  </div>
+                  <div>
+                    <div className="text-gray-400 text-xs mb-1">Last Used</div>
+                    <div>{format(new Date(item.lastUsedAt), "MMM d, yyyy")}</div>
+                  </div>
+                </div>
+                
+                <div className="mt-auto w-full pt-4 border-t border-gray-100 flex justify-end">
+                  <button 
+                    onClick={() => {
+                      setEditingItem(item);
+                      setIsEditModalOpen(true);
+                    }}
+                    className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700 transition-colors"
+                  >
+                    Edit Item
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <Pagination className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""} />
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-[17px] font-bold text-gray-900">Add Inventory Item</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddItem} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Item Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                  placeholder="e.g. Lithium Cobalt Oxide"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Type
+                    </label>
+                    <select className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm">
+                      <option>Cathode Active Material</option>
+                      <option>Anode Active Material</option>
+                      <option>Electrolyte</option>
+                      <option>Separator</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Quantity
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                      placeholder="e.g. 500g"
+                    />
+                  </div>
+              </div>
+              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
+                >
+                  Add Item
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isEditModalOpen && editingItem && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <h2 className="text-[17px] font-bold text-gray-900">Edit Inventory Item</h2>
+              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateItem} className="p-6 space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Item Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                  defaultValue={editingItem.name}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Type
+                    </label>
+                    <select 
+                      className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                      defaultValue={editingItem.type}
+                    >
+                      <option>Cathode Active Material</option>
+                      <option>Anode Active Material</option>
+                      <option>Electrolyte</option>
+                      <option>Separator</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Quantity
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                      defaultValue={editingItem.quantity}
+                    />
+                  </div>
+              </div>
+              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

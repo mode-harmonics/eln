@@ -3,7 +3,7 @@
     "module": "commonjs",
     "target": "ES2022",
     "lib": ["ES2022"],
-    "moduleResolution": "node",
+    "moduleResolution": "nodenext",
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -21,10 +21,10 @@
     "skipLibCheck": true,
     "strict": true,
     "resolveJsonModule": true,
-    "baseUrl": ".",
+    // "baseUrl": ".",
     "paths": {
-      "@eln/shared": ["packages/shared/src"],
-      "@eln/shared/*": ["packages/shared/src/*"]
+      "@eln/shared": ["packages/shared/dist"],
+      "@eln/shared/*": ["packages/shared/dist/*"]
     }
   }
 }
