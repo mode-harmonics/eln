@@ -236,10 +236,8 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     props.dcrTest.forEach((d) => names.add(d.cellName));
     props.fastCharge.forEach((d) => names.add(d.cellName));
     props.htCycle.forEach((d) => {
-      if (d.caps) {
-        Object.keys(d.caps)
-          .filter((k) => !k.endsWith("_ret"))
-          .forEach((k) => names.add(k));
+      if (d.cellName) {
+        names.add(d.cellName);
       }
     });
     return Array.from(names).sort();
