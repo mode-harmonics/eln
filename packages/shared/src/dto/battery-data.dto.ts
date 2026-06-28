@@ -8,28 +8,37 @@ export interface ProcessDataDto {
   id: string;
   experimentId: string;
   cellId: string;
-  m0: number | null;
-  m1: number | null;
-  m2: number | null;
-  v0: number | null;
-  v1: number | null;
-  fu0: number | null;
-  fr0: number | null;
-  fq1: number | null;
-  fq2: number | null;
-  fu1: number | null;
-  fr1: number | null;
-  fu2: number | null;
-  fr2: number | null;
-  m3: number | null;
-  m4: number | null;
-  gu0: number | null;
-  gr0: number | null;
-  gqc1: number | null;
-  gqd1: number | null;
-  gqc2: number | null;
-  gu1: number | null;
-  gr1: number | null;
+  m0: string | null;
+  m1: string | null;
+  m2: string | null;
+  v0: string | null;
+  v1: string | null;
+  fu0: string | null;
+  fr0: string | null;
+  fq1: string | null;
+  fq2: string | null;
+  fu1: string | null;
+  fr1: string | null;
+  fu2: string | null;
+  fr2: string | null;
+  m3: string | null;
+  m4: string | null;
+  gu0: string | null;
+  gr0: string | null;
+  gqc1: string | null;
+  gqd1: string | null;
+  gqc2: string | null;
+  gu1: string | null;
+  gr1: string | null;
+  mIn: string | null;
+  mLoss: string | null;
+  mHold: string | null;
+  fq: string | null;
+  qdFirst: string | null;
+  fvg: string | null;
+  ku: string | null;
+  qcFirst: string | null;
+  ceFirst: string | null;
   picked: boolean;
   createdAt: string;
 }
@@ -40,12 +49,18 @@ export interface CalendarLifeDto {
   cellName: string;
   isHorizontal: boolean;
   dayCount: number;
-  q: number | null;
-  dq: number | null;
-  ddcr: number | null;
-  cdcr: number | null;
-  u: number | null;
-  r: number | null;
+  q: string | null;
+  dq: string | null;
+  ddcr: string | null;
+  cdcr: string | null;
+  u: string | null;
+  r: string | null;
+  qRetention: string | null;
+  qRecovery: string | null;
+  ddcrGrowth: string | null;
+  cdcrGrowth: string | null;
+  uGrowth: string | null;
+  rGrowth: string | null;
   createdAt: string;
 }
 
@@ -53,9 +68,10 @@ export interface StorageSwellingDto {
   id: string;
   experimentId: string;
   cellName: string;
-  qd1st: number | null;
+  qd1st: string | null;
   dayCount: number;
-  v: number | null;
+  v: string | null;
+  vg: string | null;
   createdAt: string;
 }
 
@@ -63,9 +79,11 @@ export interface EnergyEfficiencyDto {
   id: string;
   experimentId: string;
   cellName: string;
-  de: number | null;
-  ce: number | null;
+  de: string | null;
+  ce: string | null;
   notes: string | null;
+  ee: string | null;
+  eePct: string | null;
   createdAt: string;
 }
 
@@ -73,32 +91,39 @@ export interface DcrTestDto {
   id: string;
   experimentId: string;
   cellName: string;
-  q0: number | null;
-  du0: number | null;
-  du1: number | null;
-  di: number | null;
-  cu0: number | null;
-  cu1: number | null;
-  ci: number | null;
+  q0: string | null;
+  du0: string | null;
+  du1: string | null;
+  di: string | null;
+  cu0: string | null;
+  cu1: string | null;
+  ci: string | null;
+  ddcr: string | null;
+  cdcr: string | null;
+  dRcProduct: string | null;
+  cRcProduct: string | null;
   createdAt: string;
 }
 
 export interface FastChargeStepDto {
   stepNo: number;
-  rate: number | null;
+  rate: number | string | null;
   cutOffVoltage: number | null;
   current: number | null;
   stepCapacity: number | null;
   stepTime: number | null;
+  stepSoc: number | null;
+  cumulativeSoc: number | null;
 }
 
 export interface FastChargeDto {
   id: string;
   experimentId: string;
   cellName: string;
-  c0: number | null;
-  providedFastChargeTime: number | null;
-  steps: FastChargeStepDto[];
+  c0: string | null;
+  providedFastChargeTime: string | null;
+  computedFastChargeTime: string | null;
+  steps: FastChargeStepDto[] | null;
   createdAt: string;
 }
 
@@ -106,7 +131,7 @@ export interface HtCycleDto {
   id: string;
   experimentId: string;
   cycle: number;
-  /** Keys are `${batteryId}` -> capacity and `${batteryId}_ret` -> retention %. */
   caps: Record<string, number>;
+  notes: string | null;
   createdAt: string;
 }

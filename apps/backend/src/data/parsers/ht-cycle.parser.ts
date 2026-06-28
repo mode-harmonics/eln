@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { HtCycle } from '../../entities/ht-cycle.entity';
-import { DataParser, readHeaderRow, toNumberOrNull } from './parser.interface';
+import { DataParser, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 /**
  * htCycle — source sheets use cycle number as the time axis (one row per
@@ -30,11 +30,12 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
     const rawHeaders = readHeaderRow(sheet);
     const lowerHeaders = rawHeaders.map((h) => h.trim().toLowerCase());
     const cycleCol = lowerHeaders.indexOf('cycle');
+    const notesCol = lowerHeaders.findIndex((h) => ['notes', 'note', 'remark', 'remarks', '备注'].includes(h));
 
     // Split columns: raw capacity columns vs explicit _ret columns (case-insensitive)
     const capColumns: Array<{ colIndex: number; key: string }> = [];
     rawHeaders.forEach((header, colIndex) => {
-      if (colIndex === cycleCol) return;
+      if (colIndex === cycleCol || colIndex === notesCol) return;
       const key = header.trim();
       if (key) {
         capColumns.push({ colIndex, key });
@@ -70,6 +71,7 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
         experimentId,
         cycle: cycleValue,
         caps,
+        notes: notesCol >= 0 ? toStringOrNull(row.getCell(notesCol).value) : null,
       });
     });
 

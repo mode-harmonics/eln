@@ -51,7 +51,7 @@ describe('ProcessDataParser', () => {
         fu0: '3.85',
         fr0: '12.5',
         fq1: '2.15',
-        fq2: '2.10',
+        fq2: '2.1',
         picked: true,
       });
       expect(rows[0]).toHaveProperty('id');

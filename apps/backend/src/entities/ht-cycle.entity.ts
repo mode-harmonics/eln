@@ -34,6 +34,9 @@ export class HtCycle {
   @Column({ type: 'jsonb', comment: '容量字典数据' })
   caps!: Record<string, number>;
 
+  @Column({ type: 'varchar', length: 255, nullable: true, comment: '备注' })
+  notes!: string | null;
+
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;
 }

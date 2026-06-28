@@ -72,7 +72,8 @@ export class ProcessDataParser implements DataParser<Partial<ProcessData>> {
       for (const field of NUMERIC_FIELDS) {
         const col = colIndex(field);
         if (col >= 0) {
-          (record as Record<string, unknown>)[field] = toNumberOrNull(row.getCell(col).value);
+          const value = toNumberOrNull(row.getCell(col).value);
+          (record as Record<string, unknown>)[field] = value !== null ? String(value) : null;
         }
       }
 

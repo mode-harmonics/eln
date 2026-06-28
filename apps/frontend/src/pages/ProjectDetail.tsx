@@ -47,21 +47,21 @@ export function ProjectDetail() {
         const expIds = exps.map((e) => e.id);
         if (expIds.length === 0) return;
 
-        const dataTypes: Array<{ type: string; setter: (d: any[]) => void }> = [
-          { type: "process", setter: setProcessData },
-          { type: "calendar", setter: setCalendarLife },
-          { type: "swelling", setter: setStorageSwelling },
-          { type: "efficiency", setter: setEnergyEfficiency },
-          { type: "dcr", setter: setDcrTest },
-          { type: "fastcharge", setter: setFastCharge },
-          { type: "htcycle", setter: setHtCycle },
+        const dataTypes: Array<{ type: string; setter: (d: any) => void }> = [
+          { type: "process", setter: setProcessData as any },
+          { type: "calendar", setter: setCalendarLife as any },
+          { type: "swelling", setter: setStorageSwelling as any },
+          { type: "efficiency", setter: setEnergyEfficiency as any },
+          { type: "dcr", setter: setDcrTest as any },
+          { type: "fastcharge", setter: setFastCharge as any },
+          { type: "htcycle", setter: setHtCycle as any },
         ];
 
         // Fetch data for each experiment × data-type pair in parallel, then flatten
         expIds.forEach((expId) => {
           dataTypes.forEach(({ type, setter }) => {
             api.get<any[]>(`/api/v1/data/${type}/${expId}`)
-              .then((rows) => setter((prev) => [...prev, ...rows]))
+              .then((rows) => setter((prev: any[]) => [...prev, ...rows]))
               .catch(() => {}); // silence 404s for experiment/type combos with no data
           });
         });
