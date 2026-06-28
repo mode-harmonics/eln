@@ -9,11 +9,13 @@ import { SearchInput } from "../components/SearchInput";
 import { TextInput, Select, Checkbox } from "../components/FormFields";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
+import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { User, Role } from "../types";
 
 export function Users() {
   const { t } = useTranslation();
+  const { hasPermission } = usePermissions();
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,15 +166,17 @@ export function Users() {
               setViewMode={setViewMode}
               className="hidden sm:flex"
             />
-            <Button
-              size="sm"
-              onClick={() => {
-                loadRolesIfNeeded();
-                setIsModalOpen(true);
-              }}
-            >
-              {t("add_user")}
-            </Button>
+            {hasPermission("users:write") && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  loadRolesIfNeeded();
+                  setIsModalOpen(true);
+                }}
+              >
+                {t("add_user")}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -194,9 +198,11 @@ export function Users() {
                     <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("status")}
                     </th>
-                    <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("actions")}
-                    </th>
+                    {hasPermission("users:write") && (
+                      <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                        {t("actions")}
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -232,26 +238,28 @@ export function Users() {
                             {user.isActive ? t("active") : t("inactive", "Inactive")}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="inline-flex items-center gap-3">
-                            <button
-                              onClick={() => {
-                                loadRolesIfNeeded();
-                                setEditingUser(user);
-                                setIsEditModalOpen(true);
-                              }}
-                              className="text-[#1d74f5] hover:text-blue-700 font-medium"
-                            >
-                              {t("edit")}
-                            </button>
-                            <button
-                              onClick={() => handleDeleteUser(user.id)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
+                        {hasPermission("users:write") && (
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <div className="inline-flex items-center gap-3">
+                              <button
+                                onClick={() => {
+                                  loadRolesIfNeeded();
+                                  setEditingUser(user);
+                                  setIsEditModalOpen(true);
+                                }}
+                                className="text-[#1d74f5] hover:text-blue-700 font-medium"
+                              >
+                                {t("edit")}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteUser(user.id)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}
@@ -268,12 +276,14 @@ export function Users() {
                   key={user.id}
                   className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col items-center text-center relative group"
                 >
-                  <button
-                    onClick={() => handleDeleteUser(user.id)}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {hasPermission("users:write") && (
+                    <button
+                      onClick={() => handleDeleteUser(user.id)}
+                      className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                   <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold border border-blue-200">
                     {initials}
                   </div>
@@ -296,18 +306,20 @@ export function Users() {
                     </span>
                   </div>
 
-                  <div className="mt-auto w-full pt-4 border-t border-gray-100">
-                    <button
-                      onClick={() => {
-                        loadRolesIfNeeded();
-                        setEditingUser(user);
-                        setIsEditModalOpen(true);
-                      }}
-                      className="w-full py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
-                    >
-                      {t("edit_user")}
-                    </button>
-                  </div>
+                  {hasPermission("users:write") && (
+                    <div className="mt-auto w-full pt-4 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          loadRolesIfNeeded();
+                          setEditingUser(user);
+                          setIsEditModalOpen(true);
+                        }}
+                        className="w-full py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
+                      >
+                        {t("edit_user")}
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}

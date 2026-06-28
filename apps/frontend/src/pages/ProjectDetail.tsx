@@ -9,6 +9,7 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
+import { usePermissions } from "../hooks/usePermissions";
 import { DataSummary } from "../components/DataSummary";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { api, ApiError } from "../lib/api";
@@ -17,6 +18,7 @@ import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, E
 export function ProjectDetail() {
   const { t } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
+  const { hasPermission } = usePermissions();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalRecordType, setModalRecordType] = useState("ProcessData");
@@ -214,12 +216,14 @@ export function ProjectDetail() {
                 setViewMode={setViewMode}
                 className="hidden sm:flex"
               />
-              <Button
-                size="sm"
-                onClick={() => setIsModalOpen(true)}
-              >
-                {t("new_record")}
-              </Button>
+              {hasPermission("projects:write") && hasPermission("data:write") && (
+                <Button
+                  size="sm"
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  {t("new_record")}
+                </Button>
+              )}
             </div>
           </div>
 

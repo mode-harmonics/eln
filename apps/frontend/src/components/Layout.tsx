@@ -16,34 +16,43 @@ import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { Dropdown } from "./Dropdown";
 import { api } from "../lib/api";
-
+import { usePermissions } from "../hooks/usePermissions";
 
 const NAVIGATION = [
-  { nameKey: "projects", href: "/projects", icon: Grid },
-  { nameKey: "inventory", href: "/inventory", icon: Database },
+  { nameKey: "projects", href: "/projects", icon: Grid, requiredPermission: "projects:read" },
+  { nameKey: "inventory", href: "/inventory", icon: Database, requiredPermission: "data:read" },
 ];
 
 const SYSTEM_NAVIGATION = [
-  { nameKey: "user_management", href: "/users", icon: Users },
-  { nameKey: "role_management", href: "/roles", icon: Shield },
+  { nameKey: "user_management", href: "/users", icon: Users, requiredPermission: "users:read" },
+  { nameKey: "role_management", href: "/roles", icon: Shield, requiredPermission: "roles:read" },
 ];
 
 export function Layout() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   useEffect(() => {
     api.get<any>("/api/v1/users/me")
-      .then((data) => setCurrentUser(data))
+      .then((data) => {
+        setCurrentUser(data);
+        if (data?.permissionList) {
+          localStorage.setItem("permissionList", JSON.stringify(data.permissionList));
+          window.dispatchEvent(new Event("permissionsChanged"));
+        }
+      })
       .catch(() => { });
   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("auth");
+    localStorage.removeItem("permissionList");
+    window.dispatchEvent(new Event("permissionsChanged"));
     navigate("/login");
   };
 
@@ -135,7 +144,7 @@ export function Layout() {
                 {t("workspace", "Workspace")}
               </p>
             </div>
-            {NAVIGATION.map((item) => {
+            {NAVIGATION.filter(item => hasPermission(item.requiredPermission)).map((item) => {
               const isActive =
                 location.pathname.startsWith(item.href) ||
                 (item.href === "/projects" &&
@@ -165,37 +174,41 @@ export function Layout() {
               );
             })}
 
-            <div className="px-6 py-2 mt-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                {t("system", "System")}
-              </p>
-            </div>
-            {SYSTEM_NAVIGATION.map((item) => {
-              const isActive = location.pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.nameKey}
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
-                  className={cn(
-                    isActive
-                      ? "bg-[#e1e5e8] text-gray-900"
-                      : "text-gray-500 hover:bg-black/5 hover:text-gray-900",
-                    "group flex items-center gap-3 px-6 py-2.5 text-[15px] font-medium transition-colors",
-                  )}
-                >
-                  <item.icon
-                    className={cn(
-                      isActive
-                        ? "text-gray-700"
-                        : "text-gray-400 group-hover:text-gray-600",
-                      "h-[18px] w-[18px] shrink-0 stroke-[2]",
-                    )}
-                  />
-                  {t(item.nameKey)}
-                </Link>
-              );
-            })}
+            {SYSTEM_NAVIGATION.some(item => hasPermission(item.requiredPermission)) && (
+              <>
+                <div className="px-6 py-2 mt-4">
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                    {t("system", "System")}
+                  </p>
+                </div>
+                {SYSTEM_NAVIGATION.filter(item => hasPermission(item.requiredPermission)).map((item) => {
+                  const isActive = location.pathname.startsWith(item.href);
+                  return (
+                    <Link
+                      key={item.nameKey}
+                      to={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        isActive
+                          ? "bg-[#e1e5e8] text-gray-900"
+                          : "text-gray-500 hover:bg-black/5 hover:text-gray-900",
+                        "group flex items-center gap-3 px-6 py-2.5 text-[15px] font-medium transition-colors",
+                      )}
+                    >
+                      <item.icon
+                        className={cn(
+                          isActive
+                            ? "text-gray-700"
+                            : "text-gray-400 group-hover:text-gray-600",
+                          "h-[18px] w-[18px] shrink-0 stroke-[2]",
+                        )}
+                      />
+                      {t(item.nameKey)}
+                    </Link>
+                  );
+                })}
+              </>
+            )}
           </nav>
         </div>
       </div>

@@ -4,11 +4,13 @@ import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { useViewMode } from "../hooks/useViewMode";
+import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { Role } from "../types";
 
 export function Roles() {
   const { t } = useTranslation();
+  const { hasPermission } = usePermissions();
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,9 +133,11 @@ export function Roles() {
                     <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("permissions")}
                     </th>
-                    <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("actions")}
-                    </th>
+                    {hasPermission("roles:write") && (
+                      <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                        {t("actions")}
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -154,17 +158,19 @@ export function Roles() {
                           {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No explicit permissions"}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => {
-                            setEditingRole(role);
-                            setIsEditModalOpen(true);
-                          }}
-                          className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700"
-                        >
-                          {t("edit_permissions")}
-                        </button>
-                      </td>
+                      {hasPermission("roles:write") && (
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <button
+                            onClick={() => {
+                              setEditingRole(role);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700"
+                          >
+                            {t("edit_permissions")}
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -191,17 +197,19 @@ export function Roles() {
                 <p className="text-[13px] text-gray-600 flex-1">
                   {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No permissions configured"}
                 </p>
-                <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
-                  <button
-                    onClick={() => {
-                      setEditingRole(role);
-                      setIsEditModalOpen(true);
-                    }}
-                    className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700 ml-auto"
-                  >
-                    {t("edit_permissions")}
-                  </button>
-                </div>
+                {hasPermission("roles:write") && (
+                  <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
+                    <button
+                      onClick={() => {
+                        setEditingRole(role);
+                        setIsEditModalOpen(true);
+                      }}
+                      className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700 ml-auto"
+                    >
+                      {t("edit_permissions")}
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

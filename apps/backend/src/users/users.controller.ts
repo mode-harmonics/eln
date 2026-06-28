@@ -2,11 +2,13 @@ import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query } fro
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../common/guards/permissions.guard';
+import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { UsersService } from './users.service';
 
 @ApiTags('users')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -18,6 +20,7 @@ export class UsersController {
   }
 
   @Get()
+  @RequirePermission('users:read')
   @ApiOperation({ summary: 'Get list of all users.' })
   async findAll(
     @Query('page') page?: number,
@@ -32,18 +35,21 @@ export class UsersController {
   }
 
   @Post()
+  @RequirePermission('users:write')
   @ApiOperation({ summary: 'Create a new user.' })
   async create(@Body() dto: { username: string; email: string; fullName: string; roleId?: string }) {
     return this.usersService.create(dto);
   }
 
   @Put(':id')
+  @RequirePermission('users:write')
   @ApiOperation({ summary: 'Update an existing user.' })
   async update(@Param('id') id: string, @Body() dto: { username?: string; email?: string; fullName?: string; roleId?: string; isActive?: boolean }) {
     return this.usersService.update(id, dto);
   }
 
   @Delete(':id')
+  @RequirePermission('users:write')
   @ApiOperation({ summary: 'Delete a user.' })
   async remove(@Param('id') id: string) {
     return this.usersService.remove(id);

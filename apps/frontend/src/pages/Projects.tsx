@@ -11,12 +11,14 @@ import { SearchInput } from "../components/SearchInput";
 import { TextInput, Textarea, Select } from "../components/FormFields";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
+import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { Project, PaginatedProjects } from "../types";
 
 export function Projects() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,9 +143,11 @@ export function Projects() {
           />
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} />
-            <Button onClick={() => setIsModalOpen(true)} size="sm">
-              {t("new_project")}
-            </Button>
+            {hasPermission("projects:write") && (
+              <Button onClick={() => setIsModalOpen(true)} size="sm">
+                {t("new_project")}
+              </Button>
+            )}
           </div>
         </div>
 
@@ -184,32 +188,34 @@ export function Projects() {
                       {project.creator?.fullName || project.createdBy}
                     </span>
                   </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleDeleteProject(project);
-                      }}
-                      className="text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setEditingProject(project);
-                        setEditName(project.name);
-                        setEditDesc(project.description || "");
-                        setEditStatus(project.status);
-                        setIsEditModalOpen(true);
-                      }}
-                      className="text-gray-400 hover:text-[#1d74f5] transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  {hasPermission("projects:write") && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleDeleteProject(project);
+                        }}
+                        className="text-gray-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setEditingProject(project);
+                          setEditName(project.name);
+                          setEditDesc(project.description || "");
+                          setEditStatus(project.status);
+                          setIsEditModalOpen(true);
+                        }}
+                        className="text-gray-400 hover:text-[#1d74f5] transition-colors"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </Link>
             ))}
@@ -237,9 +243,11 @@ export function Projects() {
                     <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("created")}
                     </th>
-                    <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("actions")}
-                    </th>
+                    {hasPermission("projects:write") && (
+                      <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+                        {t("actions")}
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -273,32 +281,34 @@ export function Projects() {
                       <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-500">
                         {format(new Date(project.createdAt), "MMM d, yyyy")}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="inline-flex items-center gap-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingProject(project);
-                              setEditName(project.name);
-                              setEditDesc(project.description || "");
-                              setEditStatus(project.status);
-                              setIsEditModalOpen(true);
-                            }}
-                            className="text-[#1d74f5] hover:text-blue-700 font-medium"
-                          >
-                            {t("edit")}
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteProject(project);
-                            }}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
+                      {hasPermission("projects:write") && (
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="inline-flex items-center gap-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingProject(project);
+                                setEditName(project.name);
+                                setEditDesc(project.description || "");
+                                setEditStatus(project.status);
+                                setIsEditModalOpen(true);
+                              }}
+                              className="text-[#1d74f5] hover:text-blue-700 font-medium"
+                            >
+                              {t("edit")}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteProject(project);
+                              }}
+                              className="text-red-600 hover:text-red-800"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

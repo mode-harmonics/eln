@@ -18,6 +18,8 @@ export function Login() {
       const data = await api.post<{ accessToken: string }>("/api/v1/auth/login", { username, password });
       localStorage.setItem("token", data.accessToken);
       localStorage.setItem("auth", "true");
+      localStorage.removeItem("permissionList");
+      window.dispatchEvent(new Event("permissionsChanged"));
       navigate("/projects");
     } catch (err) {
       if (err instanceof ApiError) {

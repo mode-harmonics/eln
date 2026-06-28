@@ -9,10 +9,12 @@ import { SearchInput } from "../components/SearchInput";
 import { TextInput, Select } from "../components/FormFields";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
+import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { InventoryItem } from "../types";
 
 export function Inventory() {
+  const { hasPermission } = usePermissions();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,9 +149,11 @@ export function Inventory() {
           />
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} className="hidden sm:flex" />
-            <Button size="sm" onClick={() => setIsModalOpen(true)}>
-              Add Item
-            </Button>
+            {hasPermission("data:write") && (
+              <Button size="sm" onClick={() => setIsModalOpen(true)}>
+                Add Item
+              </Button>
+            )}
           </div>
         </div>
 
@@ -166,7 +170,9 @@ export function Inventory() {
                     <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Location</th>
                     <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                     <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Used</th>
-                    <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                    {hasPermission("data:write") && (
+                      <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -201,23 +207,25 @@ export function Inventory() {
                       <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-500">
                         {item.lastUsedAt ? format(new Date(item.lastUsedAt), "MMM d, yyyy") : "Never"}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right space-x-3">
-                        <button
-                          onClick={() => {
-                            setEditingItem(item);
-                            setIsEditModalOpen(true);
-                          }}
-                          className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="text-red-600 hover:text-red-800"
-                        >
-                          <Trash2 className="w-4 h-4 inline" />
-                        </button>
-                      </td>
+                      {hasPermission("data:write") && (
+                        <td className="px-6 py-4 whitespace-nowrap text-right space-x-3">
+                          <button
+                            onClick={() => {
+                              setEditingItem(item);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteItem(item.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-4 h-4 inline" />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -228,12 +236,14 @@ export function Inventory() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
               <div key={item.id} className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col relative group">
-                <button
-                  onClick={() => handleDeleteItem(item.id)}
-                  className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {hasPermission("data:write") && (
+                  <button
+                    onClick={() => handleDeleteItem(item.id)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="font-semibold text-[17px] text-gray-900">{item.name}</h3>
@@ -268,17 +278,19 @@ export function Inventory() {
                   </div>
                 </div>
 
-                <div className="mt-auto w-full pt-4 border-t border-gray-100 flex justify-end">
-                  <button
-                    onClick={() => {
-                      setEditingItem(item);
-                      setIsEditModalOpen(true);
-                    }}
-                    className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700 transition-colors"
-                  >
-                    Edit Item
-                  </button>
-                </div>
+                {hasPermission("data:write") && (
+                  <div className="mt-auto w-full pt-4 border-t border-gray-100 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setEditingItem(item);
+                        setIsEditModalOpen(true);
+                      }}
+                      className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700 transition-colors"
+                    >
+                      Edit Item
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
