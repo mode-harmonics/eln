@@ -80,6 +80,26 @@ export class ExperimentsService {
   }
 
   /**
+   * Delete an experiment and all associated data.
+   * Removes attachments, collaborators, version history, and the experiment itself.
+   */
+  async remove(id: string): Promise<{ success: boolean }> {
+    const experiment = await this.experimentsRepo.findOne({ where: { id } });
+    if (!experiment) {
+      throw new NotFoundException('Experiment not found.');
+    }
+
+    await Promise.all([
+      this.attachmentsRepo.delete({ experimentId: id }),
+      this.collaboratorsRepo.delete({ experimentId: id }),
+      this.versionHistoryRepo.delete({ experimentId: id }),
+    ]);
+
+    await this.experimentsRepo.remove(experiment);
+    return { success: true };
+  }
+
+  /**
    * Locks the experiment for review: Draft -> In Review. Also writes a
    * versionHistory snapshot so the submitted state is auditable.
    */

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import { DataSource } from 'typeorm';
@@ -124,5 +124,53 @@ export class DataService {
 
     const repo = this.dataSource.getRepository(EntityClass);
     return repo.find({ where: { experimentId } as Record<string, unknown> });
+  }
+
+  /** PUT /data/:type/:id — update a single data row. */
+  async updateRow(type: string, id: string, body: Record<string, unknown>): Promise<unknown> {
+    const EntityClass = TYPE_PARAM_TO_ENTITY[type];
+    if (!EntityClass) {
+      throw new BadRequestException(
+        `Unknown data type "${type}". Expected one of: ${Object.keys(TYPE_PARAM_TO_ENTITY).join(', ')}.`,
+      );
+    }
+
+    const repo = this.dataSource.getRepository(EntityClass);
+    const row = await repo.findOne({ where: { id } as Record<string, unknown> });
+    if (!row) {
+      throw new NotFoundException(`Data row not found (type=${type}, id=${id}).`);
+    }
+
+    // Exclude internal/system fields from being overwritten
+    const allowedFields = repo.metadata.columns
+      .map((col) => col.propertyName)
+      .filter((col) => !['id', 'experimentId', 'createdAt'].includes(col));
+
+    for (const [key, value] of Object.entries(body)) {
+      if (allowedFields.includes(key)) {
+        (row as Record<string, unknown>)[key] = value;
+      }
+    }
+
+    return repo.save(row);
+  }
+
+  /** DELETE /data/:type/:id — delete a single data row. */
+  async deleteRow(type: string, id: string): Promise<{ success: boolean }> {
+    const EntityClass = TYPE_PARAM_TO_ENTITY[type];
+    if (!EntityClass) {
+      throw new BadRequestException(
+        `Unknown data type "${type}". Expected one of: ${Object.keys(TYPE_PARAM_TO_ENTITY).join(', ')}.`,
+      );
+    }
+
+    const repo = this.dataSource.getRepository(EntityClass);
+    const row = await repo.findOne({ where: { id } as Record<string, unknown> });
+    if (!row) {
+      throw new NotFoundException(`Data row not found (type=${type}, id=${id}).`);
+    }
+
+    await repo.remove(row);
+    return { success: true };
   }
 }

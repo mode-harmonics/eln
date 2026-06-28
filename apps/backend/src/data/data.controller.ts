@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Param,
   Post,
+  Put,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -87,5 +89,46 @@ export class DataController {
       );
     }
     return this.dataService.findByType(type, expId);
+  }
+
+  @Put(':type/:id')
+  @ApiOperation({
+    summary: 'Update a single data row by type and row ID.',
+  })
+  async updateRow(
+    @Param('type') type: string,
+    @Param('id') id: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const requiredPermission = `data_${type}:write`;
+    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
+    const hasGeneral = hasPermission(user.permissionList, 'data:write');
+    if (!hasSpecific && !hasGeneral) {
+      throw new ForbiddenException(
+        `You do not have the required permission: ${requiredPermission} or data:write`,
+      );
+    }
+    return this.dataService.updateRow(type, id, body);
+  }
+
+  @Delete(':type/:id')
+  @ApiOperation({
+    summary: 'Delete a single data row by type and row ID.',
+  })
+  async deleteRow(
+    @Param('type') type: string,
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const requiredPermission = `data_${type}:write`;
+    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
+    const hasGeneral = hasPermission(user.permissionList, 'data:write');
+    if (!hasSpecific && !hasGeneral) {
+      throw new ForbiddenException(
+        `You do not have the required permission: ${requiredPermission} or data:write`,
+      );
+    }
+    return this.dataService.deleteRow(type, id);
   }
 }

@@ -1,14 +1,19 @@
 import React, { useEffect, useState } from "react";
-import { Info, Loader2 } from "lucide-react";
+import { Edit3, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
+import { Button } from "./Button";
+import { Modal } from "./Modal";
 
-/** Shared hook: fetch /api/v1/data/:type/:expId and return { data, loading, error } */
+/** Shared hook: fetch /api/v1/data/:type/:expId and return { data, loading, error, refresh } */
 function useTableData<T>(type: string, experimentId: string) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [ref, setRef] = useState(0);
+
+  const refresh = () => setRef((n) => n + 1);
 
   useEffect(() => {
     if (!experimentId) return;
@@ -17,9 +22,9 @@ function useTableData<T>(type: string, experimentId: string) {
       .then(setData)
       .catch((err) => setError(err?.message ?? "加载失败"))
       .finally(() => setLoading(false));
-  }, [type, experimentId]);
+  }, [type, experimentId, ref]);
 
-  return { data, loading, error };
+  return { data, loading, error, refresh };
 }
 
 function TableShell({ loading, error, children }: { loading: boolean; error: string | null; children: React.ReactNode }) {
@@ -28,9 +33,182 @@ function TableShell({ loading, error, children }: { loading: boolean; error: str
   return <>{children}</>;
 }
 
+// ─── Shared Row Edit / Delete Components ──────────────────────────────────────
+
+const SYSTEM_FIELDS = new Set(["id", "experimentId", "createdAt"]);
+
+interface EditRowModalProps {
+  open: boolean;
+  onClose: () => void;
+  row: Record<string, unknown>;
+  type: string;
+  onSaved: () => void;
+}
+
+function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) {
+  const { t } = useTranslation();
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    // Initialize form from row data, skipping system fields
+    const init: Record<string, string> = {};
+    for (const [key, val] of Object.entries(row)) {
+      if (!SYSTEM_FIELDS.has(key)) {
+        init[key] = val == null ? "" : String(val);
+      }
+    }
+    setForm(init);
+  }, [row]);
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      // Convert numeric strings back to appropriate types
+      const body: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(form)) {
+        if (key === "picked" || key === "isHorizontal") {
+          body[key] = val === "true" || val === "Yes";
+        } else {
+          body[key] = val === "" ? null : val;
+        }
+      }
+      await api.put(`/api/v1/data/${type}/${row.id}`, body);
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      alert(err?.message ?? "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const editableFields = Object.keys(form).filter((key) => !SYSTEM_FIELDS.has(key));
+
+  return (
+    <Modal open={open} onClose={onClose} title={`${t("edit_row")} - ${row.cellId || row.cellName || row.id}`} maxWidth="2xl">
+      <form onSubmit={handleSave} className="flex flex-col" style={{ maxHeight: "calc(90vh - 80px)" }}>
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            {editableFields.map((key) => (
+              <div key={key}>
+                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{key}</label>
+                {key === "picked" || key === "isHorizontal" ? (
+                  <select
+                    value={form[key]}
+                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                    disabled={saving}
+                  >
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={form[key] ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm font-mono text-xs"
+                    disabled={saving}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="sticky bottom-0 bg-white px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100 rounded-b-lg">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
+            {t("cancel")}
+          </Button>
+          <Button type="submit" loading={saving} disabled={saving}>
+            {saving ? t("saving") : t("save")}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+interface DeleteRowConfirmProps {
+  open: boolean;
+  onClose: () => void;
+  rowId: string;
+  type: string;
+  onDeleted: () => void;
+}
+
+function DeleteRowConfirm({ open, onClose, rowId, type, onDeleted }: DeleteRowConfirmProps) {
+  const { t } = useTranslation();
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await api.delete(`/api/v1/data/${type}/${rowId}`);
+      onDeleted();
+      onClose();
+    } catch (err: any) {
+      alert(err?.message ?? "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={t("delete_confirm_title")}>
+      <div className="p-6 space-y-5">
+        <p className="text-sm text-gray-600">{t("delete_row_confirm")}</p>
+        <div className="pt-2 flex items-center justify-end gap-3">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={deleting}>
+            {t("cancel")}
+          </Button>
+          <Button type="button" variant="danger" onClick={handleDelete} loading={deleting} disabled={deleting}>
+            {deleting ? t("deleting") : t("delete")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+interface RowActionsProps {
+  row: Record<string, unknown>;
+  type: string;
+  onRefresh: () => void;
+}
+
+function RowActions({ row, type, onRefresh }: RowActionsProps) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
+  return (
+    <>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setEditOpen(true)}
+          className="p-1 text-gray-400 hover:text-[#1d74f5] transition-colors"
+          title="Edit"
+        >
+          <Edit3 className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+          title="Delete"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      <EditRowModal open={editOpen} onClose={() => setEditOpen(false)} row={row} type={type} onSaved={onRefresh} />
+      <DeleteRowConfirm open={deleteOpen} onClose={() => setDeleteOpen(false)} rowId={row.id as string} type={type} onDeleted={onRefresh} />
+    </>
+  );
+}
+
 export function ProcessDataTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
-  const { data, loading, error } = useTableData<any>('process', experimentId);
+  const { data, loading, error, refresh } = useTableData<any>('process', experimentId);
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
@@ -182,6 +360,9 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_picked")}
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              {t("actions")}
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -294,6 +475,9 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
                   </span>
                 )}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                <RowActions row={d} type="process" onRefresh={refresh} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -305,7 +489,7 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
 
 export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
-  const { data, loading, error } = useTableData<any>('calendar', experimentId);
+  const { data, loading, error, refresh } = useTableData<any>('calendar', experimentId);
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
@@ -388,6 +572,9 @@ export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
                 {t("col_comp_rGrowth")}
               </span>
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              {t("actions")}
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -438,6 +625,9 @@ export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.rGrowth}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                <RowActions row={d} type="calendar" onRefresh={refresh} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -449,7 +639,7 @@ export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
 
 export function StorageSwellingTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
-  const { data, loading, error } = useTableData<any>('swelling', experimentId);
+  const { data, loading, error, refresh } = useTableData<any>('swelling', experimentId);
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
@@ -477,6 +667,9 @@ export function StorageSwellingTable({ experimentId }: { experimentId: string })
                 {t("col_comp_vg")}
               </span>
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              {t("actions")}
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -497,6 +690,9 @@ export function StorageSwellingTable({ experimentId }: { experimentId: string })
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.vg}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                <RowActions row={d} type="swelling" onRefresh={refresh} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -508,7 +704,7 @@ export function StorageSwellingTable({ experimentId }: { experimentId: string })
 
 export function EnergyEfficiencyTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
-  const { data, loading, error } = useTableData<any>('efficiency', experimentId);
+  const { data, loading, error, refresh } = useTableData<any>('efficiency', experimentId);
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
@@ -544,6 +740,9 @@ export function EnergyEfficiencyTable({ experimentId }: { experimentId: string }
                 {t("col_comp_eePct")}
               </span>
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              {t("actions")}
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -567,6 +766,9 @@ export function EnergyEfficiencyTable({ experimentId }: { experimentId: string }
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.eePct}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                <RowActions row={d} type="efficiency" onRefresh={refresh} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -578,7 +780,7 @@ export function EnergyEfficiencyTable({ experimentId }: { experimentId: string }
 
 export function DcrTestTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
-  const { data, loading, error } = useTableData<any>('dcr', experimentId);
+  const { data, loading, error, refresh } = useTableData<any>('dcr', experimentId);
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
@@ -642,6 +844,9 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
                 {t("col_comp_cRcProduct")}
               </span>
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              {t("actions")}
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -683,6 +888,9 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 bg-[#f8fafc]">
                 {d.cRcProduct}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                <RowActions row={d} type="dcr" onRefresh={refresh} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -694,7 +902,7 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
 
 export function FastChargeTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
-  const { data, loading, error } = useTableData<any>('fastcharge', experimentId);
+  const { data, loading, error, refresh } = useTableData<any>('fastcharge', experimentId);
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
@@ -722,6 +930,9 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
                 {t("col_comp_computedTime")}
               </span>
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              {t("actions")}
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -746,6 +957,9 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
                   ? `${d.computedFastChargeTime} min`
                   : "N/A"}
               </td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                <RowActions row={d} type="fastcharge" onRefresh={refresh} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -757,7 +971,7 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
 
 export function HtCycleTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
-  const { data, loading, error } = useTableData<any>('htcycle', experimentId);
+  const { data, loading, error, refresh } = useTableData<any>('htcycle', experimentId);
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
@@ -770,6 +984,9 @@ export function HtCycleTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_caps")}
             </th>
+            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              {t("actions")}
+            </th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -780,6 +997,9 @@ export function HtCycleTable({ experimentId }: { experimentId: string }) {
               </td>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                 {JSON.stringify(d.caps)}
+              </td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                <RowActions row={d} type="htcycle" onRefresh={refresh} />
               </td>
             </tr>
           ))}
