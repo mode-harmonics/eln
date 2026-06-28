@@ -1,55 +1,97 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, FileText, X } from "lucide-react";
-import {
-  MOCK_PROJECTS,
-  MOCK_EXPERIMENTS,
-  MOCK_USERS,
-  MOCK_PROCESS_DATA,
-  MOCK_CALENDAR_LIFE,
-  MOCK_STORAGE_SWELLING,
-  MOCK_ENERGY_EFFICIENCY,
-  MOCK_DCR_TEST,
-  MOCK_FAST_CHARGE,
-  MOCK_HT_CYCLE,
-} from "../mockData";
+import { ArrowLeft, FileText, X, Loader2 } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { DataSummary } from "../components/DataSummary";
+import { api, ApiError } from "../lib/api";
+import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle } from "../types";
 
 export function ProjectDetail() {
   const { t } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [viewMode, setViewMode] = useViewMode(
-    "project_detail_view_mode",
-    "list",
-  );
-  const [activeTab, setActiveTab] = useState<"summary" | "experiments">(
-    "summary",
-  );
-  const project = MOCK_PROJECTS.find((p) => p.id === projectId);
-  const experiments = MOCK_EXPERIMENTS.filter((e) => e.projectId === projectId);
+  const [viewMode, setViewMode] = useViewMode("project_detail_view_mode", "list");
+  const [activeTab, setActiveTab] = useState<"summary" | "experiments">("summary");
+
+  const [project, setProject] = useState<Project | null>(null);
+  const [experiments, setExperiments] = useState<Experiment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Business data for DataSummary tab
+  const [processData, setProcessData] = useState<ProcessData[]>([]);
+  const [calendarLife, setCalendarLife] = useState<CalendarLife[]>([]);
+  const [storageSwelling, setStorageSwelling] = useState<StorageSwelling[]>([]);
+  const [energyEfficiency, setEnergyEfficiency] = useState<EnergyEfficiency[]>([]);
+  const [dcrTest, setDcrTest] = useState<DcrTest[]>([]);
+  const [fastCharge, setFastCharge] = useState<FastCharge[]>([]);
+  const [htCycle, setHtCycle] = useState<HtCycle[]>([]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    setLoading(true);
+    Promise.all([
+      api.get<Project>(`/api/v1/projects/${projectId}`),
+      api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`),
+    ])
+      .then(([proj, exps]) => {
+        setProject(proj);
+        setExperiments(exps);
+
+        // Load business data for all experiments in this project
+        const expIds = exps.map((e) => e.id);
+        if (expIds.length === 0) return;
+
+        const dataTypes: Array<{ type: string; setter: (d: any[]) => void }> = [
+          { type: "process", setter: setProcessData },
+          { type: "calendar", setter: setCalendarLife },
+          { type: "swelling", setter: setStorageSwelling },
+          { type: "efficiency", setter: setEnergyEfficiency },
+          { type: "dcr", setter: setDcrTest },
+          { type: "fastcharge", setter: setFastCharge },
+          { type: "htcycle", setter: setHtCycle },
+        ];
+
+        // Fetch data for each experiment × data-type pair in parallel, then flatten
+        expIds.forEach((expId) => {
+          dataTypes.forEach(({ type, setter }) => {
+            api.get<any[]>(`/api/v1/data/${type}/${expId}`)
+              .then((rows) => setter((prev) => [...prev, ...rows]))
+              .catch(() => {}); // silence 404s for experiment/type combos with no data
+          });
+        });
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "加载失败"))
+      .finally(() => setLoading(false));
+  }, [projectId]);
 
   const handleCreateRecord = (e: React.FormEvent) => {
     e.preventDefault();
     setIsModalOpen(false);
   };
 
-  if (!project) return <div className="p-10">{t("project_not_found")}</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (error || !project) {
+    return <div className="p-10">{error ?? t("project_not_found")}</div>;
+  }
 
   return (
     <div className="space-y-8">
       <div>
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <Link
-            to="/projects"
-            className="hover:text-gray-900 flex items-center gap-1"
-          >
+          <Link to="/projects" className="hover:text-gray-900 flex items-center gap-1">
             <ArrowLeft className="w-4 h-4" />
             {t("projects")}
           </Link>
@@ -91,27 +133,13 @@ export function ProjectDetail() {
 
       {activeTab === "summary" ? (
         <DataSummary
-          processData={MOCK_PROCESS_DATA.filter((d) =>
-            experiments.some((e) => e.id === d.experimentId),
-          )}
-          calendarLife={MOCK_CALENDAR_LIFE.filter((d) =>
-            experiments.some((e) => e.id === d.experimentId),
-          )}
-          storageSwelling={MOCK_STORAGE_SWELLING.filter((d) =>
-            experiments.some((e) => e.id === d.experimentId),
-          )}
-          energyEfficiency={MOCK_ENERGY_EFFICIENCY.filter((d) =>
-            experiments.some((e) => e.id === d.experimentId),
-          )}
-          dcrTest={MOCK_DCR_TEST.filter((d) =>
-            experiments.some((e) => e.id === d.experimentId),
-          )}
-          fastCharge={MOCK_FAST_CHARGE.filter((d) =>
-            experiments.some((e) => e.id === d.experimentId),
-          )}
-          htCycle={MOCK_HT_CYCLE.filter((d) =>
-            experiments.some((e) => e.id === d.experimentId),
-          )}
+          processData={processData}
+          calendarLife={calendarLife}
+          storageSwelling={storageSwelling}
+          energyEfficiency={energyEfficiency}
+          dcrTest={dcrTest}
+          fastCharge={fastCharge}
+          htCycle={htCycle}
         />
       ) : (
         <div className="space-y-6">
@@ -137,50 +165,42 @@ export function ProjectDetail() {
           {viewMode === "list" ? (
             <div className="border border-gray-200 rounded bg-white">
               <div className="divide-y divide-gray-100">
-                {experiments.map((exp) => {
-                  const author = MOCK_USERS.find((u) => u.id === exp.createdBy);
-                  return (
-                    <Link
-                      key={exp.id}
-                      to={`/experiments/${exp.id}`}
-                      className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors group"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="text-gray-400 group-hover:text-gray-600">
-                          <FileText className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h3 className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">
-                            {exp.title}
-                          </h3>
-                          <div className="mt-1 flex items-center gap-3 text-[13px] text-gray-500">
-                            <span>{author?.fullName}</span>
-                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                            <span>
-                              {t("updated")}{" "}
-                              {format(new Date(exp.updatedAt), "MMM d, yyyy")}
-                            </span>
-                            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                            <span>v{exp.versionNo}</span>
-                          </div>
-                        </div>
+                {experiments.map((exp) => (
+                  <Link
+                    key={exp.id}
+                    to={`/experiments/${exp.id}`}
+                    className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="text-gray-400 group-hover:text-gray-600">
+                        <FileText className="w-5 h-5" />
                       </div>
                       <div>
-                        <span
-                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
-                            exp.status === "Approved"
-                              ? "bg-[#f0f9f4] text-[#1e8b4e]"
-                              : exp.status === "In Review"
-                                ? "bg-[#fff8e6] text-[#b28200]"
-                                : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {exp.status}
-                        </span>
+                        <h3 className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">
+                          {exp.title}
+                        </h3>
+                        <div className="mt-1 flex items-center gap-3 text-[13px] text-gray-500">
+                          <span>{t("updated")}{" "}{format(new Date(exp.updatedAt), "MMM d, yyyy")}</span>
+                          <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                          <span>v{exp.versionNo}</span>
+                        </div>
                       </div>
-                    </Link>
-                  );
-                })}
+                    </div>
+                    <div>
+                      <span
+                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
+                          exp.status === "Approved"
+                            ? "bg-[#f0f9f4] text-[#1e8b4e]"
+                            : exp.status === "In Review"
+                              ? "bg-[#fff8e6] text-[#b28200]"
+                              : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {exp.status}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
                 {experiments.length === 0 && (
                   <div className="p-8 text-center text-sm text-gray-500">
                     {t("no_experiments_found")}
@@ -193,47 +213,41 @@ export function ProjectDetail() {
             </div>
           ) : (
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {experiments.map((exp) => {
-                const author = MOCK_USERS.find((u) => u.id === exp.createdBy);
-                return (
-                  <Link
-                    key={exp.id}
-                    to={`/experiments/${exp.id}`}
-                    className="group flex flex-col border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors relative"
-                  >
-                    <div className="absolute top-6 right-6 text-gray-400 group-hover:text-gray-600">
-                      <FileText className="w-5 h-5" />
+              {experiments.map((exp) => (
+                <Link
+                  key={exp.id}
+                  to={`/experiments/${exp.id}`}
+                  className="group flex flex-col border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors relative"
+                >
+                  <div className="absolute top-6 right-6 text-gray-400 group-hover:text-gray-600">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <div className="pr-8 mb-4">
+                    <h3 className="text-[17px] font-semibold text-gray-900 group-hover:text-[#1d74f5] leading-tight">
+                      {exp.title}
+                    </h3>
+                  </div>
+                  <div className="mt-auto pt-6 flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
+                          exp.status === "Approved"
+                            ? "bg-[#f0f9f4] text-[#1e8b4e]"
+                            : exp.status === "In Review"
+                              ? "bg-[#fff8e6] text-[#b28200]"
+                              : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {exp.status}
+                      </span>
+                      <span className="text-[13px] text-gray-500">v{exp.versionNo}</span>
                     </div>
-                    <div className="pr-8 mb-4">
-                      <h3 className="text-[17px] font-semibold text-gray-900 group-hover:text-[#1d74f5] leading-tight">
-                        {exp.title}
-                      </h3>
+                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[13px] text-gray-500">
+                      <span>{format(new Date(exp.updatedAt), "MMM d")}</span>
                     </div>
-                    <div className="mt-auto pt-6 flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
-                            exp.status === "Approved"
-                              ? "bg-[#f0f9f4] text-[#1e8b4e]"
-                              : exp.status === "In Review"
-                                ? "bg-[#fff8e6] text-[#b28200]"
-                                : "bg-gray-100 text-gray-600"
-                          }`}
-                        >
-                          {exp.status}
-                        </span>
-                        <span className="text-[13px] text-gray-500">
-                          v{exp.versionNo}
-                        </span>
-                      </div>
-                      <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[13px] text-gray-500">
-                        <span>{author?.fullName}</span>
-                        <span>{format(new Date(exp.updatedAt), "MMM d")}</span>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
           {viewMode === "grid" && experiments.length > 0 && <Pagination />}
@@ -247,18 +261,13 @@ export function ProjectDetail() {
               <h2 className="text-[17px] font-bold text-gray-900">
                 {t("create_new_record")}
               </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <form onSubmit={handleCreateRecord} className="p-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t("title")}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("title")}</label>
                 <input
                   type="text"
                   required
@@ -267,18 +276,12 @@ export function ProjectDetail() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t("record_type")}
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("record_type")}</label>
                 <select className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm">
                   <option value="ProcessData">{t("process_data")}</option>
                   <option value="CalendarLife">{t("calendar_life")}</option>
-                  <option value="StorageSwelling">
-                    {t("storage_swelling")}
-                  </option>
-                  <option value="EnergyEfficiency">
-                    {t("energy_efficiency")}
-                  </option>
+                  <option value="StorageSwelling">{t("storage_swelling")}</option>
+                  <option value="EnergyEfficiency">{t("energy_efficiency")}</option>
                   <option value="DcrTest">{t("dcr_test")}</option>
                   <option value="FastCharge">{t("fast_charge")}</option>
                   <option value="HtCycle">{t("ht_cycle")}</option>

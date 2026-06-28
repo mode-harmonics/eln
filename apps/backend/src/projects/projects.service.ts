@@ -50,7 +50,23 @@ export class ProjectsService {
     );
   }
 
+  async findOne(id: string): Promise<Project> {
+    const project = await this.projectsRepo.findOne({ where: { id } });
+    if (!project) throw new NotFoundException('Project not found.');
+    return project;
+  }
+
+  async findExperiments(projectId: string): Promise<Experiment[]> {
+    const project = await this.projectsRepo.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found.');
+    return this.experimentsRepo.find({
+      where: { projectId },
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {
+
     const project = this.projectsRepo.create({
       id: uuid(),
       name: dto.name,

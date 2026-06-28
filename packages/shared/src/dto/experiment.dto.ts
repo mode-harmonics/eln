@@ -52,3 +52,19 @@ export interface VersionHistoryDto {
   updatedBy: string;
   updatedAt: string;
 }
+
+export interface UploadResult {
+  experimentId: string;
+  sheets: Array<{
+    sheetName: string;
+    dataType: string;
+    rowsInserted: number;
+  }>;
+  attachmentId: string;
+}
+
+export interface DataQueryResult {
+  type: string;
+  experimentId: string;
+  rows: Record<string, unknown>[];
+}

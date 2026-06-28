@@ -11,10 +11,12 @@ import {
   User,
   Globe,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { Dropdown } from "./Dropdown";
+import { api } from "../lib/api";
+
 
 const NAVIGATION = [
   { nameKey: "projects", href: "/projects", icon: Grid },
@@ -31,8 +33,16 @@ export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    api.get<any>("/api/v1/users/me")
+      .then((data) => setCurrentUser(data))
+      .catch(() => {});
+  }, []);
 
   const handleLogout = () => {
+    localStorage.removeItem("token");
     localStorage.removeItem("auth");
     navigate("/login");
   };
@@ -40,6 +50,9 @@ export function Layout() {
   const toggleLanguage = () => {
     i18n.changeLanguage(i18n.language === "en" ? "zh" : "en");
   };
+
+  const initial = currentUser?.fullName ? currentUser.fullName.charAt(0).toUpperCase() : "U";
+  const displayName = currentUser?.fullName || "User";
 
   return (
     <div className="flex h-screen bg-white">
@@ -69,17 +82,18 @@ export function Layout() {
             <Dropdown
               trigger={
                 <button className="bg-[#f27429] text-white px-2.5 h-7 flex items-center justify-center rounded font-semibold text-xs hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-[#f27429] focus:ring-offset-2 relative z-20">
-                  {t("admin_user", "Admin User")}
+                  {displayName}
                 </button>
               }
             >
               <div className="flex items-center gap-3 px-4 py-3 bg-gray-50">
                 <div className="bg-[#f27429] text-white w-8 h-8 flex items-center justify-center rounded font-semibold text-sm shrink-0">
-                  A
+                  {initial}
                 </div>
                 <span className="text-sm font-medium text-gray-900 truncate">
-                  {t("admin_user", "Admin User")}
+                  {displayName}
                 </span>
+
               </div>
               <div className="border-t border-gray-100 my-1"></div>
               <button

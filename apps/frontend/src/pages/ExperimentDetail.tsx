@@ -1,13 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowLeft, Info, Download, FileText } from "lucide-react";
-import { 
-  MOCK_EXPERIMENTS, 
-  MOCK_PROJECTS, 
-  MOCK_USERS
-} from "../mockData";
-import { 
+import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import {
   ProcessDataTable,
   CalendarLifeTable,
   StorageSwellingTable,
@@ -17,35 +12,55 @@ import {
   HtCycleTable
 } from "../components/ExperimentTables";
 import { ExperimentChart } from "../components/ExperimentChart";
+import { api, ApiError } from "../lib/api";
+import type { Experiment } from "../types";
+
+interface ExperimentDetail extends Experiment {
+  attachments?: unknown[];
+  collaborators?: unknown[];
+}
 
 export function ExperimentDetail() {
   const { experimentId } = useParams<{ experimentId: string }>();
-  const experiment = MOCK_EXPERIMENTS.find((e) => e.id === experimentId);
-  const project = MOCK_PROJECTS.find((p) => p.id === experiment?.projectId);
-  const author = MOCK_USERS.find((u) => u.id === experiment?.createdBy);
+  const [experiment, setExperiment] = useState<ExperimentDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!experiment || !project) return <div className="p-10">Experiment not found</div>;
+  useEffect(() => {
+    if (!experimentId) return;
+    api.get<ExperimentDetail>(`/api/v1/experiments/${experimentId}`)
+      .then(setExperiment)
+      .catch((err) => setError(err instanceof ApiError ? err.message : "加载失败"))
+      .finally(() => setLoading(false));
+  }, [experimentId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (error || !experiment) {
+    return <div className="p-10 text-sm text-red-500">{error ?? "Experiment not found"}</div>;
+  }
+
+  const assayType = experiment.metadata?.assayType;
 
   const renderTable = () => {
-    switch (experiment.metadata.assayType) {
-      case "ProcessData":
-        return <ProcessDataTable />;
-      case "CalendarLife":
-        return <CalendarLifeTable />;
-      case "StorageSwelling":
-        return <StorageSwellingTable />;
-      case "EnergyEfficiency":
-        return <EnergyEfficiencyTable />;
-      case "DcrTest":
-        return <DcrTestTable />;
-      case "FastCharge":
-        return <FastChargeTable />;
-      case "HtCycle":
-        return <HtCycleTable />;
+    switch (assayType) {
+      case "ProcessData":    return <ProcessDataTable experimentId={experiment.id} />;
+      case "CalendarLife":   return <CalendarLifeTable experimentId={experiment.id} />;
+      case "StorageSwelling": return <StorageSwellingTable experimentId={experiment.id} />;
+      case "EnergyEfficiency": return <EnergyEfficiencyTable experimentId={experiment.id} />;
+      case "DcrTest":        return <DcrTestTable experimentId={experiment.id} />;
+      case "FastCharge":     return <FastChargeTable experimentId={experiment.id} />;
+      case "HtCycle":        return <HtCycleTable experimentId={experiment.id} />;
       default:
         return (
           <div className="p-8 text-center text-sm text-gray-500">
-            No mock data available for {experiment.metadata.assayType || 'this type'}.
+            No data table available for {assayType || "this type"}.
           </div>
         );
     }
@@ -57,43 +72,50 @@ export function ExperimentDetail() {
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
           <Link to="/projects" className="hover:text-gray-900">Projects</Link>
           <span>/</span>
-          <Link to={`/projects/${project.id}`} className="hover:text-gray-900">{project.name}</Link>
-          <span>/</span>
+          {experiment.projectId && (
+            <>
+              <Link to={`/projects/${experiment.projectId}`} className="hover:text-gray-900">
+                Project
+              </Link>
+              <span>/</span>
+            </>
+          )}
           <span className="text-gray-900 font-medium">{experiment.title}</span>
         </div>
-        
+
         <div className="flex items-end justify-between">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900">{experiment.title}</h1>
-                <div className="mt-2 flex items-center gap-4 text-[13px] text-gray-500">
-                  <span>Author: {author?.fullName}</span>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{experiment.title}</h1>
+            <div className="mt-2 flex items-center gap-4 text-[13px] text-gray-500">
+              <span>Updated {format(new Date(experiment.updatedAt), "PPp")}</span>
+              <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+              <span>v{experiment.versionNo}</span>
+              {assayType && (
+                <>
                   <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                  <span>Updated {format(new Date(experiment.updatedAt), "PPp")}</span>
-                  <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                  <span>v{experiment.versionNo}</span>
-                </div>
+                  <span>{assayType}</span>
+                </>
+              )}
             </div>
-            <div className="flex items-center gap-3">
-              <button className="px-4 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded hover:bg-gray-200 transition-colors">
-                Export
-              </button>
-              <button className="px-4 py-1.5 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors">
-                Edit Record
-              </button>
-            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="px-4 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded hover:bg-gray-200 transition-colors">
+              Export
+            </button>
+          </div>
         </div>
         <div className="h-px bg-gray-200 w-full mt-6"></div>
       </div>
 
       <div className="space-y-8">
-        <ExperimentChart assayType={experiment.metadata.assayType || 'Unknown'} />
+        <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} />
 
         {/* Data Table Section */}
         <div className="bg-white border border-gray-200 rounded shadow-sm">
           <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
             <h2 className="text-[15px] font-semibold text-gray-900">Data Table</h2>
             <button className="text-gray-400 hover:text-gray-600">
-                <Download className="w-4 h-4" />
+              <Download className="w-4 h-4" />
             </button>
           </div>
           {renderTable()}

@@ -18,6 +18,18 @@ export class ProjectsController {
     return this.projectsService.findVisibleToUser(user.id);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single project by ID.' })
+  async findOne(@Param('id') id: string) {
+    return this.projectsService.findOne(id);
+  }
+
+  @Get(':id/experiments')
+  @ApiOperation({ summary: 'List all experiments belonging to this project.' })
+  async findExperiments(@Param('id') id: string) {
+    return this.projectsService.findExperiments(id);
+  }
+
   @Post()
   @ApiOperation({ summary: 'Create a new project, owned by the current user.' })
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateProjectDto) {

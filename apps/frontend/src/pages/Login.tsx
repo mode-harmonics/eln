@@ -1,19 +1,32 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { api, ApiError } from "../lib/api";
 
 export function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("pi@eln.local");
   const [password, setPassword] = useState("Password123!");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => {
+    setError(null);
+    try {
+      const data = await api.post<{ accessToken: string }>("/api/v1/auth/login", { email, password });
+      localStorage.setItem("token", data.accessToken);
       localStorage.setItem("auth", "true");
       navigate("/projects");
-    }, 600);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.status === 401 ? "邮箱或密码不正确" : err.message);
+      } else {
+        setError("网络错误，请稍后重试");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,13 +71,17 @@ export function Login() {
               />
             </div>
 
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
+          )}
+
           <div className="pt-2">
             <button
               type="submit"
               disabled={loading}
               className="flex w-full justify-center rounded bg-[#1d74f5] px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-[#1d74f5] focus:ring-offset-2 disabled:opacity-70 transition-colors"
             >
-              {loading ? "Signing in..." : "Login"}
+              {loading ? "登录中..." : "Login"}
             </button>
           </div>
         </form>

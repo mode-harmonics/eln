@@ -1,20 +1,38 @@
-import React from "react";
-import { Info } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Info, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import {
-  MOCK_PROCESS_DATA,
-  MOCK_CALENDAR_LIFE,
-  MOCK_STORAGE_SWELLING,
-  MOCK_ENERGY_EFFICIENCY,
-  MOCK_DCR_TEST,
-  MOCK_FAST_CHARGE,
-  MOCK_HT_CYCLE,
-} from "../mockData";
+import { api } from "../lib/api";
 
-export function ProcessDataTable() {
+/** Shared hook: fetch /api/v1/data/:type/:expId and return { data, loading, error } */
+function useTableData<T>(type: string, experimentId: string) {
+  const [data, setData] = useState<T[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!experimentId) return;
+    setLoading(true);
+    api.get<T[]>(`/api/v1/data/${type}/${experimentId}`)
+      .then(setData)
+      .catch((err) => setError(err?.message ?? "加载失败"))
+      .finally(() => setLoading(false));
+  }, [type, experimentId]);
+
+  return { data, loading, error };
+}
+
+function TableShell({ loading, error, children }: { loading: boolean; error: string | null; children: React.ReactNode }) {
+  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>;
+  if (error) return <div className="p-6 text-center text-sm text-red-500">{error}</div>;
+  return <>{children}</>;
+}
+
+export function ProcessDataTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
+  const { data, loading, error } = useTableData<any>('process', experimentId);
   return (
+    <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -167,7 +185,7 @@ export function ProcessDataTable() {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {MOCK_PROCESS_DATA.map((d) => (
+          {data.map((d: any) => (
             <tr key={d.id}>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                 {d.cellId}
@@ -281,12 +299,15 @@ export function ProcessDataTable() {
         </tbody>
       </table>
     </div>
+    </TableShell>
   );
 }
 
-export function CalendarLifeTable() {
+export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
+  const { data, loading, error } = useTableData<any>('calendar', experimentId);
   return (
+    <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -370,7 +391,7 @@ export function CalendarLifeTable() {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {MOCK_CALENDAR_LIFE.map((d) => (
+          {data.map((d: any) => (
             <tr key={d.id || d.dayCount}>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                 {d.cellName}
@@ -422,12 +443,15 @@ export function CalendarLifeTable() {
         </tbody>
       </table>
     </div>
+    </TableShell>
   );
 }
 
-export function StorageSwellingTable() {
+export function StorageSwellingTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
+  const { data, loading, error } = useTableData<any>('swelling', experimentId);
   return (
+    <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -456,7 +480,7 @@ export function StorageSwellingTable() {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {MOCK_STORAGE_SWELLING.map((d) => (
+          {data.map((d: any) => (
             <tr key={d.id}>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                 {d.cellName}
@@ -478,12 +502,15 @@ export function StorageSwellingTable() {
         </tbody>
       </table>
     </div>
+    </TableShell>
   );
 }
 
-export function EnergyEfficiencyTable() {
+export function EnergyEfficiencyTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
+  const { data, loading, error } = useTableData<any>('efficiency', experimentId);
   return (
+    <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -520,7 +547,7 @@ export function EnergyEfficiencyTable() {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {MOCK_ENERGY_EFFICIENCY.map((d) => (
+          {data.map((d: any) => (
             <tr key={d.id}>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                 {d.cellName}
@@ -545,12 +572,15 @@ export function EnergyEfficiencyTable() {
         </tbody>
       </table>
     </div>
+    </TableShell>
   );
 }
 
-export function DcrTestTable() {
+export function DcrTestTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
+  const { data, loading, error } = useTableData<any>('dcr', experimentId);
   return (
+    <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -615,7 +645,7 @@ export function DcrTestTable() {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {MOCK_DCR_TEST.map((d) => (
+          {data.map((d: any) => (
             <tr key={d.id}>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                 {d.cellName}
@@ -658,12 +688,15 @@ export function DcrTestTable() {
         </tbody>
       </table>
     </div>
+    </TableShell>
   );
 }
 
-export function FastChargeTable() {
+export function FastChargeTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
+  const { data, loading, error } = useTableData<any>('fastcharge', experimentId);
   return (
+    <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -692,7 +725,7 @@ export function FastChargeTable() {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {MOCK_FAST_CHARGE.map((d) => (
+          {data.map((d: any) => (
             <tr key={d.id}>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                 {d.cellName}
@@ -718,12 +751,15 @@ export function FastChargeTable() {
         </tbody>
       </table>
     </div>
+    </TableShell>
   );
 }
 
-export function HtCycleTable() {
+export function HtCycleTable({ experimentId }: { experimentId: string }) {
   const { t } = useTranslation();
+  const { data, loading, error } = useTableData<any>('htcycle', experimentId);
   return (
+    <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
@@ -737,7 +773,7 @@ export function HtCycleTable() {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {MOCK_HT_CYCLE.map((d) => (
+          {data.map((d: any) => (
             <tr key={d.id}>
               <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
                 {d.cycle}
@@ -750,5 +786,6 @@ export function HtCycleTable() {
         </tbody>
       </table>
     </div>
+    </TableShell>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -11,27 +11,40 @@ import {
   ResponsiveContainer,
   Legend
 } from 'recharts';
-import {
-  MOCK_PROCESS_DATA,
-  MOCK_CALENDAR_LIFE,
-  MOCK_STORAGE_SWELLING,
-  MOCK_ENERGY_EFFICIENCY,
-  MOCK_DCR_TEST,
-  MOCK_FAST_CHARGE,
-  MOCK_HT_CYCLE
-} from '../mockData';
+import { api } from '../lib/api';
 
 interface ExperimentChartProps {
   assayType: string;
+  experimentId?: string;
 }
 
-export function ExperimentChart({ assayType }: ExperimentChartProps) {
+const TYPE_MAP: Record<string, string> = {
+  ProcessData: 'process',
+  CalendarLife: 'calendar',
+  StorageSwelling: 'swelling',
+  EnergyEfficiency: 'efficiency',
+  DcrTest: 'dcr',
+  FastCharge: 'fastcharge',
+  HtCycle: 'htcycle',
+};
+
+export function ExperimentChart({ assayType, experimentId }: ExperimentChartProps) {
+  const [data, setData] = useState<any[]>([]);
+
+  useEffect(() => {
+    const type = TYPE_MAP[assayType];
+    if (!type || !experimentId) return;
+    api.get<any[]>(`/api/v1/data/${type}/${experimentId}`)
+      .then(setData)
+      .catch(() => setData([]));
+  }, [assayType, experimentId]);
+
   const renderChart = () => {
     switch (assayType) {
       case 'ProcessData':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={MOCK_PROCESS_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="cellId" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
@@ -43,7 +56,7 @@ export function ExperimentChart({ assayType }: ExperimentChartProps) {
       case 'CalendarLife':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={MOCK_CALENDAR_LIFE} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="dayCount" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
               <YAxis domain={['auto', 'auto']} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
@@ -55,7 +68,7 @@ export function ExperimentChart({ assayType }: ExperimentChartProps) {
       case 'StorageSwelling':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={MOCK_STORAGE_SWELLING} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="dayCount" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
@@ -67,7 +80,7 @@ export function ExperimentChart({ assayType }: ExperimentChartProps) {
       case 'EnergyEfficiency':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={MOCK_ENERGY_EFFICIENCY} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="cellName" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
@@ -81,31 +94,32 @@ export function ExperimentChart({ assayType }: ExperimentChartProps) {
       case 'DcrTest':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={MOCK_DCR_TEST} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="cellName" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
               <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-              <Bar dataKey="di" fill="#1d74f5" radius={[4, 4, 0, 0]} name="DCR (di)" maxBarSize={40} />
+              <Bar dataKey="ddcr" fill="#1d74f5" radius={[4, 4, 0, 0]} name="D-DCR" maxBarSize={40} />
+              <Bar dataKey="cdcr" fill="#10b981" radius={[4, 4, 0, 0]} name="C-DCR" maxBarSize={40} />
             </BarChart>
           </ResponsiveContainer>
         );
       case 'FastCharge':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={MOCK_FAST_CHARGE} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="cellName" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
               <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-              <Bar dataKey="c0" fill="#1d74f5" radius={[4, 4, 0, 0]} name="c0" maxBarSize={40} />
+              <Bar dataKey="computedFastChargeTime" fill="#1d74f5" radius={[4, 4, 0, 0]} name="10%-80% SOC (min)" maxBarSize={40} />
             </BarChart>
           </ResponsiveContainer>
         );
       case 'HtCycle':
         return (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={MOCK_HT_CYCLE} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
               <XAxis dataKey="cycle" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} dy={10} />
               <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />

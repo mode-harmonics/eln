@@ -5,6 +5,7 @@
     "rootDir": "src",
     "noEmit": true,
     "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "paths": {
@@ -15,5 +16,5 @@
       "@eln/shared/*": ["../../packages/shared/src/*"]
     }
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

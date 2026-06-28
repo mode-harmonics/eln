@@ -4,7 +4,12 @@
     "outDir": "dist",
     "rootDir": "./src",
     "declaration": true,
-    "composite": true
+    "composite": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "paths": {}
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }

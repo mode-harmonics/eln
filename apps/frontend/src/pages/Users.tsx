@@ -1,36 +1,112 @@
-import React, { useState } from "react";
-import { Search, X } from "lucide-react";
-import { format } from "date-fns";
+import React, { useEffect, useState } from "react";
+import { Search, X, Loader2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { MOCK_USERS } from "../mockData";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
+import { api, ApiError } from "../lib/api";
+import type { User, Role } from "../types";
 
 export function Users() {
   const { t } = useTranslation();
+  const [users, setUsers] = useState<any[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
-  const [newUserRole, setNewUserRole] = useState("Scientist");
+  const [newUserRole, setNewUserRole] = useState("");
   const [viewMode, setViewMode] = useViewMode("users_view_mode", "list");
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      api.get<any[]>("/api/v1/users"),
+      api.get<Role[]>("/api/v1/roles"),
+    ])
+      .then(([userData, roleData]) => {
+        setUsers(userData);
+        setRoles(roleData);
+        if (roleData.length > 0) {
+          setNewUserRole(roleData[0].id);
+        }
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : "加载用户数据失败"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsModalOpen(false);
-    setNewUserEmail("");
-    setNewUserName("");
-    setNewUserRole("Scientist");
+    if (!newUserEmail || !newUserName) return;
+    try {
+      const created = await api.post<any>("/api/v1/users", {
+        email: newUserEmail,
+        fullName: newUserName,
+        roleId: newUserRole || undefined,
+      });
+      // Refresh user list
+      const updatedList = await api.get<any[]>("/api/v1/users");
+      setUsers(updatedList);
+      setIsModalOpen(false);
+      setNewUserEmail("");
+      setNewUserName("");
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "创建用户失败");
+    }
   };
 
-  const handleUpdateUser = (e: React.FormEvent) => {
+  const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsEditModalOpen(false);
-    setEditingUser(null);
+    if (!editingUser) return;
+    const form = e.currentTarget as HTMLFormElement;
+    const email = (form.elements.namedItem("edit-email") as HTMLInputElement).value;
+    const name = (form.elements.namedItem("edit-name") as HTMLInputElement).value;
+    const roleId = (form.elements.namedItem("edit-role") as HTMLSelectElement).value;
+    const isActive = (form.elements.namedItem("edit-active") as HTMLInputElement).checked;
+
+    try {
+      await api.put(`/api/v1/users/${editingUser.id}`, {
+        email,
+        fullName: name,
+        roleId: roleId || undefined,
+        isActive,
+      });
+      const updatedList = await api.get<any[]>("/api/v1/users");
+      setUsers(updatedList);
+      setIsEditModalOpen(false);
+      setEditingUser(null);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "更新用户失败");
+    }
   };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!window.confirm("确定要删除此用户吗？")) return;
+    try {
+      await api.delete(`/api/v1/users/${userId}`);
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "删除用户失败");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="p-8 text-center text-sm text-red-500">{error}</div>;
+  }
 
   return (
     <div className="space-y-8 relative">
@@ -72,137 +148,134 @@ export function Users() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("name")}
                     </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("email")}
                     </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("role")}
                     </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("status")}
                     </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider"
-                    >
+                    <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                       {t("actions")}
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {MOCK_USERS.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50/50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold border border-blue-200">
-                            {user.fullName
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
+                  {users.map((user) => {
+                    const initials = user.fullName ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase() : "U";
+                    return (
+                      <tr key={user.id} className="hover:bg-gray-50/50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold border border-blue-200">
+                              {initials}
+                            </div>
+                            <div className="text-[13px] font-medium text-gray-900">
+                              {user.fullName}
+                            </div>
                           </div>
-                          <div className="text-[13px] font-medium text-gray-900">
-                            {user.fullName}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-[13px] text-gray-500">
+                            {user.email}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-[13px] text-gray-500">
-                          {user.email}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
-                          {user.roleId === "r1"
-                            ? t("admin_role")
-                            : t("editor_role")}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-[#f0f9f4] text-[#1e8b4e]">
-                          {t("active")}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button
-                          onClick={() => {
-                            setEditingUser(user);
-                            setIsEditModalOpen(true);
-                          }}
-                          className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700"
-                        >
-                          {t("edit")}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
+                            {user.roleName || "No Role"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={cn(
+                            "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
+                            user.isActive ? "bg-[#f0f9f4] text-[#1e8b4e]" : "bg-red-50 text-red-600"
+                          )}>
+                            {user.isActive ? t("active") : t("inactive", "Inactive")}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                          <button
+                            onClick={() => {
+                              setEditingUser(user);
+                              setIsEditModalOpen(true);
+                            }}
+                            className="text-[#1d74f5] hover:text-blue-700 font-medium"
+                          >
+                            {t("edit")}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteUser(user.id)}
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 className="w-4 h-4 inline" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {MOCK_USERS.map((user) => (
-              <div
-                key={user.id}
-                className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col items-center text-center"
-              >
-                <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold border border-blue-200">
-                  {user.fullName
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </div>
-                <h3 className="font-semibold text-[17px] text-gray-900">
-                  {user.fullName}
-                </h3>
-                <p className="text-[13px] text-gray-500 mt-1 mb-4">
-                  {user.email}
-                </p>
-
-                <div className="flex items-center gap-2 mb-6">
-                  <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
-                    {user.roleId === "r1" ? t("admin_role") : t("editor_role")}
-                  </span>
-                  <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-[#f0f9f4] text-[#1e8b4e]">
-                    {t("active")}
-                  </span>
-                </div>
-
-                <div className="mt-auto w-full pt-4 border-t border-gray-100">
+            {users.map((user) => {
+              const initials = user.fullName ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase() : "U";
+              return (
+                <div
+                  key={user.id}
+                  className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col items-center text-center relative group"
+                >
                   <button
-                    onClick={() => {
-                      setEditingUser(user);
-                      setIsEditModalOpen(true);
-                    }}
-                    className="w-full py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
+                    onClick={() => handleDeleteUser(user.id)}
+                    className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
-                    {t("edit_user")}
+                    <Trash2 className="w-4 h-4" />
                   </button>
+                  <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold border border-blue-200">
+                    {initials}
+                  </div>
+                  <h3 className="font-semibold text-[17px] text-gray-900">
+                    {user.fullName}
+                  </h3>
+                  <p className="text-[13px] text-gray-500 mt-1 mb-4">
+                    {user.email}
+                  </p>
+
+                  <div className="flex items-center gap-2 mb-6">
+                    <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
+                      {user.roleName || "No Role"}
+                    </span>
+                    <span className={cn(
+                      "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
+                      user.isActive ? "bg-[#f0f9f4] text-[#1e8b4e]" : "bg-red-50 text-red-600"
+                    )}>
+                      {user.isActive ? t("active") : t("inactive", "Inactive")}
+                    </span>
+                  </div>
+
+                  <div className="mt-auto w-full pt-4 border-t border-gray-100">
+                    <button
+                      onClick={() => {
+                        setEditingUser(user);
+                        setIsEditModalOpen(true);
+                      }}
+                      className="w-full py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
+                    >
+                      {t("edit_user")}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
-        <Pagination
-          className={
-            viewMode === "list" ? "border-t border-gray-200 bg-white" : ""
-          }
-        />
+        <Pagination className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""} />
       </div>
 
       {isEditModalOpen && editingUser && (
@@ -221,10 +294,7 @@ export function Users() {
             </div>
             <form onSubmit={handleUpdateUser} className="p-6 space-y-5">
               <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  htmlFor="edit-email"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-email">
                   {t("email")}
                 </label>
                 <input
@@ -236,10 +306,7 @@ export function Users() {
                 />
               </div>
               <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  htmlFor="edit-name"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-name">
                   {t("name")}
                 </label>
                 <input
@@ -251,21 +318,30 @@ export function Users() {
                 />
               </div>
               <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  htmlFor="edit-role"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-role">
                   {t("role")}
                 </label>
                 <select
                   id="edit-role"
                   className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  defaultValue={editingUser.role}
+                  defaultValue={editingUser.roleId || ""}
                 >
-                  <option value="Admin">{t("admin_role")}</option>
-                  <option value="Scientist">{t("scientist_role")}</option>
-                  <option value="Viewer">{t("viewer_role")}</option>
+                  <option value="">No Role</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>{role.name}</option>
+                  ))}
                 </select>
+              </div>
+              <div className="flex items-center gap-3">
+                <input
+                  id="edit-active"
+                  type="checkbox"
+                  defaultChecked={editingUser.isActive}
+                  className="w-4 h-4 text-[#1d74f5] rounded border-gray-300"
+                />
+                <label className="text-sm text-gray-700 font-medium" htmlFor="edit-active">
+                  {t("active")}
+                </label>
               </div>
               <div className="pt-4 flex items-center justify-end gap-3 mt-6">
                 <button
@@ -303,10 +379,7 @@ export function Users() {
             </div>
             <form onSubmit={handleCreateUser} className="p-6 space-y-5">
               <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  htmlFor="email"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
                   {t("email")}
                 </label>
                 <input
@@ -320,10 +393,7 @@ export function Users() {
                 />
               </div>
               <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  htmlFor="name"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="name">
                   {t("name")}
                 </label>
                 <input
@@ -337,10 +407,7 @@ export function Users() {
                 />
               </div>
               <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-1"
-                  htmlFor="role"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="role">
                   {t("role")}
                 </label>
                 <select
@@ -349,9 +416,9 @@ export function Users() {
                   value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value)}
                 >
-                  <option value="Admin">{t("admin_role")}</option>
-                  <option value="Scientist">{t("scientist_role")}</option>
-                  <option value="Viewer">{t("viewer_role")}</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>{role.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="pt-4 flex items-center justify-end gap-3 mt-6">
@@ -366,7 +433,7 @@ export function Users() {
                   type="submit"
                   className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
                 >
-                  {t("send_invite")}
+                  {t("create")}
                 </button>
               </div>
             </form>

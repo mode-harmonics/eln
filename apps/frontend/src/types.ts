@@ -1,59 +1,17 @@
-export type Role = {
-  id: string;
-  name: string;
-  permissionList: string[];
-};
+import {
+  RoleDto,
+  UserDto,
+  ProjectDto,
+  ExperimentDto,
+  InventoryDto
+} from "@eln/shared";
 
-export type User = {
-  id: string;
-  email: string;
-  fullName: string;
-  avatar?: string;
-  roleId: string;
-  departmentId: string;
-  isActive: boolean;
-};
+export type Role = RoleDto;
+export type User = UserDto & { roleId?: string | null; roleName?: string | null };
+export type Project = ProjectDto;
+export type Experiment = ExperimentDto;
+export type InventoryItem = InventoryDto;
 
-export type Project = {
-  id: string;
-  name: string;
-  description: string;
-  status: "Active" | "Archived";
-  createdBy: string;
-  createdAt: string;
-};
-
-export type Experiment = {
-  id: string;
-  projectId: string;
-  title: string;
-  content: string;
-  status: "Draft" | "In Review" | "Approved" | "Archived";
-  metadata: {
-    assayType?: string;
-    notebookRef?: string;
-    deviceUsed?: string;
-    reagentLotId?: string;
-  };
-  aiAnalysisOutput?: string;
-  versionNo: number;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type InventoryItem = {
-  id: string;
-  name: string;
-  type: string;
-  lotNumber: string;
-  quantity: string;
-  storageLocation: string;
-  purity: string;
-  status: "In Stock" | "Low Stock" | "Out of Stock";
-  lastUsedAt: string;
-  createdAt: string;
-};
 
 // Battery Data Types
 export type ProcessData = {

@@ -11,6 +11,7 @@ import { ProjectsModule } from './projects/projects.module';
 import { ExperimentsModule } from './experiments/experiments.module';
 import { DataModule } from './data/data.module';
 import { AiModule } from './ai/ai.module';
+import { InventoryModule } from './inventory/inventory.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AiModule } from './ai/ai.module';
     ExperimentsModule,
     DataModule,
     AiModule,
+    InventoryModule,
   ],
   providers: [ConfigService],
 })
