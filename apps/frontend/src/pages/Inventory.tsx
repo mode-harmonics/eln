@@ -209,21 +209,12 @@ export function Inventory() {
                       </td>
                       {hasPermission("data:write") && (
                         <td className="px-6 py-4 whitespace-nowrap text-right space-x-3">
-                          <button
-                            onClick={() => {
-                              setEditingItem(item);
-                              setIsEditModalOpen(true);
-                            }}
-                            className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700"
-                          >
+                          <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                             Edit
-                          </button>
-                          <button
-                            onClick={() => handleDeleteItem(item.id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="w-4 h-4 inline" />
-                          </button>
+                          </Button>
+                          <Button variant="text" onClick={() => handleDeleteItem(item.id)} className="!text-red-600 hover:!text-red-800">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </td>
                       )}
                     </tr>
@@ -237,12 +228,9 @@ export function Inventory() {
             {items.map((item) => (
               <div key={item.id} className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col relative group">
                 {hasPermission("data:write") && (
-                  <button
-                    onClick={() => handleDeleteItem(item.id)}
-                    className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
+                  <Button variant="text" onClick={() => handleDeleteItem(item.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600">
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </Button>
                 )}
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -280,15 +268,9 @@ export function Inventory() {
 
                 {hasPermission("data:write") && (
                   <div className="mt-auto w-full pt-4 border-t border-gray-100 flex justify-end">
-                    <button
-                      onClick={() => {
-                        setEditingItem(item);
-                        setIsEditModalOpen(true);
-                      }}
-                      className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700 transition-colors"
-                    >
+                    <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                       Edit Item
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>

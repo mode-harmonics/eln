@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { X } from "lucide-react";
+import { Button } from "./Button";
 import { cn } from "../lib/utils";
 
 interface ModalProps {
@@ -40,12 +41,9 @@ export function Modal({ open, onClose, title, children, maxWidth = "lg" }: Modal
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <h2 className="text-[17px] font-bold text-gray-900">{title}</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 rounded p-1 hover:bg-gray-100 transition-colors"
-          >
+          <Button variant="text" onClick={onClose}>
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
         {children}
       </div>

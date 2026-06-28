@@ -2,7 +2,7 @@ import React from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
 
-type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
+type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "text";
 type ButtonSize = "sm" | "md" | "lg";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -21,6 +21,8 @@ const variantStyles: Record<ButtonVariant, string> = {
     "bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2",
   ghost:
     "text-gray-500 hover:text-gray-900 hover:bg-gray-100",
+  text:
+    "text-gray-500 hover:text-gray-900",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
@@ -44,7 +46,7 @@ export function Button({
       className={cn(
         "inline-flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed",
         variantStyles[variant],
-        sizeStyles[size],
+        variant !== "text" && sizeStyles[size],
         className,
       )}
       {...props}

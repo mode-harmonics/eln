@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Search, Shield, X, Loader2 } from "lucide-react";
+import { Shield, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
+import { Button } from "../components/Button";
+import { Modal } from "../components/Modal";
+import { SearchInput } from "../components/SearchInput";
 import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
@@ -93,25 +96,12 @@ export function Roles() {
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSearchQuery(searchInput);
-              setCurrentPage(1);
-            }}
-            className="relative w-full max-w-sm flex items-center"
-          >
-            <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
-              <Search className="h-4 w-4" />
-            </button>
-            <input
-              type="text"
-              placeholder={t("search_roles")}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded border border-gray-300 pl-9 pr-4 py-1.5 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
-            />
-          </form>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
+            placeholder={t("search_roles")}
+          />
           <div className="flex items-center gap-4">
             <ViewToggle
               viewMode={viewMode}
@@ -160,15 +150,9 @@ export function Roles() {
                       </td>
                       {hasPermission("roles:write") && (
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <button
-                            onClick={() => {
-                              setEditingRole(role);
-                              setIsEditModalOpen(true);
-                            }}
-                            className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700"
-                          >
+                          <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                             {t("edit_permissions")}
-                          </button>
+                          </Button>
                         </td>
                       )}
                     </tr>
@@ -199,15 +183,9 @@ export function Roles() {
                 </p>
                 {hasPermission("roles:write") && (
                   <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
-                    <button
-                      onClick={() => {
-                        setEditingRole(role);
-                        setIsEditModalOpen(true);
-                      }}
-                      className="text-[13px] font-medium text-[#1d74f5] hover:text-blue-700 ml-auto"
-                    >
+                    <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="ml-auto !text-[#1d74f5] hover:!text-blue-700">
                       {t("edit_permissions")}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -224,20 +202,7 @@ export function Roles() {
         />
       </div>
 
-      {isEditModalOpen && editingRole && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200 m-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[17px] font-bold text-gray-900">
-                {t("edit_permissions")} - {editingRole.name}
-              </h2>
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      <Modal open={isEditModalOpen && !!editingRole} onClose={() => setIsEditModalOpen(false)} title={`${t("edit_permissions")} - ${editingRole?.name}`} maxWidth="2xl">
             <form onSubmit={handleUpdateRole} className="p-6 space-y-5">
               <div>
                 <p className="text-sm text-gray-600 mb-4">
@@ -291,7 +256,7 @@ export function Roles() {
                               <input
                                 type="checkbox"
                                 checked={isRead}
-                                disabled={isFullControl || editingRole.name === "Owner"}
+                                disabled={isFullControl || editingRole?.name === "Owner"}
                                 onChange={(e) => handleToggle("read", e.target.checked)}
                                 className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
                               />
@@ -300,7 +265,7 @@ export function Roles() {
                               <input
                                 type="checkbox"
                                 checked={isWrite}
-                                disabled={isFullControl || editingRole.name === "Owner"}
+                                disabled={isFullControl || editingRole?.name === "Owner"}
                                 onChange={(e) => handleToggle("write", e.target.checked)}
                                 className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
                               />
@@ -309,7 +274,7 @@ export function Roles() {
                               <input
                                 type="checkbox"
                                 checked={isFullControl}
-                                disabled={editingRole.name === "Owner"}
+                                disabled={editingRole?.name === "Owner"}
                                 onChange={(e) => handleToggle("*", e.target.checked)}
                                 className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
                               />
@@ -322,26 +287,15 @@ export function Roles() {
                 </div>
               </div>
               <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                >
+                <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>
                   {t("cancel")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving || editingRole.name === "Owner"}
-                  className="px-4 py-2 text-sm font-medium bg-[#1d74f5] text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-[#1d74f5] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
-                >
-                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                </Button>
+                <Button type="submit" loading={saving} disabled={saving || editingRole?.name === "Owner"}>
                   {t("save")}
-                </button>
+                </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+          </Modal>
     </div>
   );
 }

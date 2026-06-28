@@ -14,6 +14,7 @@ import {
 } from "../components/ExperimentTables";
 import { ExperimentChart } from "../components/ExperimentChart";
 import { Breadcrumb } from "../components/Breadcrumb";
+import { Button } from "../components/Button";
 import { api, ApiError } from "../lib/api";
 import type { Experiment } from "../types";
 
@@ -99,9 +100,9 @@ export function ExperimentDetail() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="px-4 py-1.5 bg-gray-100 text-gray-700 text-sm font-medium rounded hover:bg-gray-200 transition-colors">
+            <Button variant="secondary">
               Export
-            </button>
+            </Button>
           </div>
         </div>
         <div className="h-px bg-gray-200 w-full mt-6"></div>
@@ -114,9 +115,9 @@ export function ExperimentDetail() {
         <div className="bg-white border border-gray-200 rounded shadow-sm">
           <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
             <h2 className="text-[15px] font-semibold text-gray-900">Data Table</h2>
-            <button className="text-gray-400 hover:text-gray-600">
+            <Button variant="text">
               <Download className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
           {renderTable()}
         </div>

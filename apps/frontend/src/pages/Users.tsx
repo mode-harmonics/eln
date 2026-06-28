@@ -241,22 +241,12 @@ export function Users() {
                         {hasPermission("users:write") && (
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="inline-flex items-center gap-3">
-                              <button
-                                onClick={() => {
-                                  loadRolesIfNeeded();
-                                  setEditingUser(user);
-                                  setIsEditModalOpen(true);
-                                }}
-                                className="text-[#1d74f5] hover:text-blue-700 font-medium"
-                              >
+                              <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                                 {t("edit")}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteUser(user.id)}
-                                className="text-red-600 hover:text-red-800"
-                              >
+                              </Button>
+                              <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="!text-red-600 hover:!text-red-800">
                                 <Trash2 className="w-4 h-4" />
-                              </button>
+                              </Button>
                             </div>
                           </td>
                         )}
@@ -277,12 +267,9 @@ export function Users() {
                   className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col items-center text-center relative group"
                 >
                   {hasPermission("users:write") && (
-                    <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="absolute top-4 right-4 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
+                    <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600">
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </Button>
                   )}
                   <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold border border-blue-200">
                     {initials}
@@ -308,16 +295,9 @@ export function Users() {
 
                   {hasPermission("users:write") && (
                     <div className="mt-auto w-full pt-4 border-t border-gray-100">
-                      <button
-                        onClick={() => {
-                          loadRolesIfNeeded();
-                          setEditingUser(user);
-                          setIsEditModalOpen(true);
-                        }}
-                        className="w-full py-1.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
-                      >
+                      <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="w-full !text-gray-600 hover:!text-gray-900">
                         {t("edit_user")}
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>

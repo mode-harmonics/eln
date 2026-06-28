@@ -169,28 +169,22 @@ export function ProjectDetail() {
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setSearchParams({ tab: "summary" })}
-            className={cn(
-              "whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors",
-              activeTab === "summary"
-                ? "border-[#1d74f5] text-[#1d74f5]"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
-            )}
-          >
+          <Button variant="text" onClick={() => setSearchParams({ tab: "summary" })} className={cn(
+            "!pb-4 border-b-2 font-medium text-sm",
+            activeTab === "summary"
+              ? "border-[#1d74f5] text-[#1d74f5]"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
+          )}>
             {t("data_summary")}
-          </button>
-          <button
-            onClick={() => setSearchParams({ tab: "experiments" })}
-            className={cn(
-              "whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors",
-              activeTab === "experiments"
-                ? "border-[#1d74f5] text-[#1d74f5]"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
-            )}
-          >
+          </Button>
+          <Button variant="text" onClick={() => setSearchParams({ tab: "experiments" })} className={cn(
+            "!pb-4 border-b-2 font-medium text-sm",
+            activeTab === "experiments"
+              ? "border-[#1d74f5] text-[#1d74f5]"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
+          )}>
             {t("experiments_records")}
-          </button>
+          </Button>
         </nav>
       </div>
 

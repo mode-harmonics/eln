@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { User, Mail, Shield, Key, Loader2 } from "lucide-react";
+import { Button } from "../components/Button";
 import { api, ApiError } from "../lib/api";
 
 export function Profile() {
@@ -74,9 +75,9 @@ export function Profile() {
                 <Key className="w-4 h-4" />
                 Security
               </h3>
-              <button disabled className="px-4 py-2 text-sm font-medium text-gray-400 bg-gray-100 border border-gray-200 rounded cursor-not-allowed">
+              <Button disabled variant="secondary">
                 Change Password (Controlled by Identity Service)
-              </button>
+              </Button>
             </div>
           </div>
         </div>
