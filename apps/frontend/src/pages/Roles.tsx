@@ -21,6 +21,17 @@ export function Roles() {
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
 
+  const [permissionList, setPermissionList] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editingRole) {
+      setPermissionList(editingRole.permissionList || []);
+    } else {
+      setPermissionList([]);
+    }
+  }, [editingRole]);
+
   useEffect(() => {
     setLoading(true);
     const queryParams = new URLSearchParams();
@@ -39,10 +50,22 @@ export function Roles() {
       .finally(() => setLoading(false));
   }, [currentPage, pageSize, searchQuery]);
 
-  const handleUpdateRole = (e: React.FormEvent) => {
+  const handleUpdateRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsEditModalOpen(false);
-    setEditingRole(null);
+    if (!editingRole) return;
+    setSaving(true);
+    try {
+      const updatedRole = await api.put<Role>(`/api/v1/roles/${editingRole.id}`, {
+        permissionList,
+      });
+      setRoles((prev) => prev.map((r) => (r.id === editingRole.id ? updatedRole : r)));
+      setIsEditModalOpen(false);
+      setEditingRole(null);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "更新角色权限失败");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -195,7 +218,7 @@ export function Roles() {
 
       {isEditModalOpen && editingRole && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
+          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-2xl animate-in fade-in zoom-in-95 duration-200 m-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
               <h2 className="text-[17px] font-bold text-gray-900">
                 {t("edit_permissions")} - {editingRole.name}
@@ -212,38 +235,99 @@ export function Roles() {
                 <p className="text-sm text-gray-600 mb-4">
                   {t("adjust_access")}
                 </p>
-                <div className="space-y-3">
-                  {[
-                    "view_projects",
-                    "edit_projects",
-                    "manage_inventory",
-                    "approve_experiments",
-                    "system_settings_perm",
-                  ].map((permKey, idx) => {
-                    const isChecked = Array.isArray(editingRole.permissionList) && editingRole.permissionList.includes(permKey);
-                    return (
-                      <label key={idx} className="flex items-center gap-3">
-                        <input
-                          type="checkbox"
-                          defaultChecked={isChecked || editingRole.name === "Admin"}
-                          disabled
-                          className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 opacity-70 cursor-not-allowed"
-                        />
-                        <span className="text-sm text-gray-700">
-                          {t(permKey)}
-                        </span>
-                      </label>
-                    );
-                  })}
+                <div className="border border-gray-200 rounded overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          {t("module_resource")}
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          {t("read")}
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          {t("write")}
+                        </th>
+                        <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          {t("full_control")}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {[
+                        { key: "projects", label: t("projects") },
+                        { key: "experiments", label: t("experiments") },
+                        { key: "data", label: t("data_summary") },
+                        { key: "users", label: t("user_management") },
+                        { key: "roles", label: t("role_management") },
+                      ].map((resource) => {
+                        const isFullControl = permissionList.includes(`${resource.key}:*`);
+                        const isRead = isFullControl || permissionList.includes(`${resource.key}:read`);
+                        const isWrite = isFullControl || permissionList.includes(`${resource.key}:write`);
+
+                        const handleToggle = (action: string, checked: boolean) => {
+                          const perm = `${resource.key}:${action}`;
+                          if (checked) {
+                            setPermissionList((prev) => [...prev, perm]);
+                          } else {
+                            setPermissionList((prev) => prev.filter((p) => p !== perm));
+                          }
+                        };
+
+                        return (
+                          <tr key={resource.key} className="hover:bg-gray-50/50">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-700">
+                              {resource.label}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center">
+                              <input
+                                type="checkbox"
+                                checked={isRead}
+                                disabled={isFullControl || editingRole.name === "Owner"}
+                                onChange={(e) => handleToggle("read", e.target.checked)}
+                                className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
+                              />
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center">
+                              <input
+                                type="checkbox"
+                                checked={isWrite}
+                                disabled={isFullControl || editingRole.name === "Owner"}
+                                onChange={(e) => handleToggle("write", e.target.checked)}
+                                className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
+                              />
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-center">
+                              <input
+                                type="checkbox"
+                                checked={isFullControl}
+                                disabled={editingRole.name === "Owner"}
+                                onChange={(e) => handleToggle("*", e.target.checked)}
+                                className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
+              <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setIsEditModalOpen(false)}
                   className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
                 >
-                  {t("close")}
+                  {t("cancel")}
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving || editingRole.name === "Owner"}
+                  className="px-4 py-2 text-sm font-medium bg-[#1d74f5] text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-[#1d74f5] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 transition-colors"
+                >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  {t("save")}
                 </button>
               </div>
             </form>

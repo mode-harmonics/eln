@@ -1,5 +1,4 @@
-import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react";
-import { useTranslation, Trans } from "react-i18next";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface PaginationProps {
@@ -19,183 +18,124 @@ export function Pagination({
   onPageSizeChange,
   className,
 }: PaginationProps) {
-  const { t } = useTranslation();
-
-  // If onPageChange or totalItems is not provided, render a simplified static view
-  if (!onPageChange || totalItems === 0) {
-    return (
-      <div className={cn("flex items-center justify-between px-6 py-4", className)}>
-        <div className="flex flex-1 justify-between sm:hidden">
-          <button className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            {t("previous")}
-          </button>
-          <button className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-            {t("next")}
-          </button>
-        </div>
-        <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm text-gray-500">
-              <Trans
-                i18nKey="showing_results"
-                values={{
-                  from: 0,
-                  to: 0,
-                  total: 0,
-                }}
-                components={{
-                  num1: <span className="font-medium text-gray-900" />,
-                  num2: <span className="font-medium text-gray-900" />,
-                  num3: <span className="font-medium text-gray-900" />,
-                }}
-              />
-            </p>
-          </div>
-          <div>
-            <nav className="isolate inline-flex gap-1" aria-label="Pagination">
-              <button className="relative inline-flex items-center rounded-md px-2 py-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-colors">
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <button
-                aria-current="page"
-                className="relative z-10 inline-flex items-center rounded-md bg-[#1d74f5] px-3.5 py-1.5 text-sm font-medium text-white shadow-sm"
-              >
-                1
-              </button>
-              <button className="relative inline-flex items-center rounded-md px-2 py-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-colors">
-                <ChevronRight className="h-4 w-4" />
-              </button>
-            </nav>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const totalPages = Math.ceil(totalItems / pageSize);
-  const fromIndex = (currentPage - 1) * pageSize + 1;
+  const totalPages = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
+  const fromIndex = totalItems > 0 ? (currentPage - 1) * pageSize + 1 : 0;
   const toIndex = Math.min(currentPage * pageSize, totalItems);
 
-  // Generate page numbers to display
   const getPageNumbers = () => {
     const pages: Array<number | "ellipsis"> = [];
-    if (totalPages <= 5) {
+    if (totalPages <= 7) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
-      if (currentPage <= 3) {
-        pages.push(1, 2, 3, "ellipsis", totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        pages.push(1, "ellipsis", totalPages - 2, totalPages - 1, totalPages);
-      } else {
-        pages.push(1, "ellipsis", currentPage - 1, currentPage, currentPage + 1, "ellipsis", totalPages);
-      }
+      pages.push(1);
+      if (currentPage > 3) pages.push("ellipsis");
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+      for (let i = start; i <= end; i++) pages.push(i);
+      if (currentPage < totalPages - 2) pages.push("ellipsis");
+      pages.push(totalPages);
     }
     return pages;
   };
 
-  const pages = getPageNumbers();
-
   return (
-    <div className={cn("flex items-center justify-between px-6 py-4", className)}>
-      <div className="flex flex-1 justify-between sm:hidden">
-        <button
-          onClick={() => currentPage > 1 && onPageChange(currentPage - 1)}
-          disabled={currentPage <= 1}
-          className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {t("previous")}
-        </button>
-        <button
-          onClick={() => currentPage < totalPages && onPageChange(currentPage + 1)}
-          disabled={currentPage >= totalPages}
-          className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {t("next")}
-        </button>
+    <div className={cn("flex items-center justify-between gap-4 px-6 py-4", className)}>
+      {/* Left: info + page size */}
+      <div className="hidden sm:flex sm:items-center sm:gap-4">
+        {totalItems > 0 ? (
+          <>
+            <p className="text-sm text-gray-500 whitespace-nowrap">
+              <span className="font-medium text-gray-900">{fromIndex}</span>
+              {" — "}
+              <span className="font-medium text-gray-900">{toIndex}</span>
+              {" / "}
+              <span className="font-medium text-gray-900">{totalItems}</span>
+              {" 条"}
+            </p>
+            {onPageSizeChange && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400">每页</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => onPageSizeChange(Number(e.target.value))}
+                  className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1d74f5] focus:border-[#1d74f5] cursor-pointer hover:border-gray-300 transition-colors"
+                >
+                  {[5, 10, 20, 50].map((size) => (
+                    <option key={size} value={size}>
+                      {size} 条/页
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-gray-400">共 0 条</p>
+        )}
       </div>
-      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          <p className="text-sm text-gray-500">
-            <Trans
-              i18nKey="showing_results"
-              values={{
-                from: fromIndex,
-                to: toIndex,
-                total: totalItems,
-              }}
-              components={{
-                num1: <span className="font-medium text-gray-900" />,
-                num2: <span className="font-medium text-gray-900" />,
-                num3: <span className="font-medium text-gray-900" />,
-              }}
-            />
-          </p>
-          {onPageSizeChange && (
-            <div className="flex items-center gap-1.5 ml-4 border-l border-gray-200 pl-4">
-              <span className="text-xs text-gray-500">{t("show", "Show:")}</span>
-              <select
-                value={pageSize}
-                onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                className="rounded border border-gray-300 px-2 py-0.5 text-xs bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-[#1d74f5] focus:border-[#1d74f5] cursor-pointer"
-              >
-                {Array.from(new Set([pageSize, 5, 10, 20, 50])).sort((a, b) => a - b).map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-        <div>
-          <nav className="isolate inline-flex gap-1" aria-label="Pagination">
-            <button
-              onClick={() => currentPage > 1 && onPageChange(currentPage - 1)}
-              disabled={currentPage <= 1}
-              className="relative inline-flex items-center rounded-md px-2 py-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="sr-only">{t("previous")}</span>
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            {pages.map((page, index) => {
+
+      {/* Right: pagination buttons */}
+      {totalPages > 0 && (
+        <nav className="flex items-center gap-0.5" aria-label="Pagination">
+          {/* First */}
+          <span
+            onClick={() => currentPage > 1 && onPageChange?.(1)}
+            className={cn("cursor-pointer select-none px-1 text-sm leading-8 transition-colors", currentPage <= 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+          >
+            <ChevronsLeft className="inline h-4 w-4" />
+          </span>
+          {/* Prev */}
+          <span
+            onClick={() => currentPage > 1 && onPageChange?.(currentPage - 1)}
+            className={cn("cursor-pointer select-none px-1 text-sm leading-8 transition-colors", currentPage <= 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+          >
+            <ChevronLeft className="inline h-4 w-4" />
+          </span>
+
+          {/* Page numbers */}
+          <span className="mx-1">
+            {getPageNumbers().map((page, idx) => {
               if (page === "ellipsis") {
                 return (
-                  <span
-                    key={`ellipsis-${index}`}
-                    className="relative inline-flex items-center px-2 py-1.5 text-sm font-medium text-gray-500"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
+                  <span key={`e-${idx}`} className="px-2 text-sm text-gray-400 select-none">
+                    ...
                   </span>
                 );
               }
               const isCurrent = page === currentPage;
               return (
-                <button
+                <span
                   key={page}
-                  onClick={() => onPageChange(page)}
-                  aria-current={isCurrent ? "page" : undefined}
+                  onClick={() => onPageChange?.(page)}
                   className={cn(
-                    "relative inline-flex items-center rounded-md px-3.5 py-1.5 text-sm font-medium transition-colors",
+                    "cursor-pointer select-none px-2 text-sm leading-8 transition-colors",
                     isCurrent
-                      ? "z-10 bg-[#1d74f5] text-white shadow-sm"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                      ? "text-[#1d74f5] font-bold"
+                      : "text-gray-500 hover:text-gray-900",
                   )}
                 >
                   {page}
-                </button>
+                </span>
               );
             })}
-            <button
-              onClick={() => currentPage < totalPages && onPageChange(currentPage + 1)}
-              disabled={currentPage >= totalPages}
-              className="relative inline-flex items-center rounded-md px-2 py-2 text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <span className="sr-only">{t("next")}</span>
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </nav>
-        </div>
-      </div>
+          </span>
+
+          {/* Next */}
+          <span
+            onClick={() => currentPage < totalPages && onPageChange?.(currentPage + 1)}
+            className={cn("cursor-pointer select-none px-1 text-sm leading-8 transition-colors", currentPage >= totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+          >
+            <ChevronRight className="inline h-4 w-4" />
+          </span>
+          {/* Last */}
+          <span
+            onClick={() => currentPage < totalPages && onPageChange?.(totalPages)}
+            className={cn("cursor-pointer select-none px-1 text-sm leading-8 transition-colors", currentPage >= totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+          >
+            <ChevronsRight className="inline h-4 w-4" />
+          </span>
+        </nav>
+      )}
     </div>
   );
 }

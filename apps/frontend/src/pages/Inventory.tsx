@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { Search, X, Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
+import { Button } from "../components/Button";
+import { Modal } from "../components/Modal";
+import { SearchInput } from "../components/SearchInput";
+import { TextInput, Select } from "../components/FormFields";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { api, ApiError } from "../lib/api";
@@ -135,33 +139,17 @@ export function Inventory() {
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSearchQuery(searchInput);
-              setCurrentPage(1);
-            }}
-            className="relative w-full max-w-sm flex items-center"
-          >
-            <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
-              <Search className="h-4 w-4" />
-            </button>
-            <input
-              type="text"
-              placeholder="Search inventory..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded border border-gray-300 pl-9 pr-4 py-1.5 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
-            />
-          </form>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
+            placeholder="Search inventory..."
+          />
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} className="hidden sm:flex" />
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-4 py-1.5 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors whitespace-nowrap"
-            >
+            <Button size="sm" onClick={() => setIsModalOpen(true)}>
               Add Item
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -305,241 +293,109 @@ export function Inventory() {
         />
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[17px] font-bold text-gray-900">Add Inventory Item</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleAddItem} className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="name">
-                  Item Name
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  placeholder="e.g. Lithium Cobalt Oxide"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="type">
-                    Type
-                  </label>
-                  <select id="type" className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm">
-                    <option>Cathode Active Material</option>
-                    <option>Anode Active Material</option>
-                    <option>Electrolyte</option>
-                    <option>Separator</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="quantity">
-                    Quantity
-                  </label>
-                  <input
-                    id="quantity"
-                    type="text"
-                    required
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    placeholder="e.g. 500g"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="lotNumber">
-                    Lot Number
-                  </label>
-                  <input
-                    id="lotNumber"
-                    type="text"
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    placeholder="e.g. LOT123"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="purity">
-                    Purity
-                  </label>
-                  <input
-                    id="purity"
-                    type="text"
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    placeholder="e.g. 99.9%"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="storageLocation">
-                    Storage Location
-                  </label>
-                  <input
-                    id="storageLocation"
-                    type="text"
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    placeholder="e.g. Shelf A4"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="status">
-                    Status
-                  </label>
-                  <select id="status" className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm">
-                    <option value="In Stock">In Stock</option>
-                    <option value="Low Stock">Low Stock</option>
-                    <option value="Out of Stock">Out of Stock</option>
-                  </select>
-                </div>
-              </div>
-              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
-                >
-                  Add Item
-                </button>
-              </div>
-            </form>
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add Inventory Item">
+        <form onSubmit={handleAddItem} className="p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="name">Item Name</label>
+            <input id="name" type="text" required className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" placeholder="e.g. Lithium Cobalt Oxide" />
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="type">Type</label>
+              <select id="type" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors">
+                <option>Cathode Active Material</option>
+                <option>Anode Active Material</option>
+                <option>Electrolyte</option>
+                <option>Separator</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="quantity">Quantity</label>
+              <input id="quantity" type="text" required className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" placeholder="e.g. 500g" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="lotNumber">Lot Number</label>
+              <input id="lotNumber" type="text" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" placeholder="e.g. LOT123" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="purity">Purity</label>
+              <input id="purity" type="text" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" placeholder="e.g. 99.9%" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="storageLocation">Storage Location</label>
+              <input id="storageLocation" type="text" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" placeholder="e.g. Shelf A4" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="status">Status</label>
+              <select id="status" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors">
+                <option value="In Stock">In Stock</option>
+                <option value="Low Stock">Low Stock</option>
+                <option value="Out of Stock">Out of Stock</option>
+              </select>
+            </div>
+          </div>
+          <div className="pt-4 flex items-center justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Add Item</Button>
+          </div>
+        </form>
+      </Modal>
 
-      {isEditModalOpen && editingItem && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[17px] font-bold text-gray-900">Edit Inventory Item</h2>
-              <button onClick={() => setIsEditModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleUpdateItem} className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-name">
-                  Item Name
-                </label>
-                <input
-                  id="edit-name"
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  defaultValue={editingItem.name}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-type">
-                    Type
-                  </label>
-                  <select
-                    id="edit-type"
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    defaultValue={editingItem.type}
-                  >
-                    <option>Cathode Active Material</option>
-                    <option>Anode Active Material</option>
-                    <option>Electrolyte</option>
-                    <option>Separator</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-quantity">
-                    Quantity
-                  </label>
-                  <input
-                    id="edit-quantity"
-                    type="text"
-                    required
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    defaultValue={editingItem.quantity}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-lotNumber">
-                    Lot Number
-                  </label>
-                  <input
-                    id="edit-lotNumber"
-                    type="text"
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    defaultValue={editingItem.lotNumber || ""}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-purity">
-                    Purity
-                  </label>
-                  <input
-                    id="edit-purity"
-                    type="text"
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    defaultValue={editingItem.purity || ""}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-storageLocation">
-                    Storage Location
-                  </label>
-                  <input
-                    id="edit-storageLocation"
-                    type="text"
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    defaultValue={editingItem.storageLocation || ""}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-status">
-                    Status
-                  </label>
-                  <select
-                    id="edit-status"
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    defaultValue={editingItem.status}
-                  >
-                    <option value="In Stock">In Stock</option>
-                    <option value="Low Stock">Low Stock</option>
-                    <option value="Out of Stock">Out of Stock</option>
-                  </select>
-                </div>
-              </div>
-              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
-                >
-                  Save Changes
-                </button>
-              </div>
-            </form>
+      <Modal open={isEditModalOpen && !!editingItem} onClose={() => setIsEditModalOpen(false)} title="Edit Inventory Item">
+        <form onSubmit={handleUpdateItem} className="p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-name">Item Name</label>
+            <input id="edit-name" type="text" required className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.name} />
           </div>
-        </div>
-      )}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-type">Type</label>
+              <select id="edit-type" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.type}>
+                <option>Cathode Active Material</option>
+                <option>Anode Active Material</option>
+                <option>Electrolyte</option>
+                <option>Separator</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-quantity">Quantity</label>
+              <input id="edit-quantity" type="text" required className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.quantity} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-lotNumber">Lot Number</label>
+              <input id="edit-lotNumber" type="text" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.lotNumber || ""} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-purity">Purity</label>
+              <input id="edit-purity" type="text" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.purity || ""} />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-storageLocation">Storage Location</label>
+              <input id="edit-storageLocation" type="text" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.storageLocation || ""} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-status">Status</label>
+              <select id="edit-status" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.status}>
+                <option value="In Stock">In Stock</option>
+                <option value="Low Stock">Low Stock</option>
+                <option value="Out of Stock">Out of Stock</option>
+              </select>
+            </div>
+          </div>
+          <div className="pt-4 flex items-center justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button type="submit">Save Changes</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

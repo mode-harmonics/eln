@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
+import { CreateExperimentDto } from '../experiments/dto';
 import { ProjectsService } from './projects.service';
 
 @ApiTags('projects')
@@ -42,6 +43,16 @@ export class ProjectsController {
     const pageNum = page ? parseInt(page as any, 10) : undefined;
     const limitNum = limit ? parseInt(limit as any, 10) : undefined;
     return this.projectsService.findExperiments(id, pageNum, limitNum, search);
+  }
+
+  @Post(':id/experiments')
+  @ApiOperation({ summary: 'Create a new experiment (record) under this project.' })
+  async createExperiment(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: CreateExperimentDto,
+  ) {
+    return this.projectsService.createExperiment(id, user.id, dto);
   }
 
   @Post()

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Button } from "../components/Button";
 import { api, ApiError } from "../lib/api";
 
 export function Login() {
@@ -76,13 +77,13 @@ export function Login() {
           )}
 
           <div className="pt-2">
-            <button
+            <Button
               type="submit"
-              disabled={loading}
-              className="flex w-full justify-center rounded bg-[#1d74f5] px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-[#1d74f5] focus:ring-offset-2 disabled:opacity-70 transition-colors"
+              loading={loading}
+              className="w-full justify-center py-2.5"
             >
-              {loading ? "登录中..." : "Login"}
-            </button>
+              Login
+            </Button>
           </div>
         </form>
       </div>

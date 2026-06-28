@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { ProcessData } from '../../entities/process-data.entity';
-import { DataParser, readHeaderRow, toBooleanOrFalse, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toBooleanOrFalse, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 const NUMERIC_FIELDS = [
   'm0', 'm1', 'm2',
@@ -18,46 +18,33 @@ const NUMERIC_FIELDS = [
 /** Safe number parse: returns null if val is null, else the numeric value. */
 const n = (v: string | null | undefined): number | null => (v == null ? null : Number(v));
 
-/**
- * processData — flat per-cell manufacturing parameters (weight, voltage,
- * internal resistance across formation / aging / grading). Each data row
- * maps 1:1 to a column by lowercased header name.
- *
- * After reading raw fields, the parser also computes the 9 derived metrics
- * and stores them alongside the source values:
- *
- *   mIn     = m1 - m0
- *   mLoss   = m1 - m2
- *   mHold   = m4 - m0
- *   fq      = fq1 + fq2
- *   qdFirst = gqd1
- *   fvg     = (v1 - v0) / qdFirst
- *   ku      = fu1 - fu2
- *   qcFirst = fq + gqc1
- *   ceFirst = qdFirst / qcFirst * 100
- */
 export class ProcessDataParser implements DataParser<Partial<ProcessData>> {
   readonly tableName = 'processData';
 
   detect(sheet: Worksheet): boolean {
-    const headers = readHeaderRow(sheet).map((h) => h.toLowerCase());
-    // Distinctive columns for this sheet: cellId/batteryId plus formation (f*) and grading (g*) fields.
-    const hasCellId = headers.some((h) => h === 'cellid' || h === 'batteryid');
-    const hasFormationFields = headers.some((h) => h === 'fu0' || h === 'fq1');
-    const hasGradingFields = headers.some((h) => h === 'gu0' || h === 'gqc1');
+    if (sheet.name.includes('制程') || sheet.name.toLowerCase().includes('process')) {
+      return true;
+    }
+    const { headers } = findHeaderRow(sheet, ['m0', 'm1', 'fu0', 'gu0']);
+    const normalized = normalizeHeaders(headers);
+    const hasCellId = normalized.some((h) => h === 'cellid' || h === 'batteryid' || h === 'cellname');
+    const hasFormationFields = normalized.some((h) => h === 'fu0' || h === 'fq1');
+    const hasGradingFields = normalized.some((h) => h === 'gu0' || h === 'gqc1');
     return hasCellId && (hasFormationFields || hasGradingFields);
   }
 
   parse(sheet: Worksheet, experimentId: string): Partial<ProcessData>[] {
-    const headers = readHeaderRow(sheet).map((h) => h.toLowerCase());
+    const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['m0', 'm1', 'fu0', 'gu0']);
+    const headers = normalizeHeaders(rawHeaders);
     const colIndex = (name: string) => headers.indexOf(name);
-    const cellIdCol = colIndex('cellid') >= 0 ? colIndex('cellid') : colIndex('batteryid');
+    const cellIdCol = colIndex('cellid') >= 0 ? colIndex('cellid') : (colIndex('batteryid') >= 0 ? colIndex('batteryid') : colIndex('cellname'));
     const pickedCol = colIndex('picked');
 
     const rows: Partial<ProcessData>[] = [];
 
-    sheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return; // header
+    sheet.eachRow((row, rowNumberCurrent) => {
+      if (rowNumberCurrent <= rowNumber) return; // header and comments
+
 
       const cellId = toStringOrNull(row.getCell(cellIdCol).value);
       if (!cellId) return; // skip blank trailing rows

@@ -81,4 +81,26 @@ export const api = {
   delete<T>(path: string) {
     return request<T>(path, { method: 'DELETE' });
   },
+  /** Sends a multipart/form-data POST (do NOT set Content-Type; browser sets boundary automatically). */
+  upload<T>(path: string, formData: FormData) {
+    const token = getToken();
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    return fetch(path, { method: 'POST', headers, body: formData }).then(async (res) => {
+      if (res.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('auth');
+        window.location.href = '/login';
+        throw new ApiError(401, 'Unauthorized');
+      }
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg = (json as any)?.message ?? res.statusText;
+        throw new ApiError(res.status, msg, json);
+      }
+      if (json && typeof json === 'object' && 'success' in json) {
+        return (json as { success: boolean; data: T }).data;
+      }
+      return json as T;
+    });
+  },
 };

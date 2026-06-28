@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { Search, X, Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
+import { Button } from "../components/Button";
+import { Modal } from "../components/Modal";
+import { SearchInput } from "../components/SearchInput";
+import { TextInput, Select, Checkbox } from "../components/FormFields";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { api, ApiError } from "../lib/api";
@@ -148,40 +152,27 @@ export function Users() {
 
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSearchQuery(searchInput);
-              setCurrentPage(1);
-            }}
-            className="relative w-full max-w-sm flex items-center"
-          >
-            <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
-              <Search className="h-4 w-4" />
-            </button>
-            <input
-              type="text"
-              placeholder={t("search_users")}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full rounded border border-gray-300 pl-9 pr-4 py-1.5 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
-            />
-          </form>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
+            placeholder={t("search_users")}
+          />
           <div className="flex items-center gap-4">
             <ViewToggle
               viewMode={viewMode}
               setViewMode={setViewMode}
               className="hidden sm:flex"
             />
-            <button
+            <Button
+              size="sm"
               onClick={() => {
                 loadRolesIfNeeded();
                 setIsModalOpen(true);
               }}
-              className="px-4 py-1.5 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors whitespace-nowrap"
             >
               {t("add_user")}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -332,194 +323,100 @@ export function Users() {
         />
       </div>
 
-      {isEditModalOpen && editingUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-md animate-in fade-in zoom-in-95 duration-200 m-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[17px] font-bold text-gray-900">
-                {t("edit_user")}
-              </h2>
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleUpdateUser} className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-username">
-                  Username
-                </label>
-                <input
-                  id="edit-username"
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  defaultValue={editingUser.username}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-email">
-                  {t("email")}
-                </label>
-                <input
-                  id="edit-email"
-                  type="email"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  defaultValue={editingUser.email}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-name">
-                  {t("name")}
-                </label>
-                <input
-                  id="edit-name"
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  defaultValue={editingUser.fullName}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-role">
-                  {t("role")}
-                </label>
-                <select
-                  id="edit-role"
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  defaultValue={editingUser.roleId || ""}
-                >
-                  <option value="">No Role</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>{role.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-3">
-                <input
-                  id="edit-active"
-                  type="checkbox"
-                  defaultChecked={editingUser.isActive}
-                  className="w-4 h-4 text-[#1d74f5] rounded border-gray-300"
-                />
-                <label className="text-sm text-gray-700 font-medium" htmlFor="edit-active">
-                  {t("active")}
-                </label>
-              </div>
-              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                >
-                  {t("cancel")}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
-                >
-                  {t("save_changes")}
-                </button>
-              </div>
-            </form>
+      <Modal open={isEditModalOpen && !!editingUser} onClose={() => setIsEditModalOpen(false)} title={t("edit_user")} maxWidth="md">
+        <form onSubmit={handleUpdateUser} className="p-6 space-y-5">
+          <TextInput
+            id="edit-username"
+            label="Username"
+            required
+            defaultValue={editingUser?.username}
+          />
+          <TextInput
+            id="edit-email"
+            label={t("email")}
+            type="email"
+            required
+            defaultValue={editingUser?.email}
+          />
+          <TextInput
+            id="edit-name"
+            label={t("name")}
+            required
+            defaultValue={editingUser?.fullName}
+          />
+          <Select
+            id="edit-role"
+            label={t("role")}
+            defaultValue={editingUser?.roleId || ""}
+          >
+            <option value="">No Role</option>
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>{role.name}</option>
+            ))}
+          </Select>
+          <Checkbox
+            id="edit-active"
+            label={t("active")}
+            defaultChecked={editingUser?.isActive}
+          />
+          <div className="pt-4 flex items-center justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit">
+              {t("save_changes")}
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-md animate-in fade-in zoom-in-95 duration-200 m-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[17px] font-bold text-gray-900">
-                {t("add_user")}
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateUser} className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="username">
-                  Username
-                </label>
-                <input
-                  id="username"
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  placeholder="e.g. johndoe"
-                  value={newUserUsername}
-                  onChange={(e) => setNewUserUsername(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
-                  {t("email")}
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  placeholder={t("email_placeholder")}
-                  value={newUserEmail}
-                  onChange={(e) => setNewUserEmail(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="name">
-                  {t("name")}
-                </label>
-                <input
-                  id="name"
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  placeholder={t("name_placeholder")}
-                  value={newUserName}
-                  onChange={(e) => setNewUserName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="role">
-                  {t("role")}
-                </label>
-                <select
-                  id="role"
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  value={newUserRole}
-                  onChange={(e) => setNewUserRole(e.target.value)}
-                >
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>{role.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                >
-                  {t("cancel")}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
-                >
-                  {t("create")}
-                </button>
-              </div>
-            </form>
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("add_user")} maxWidth="md">
+        <form onSubmit={handleCreateUser} className="p-6 space-y-5">
+          <TextInput
+            id="username"
+            label="Username"
+            required
+            placeholder="e.g. johndoe"
+            value={newUserUsername}
+            onChange={(e) => setNewUserUsername(e.target.value)}
+          />
+          <TextInput
+            id="email"
+            label={t("email")}
+            type="email"
+            required
+            placeholder={t("email_placeholder")}
+            value={newUserEmail}
+            onChange={(e) => setNewUserEmail(e.target.value)}
+          />
+          <TextInput
+            id="name"
+            label={t("name")}
+            required
+            placeholder={t("name_placeholder")}
+            value={newUserName}
+            onChange={(e) => setNewUserName(e.target.value)}
+          />
+          <Select
+            id="role"
+            label={t("role")}
+            value={newUserRole}
+            onChange={(e) => setNewUserRole(e.target.value)}
+          >
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>{role.name}</option>
+            ))}
+          </Select>
+          <div className="pt-4 flex items-center justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit">
+              {t("create")}
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

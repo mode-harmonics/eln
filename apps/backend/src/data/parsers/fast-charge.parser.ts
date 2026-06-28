@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { FastCharge, FastChargeStep } from '../../entities/fast-charge.entity';
-import { DataParser, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 /**
  * Matches step-ladder column headers like:
@@ -60,103 +60,189 @@ function computeFastChargeTime(c0: number, steps: FastChargeStep[]): number | nu
 }
 
 /**
- * fastCharge — source sheets lay each cell's step-charge ladder out
- * horizontally (step1_rate, step1_cutOffVoltage, ..., step2_rate, ...).
- * This parser folds that variable-length ladder into a single JSONB
- * `steps` array, since the step count varies by charge recipe.
- *
- * Computed fields written at parse time:
- *   steps[i].stepSoc       = stepCapacity / c0          单步SOC增量
- *   steps[i].cumulativeSoc = cumulative sum of stepSoc   累计SOC
- *   computedFastChargeTime = t(80%SOC) - t(10%SOC)      10%-80%SOC快充时间 (min)
+ * fastCharge — 快充时间工步表
+ * Handles both the horizontal (wide) step-ladder layout and the vertical (long) step-by-step layout.
  */
 export class FastChargeParser implements DataParser<Partial<FastCharge>> {
   readonly tableName = 'fastCharge';
 
   detect(sheet: Worksheet): boolean {
-    const headers = readHeaderRow(sheet);
-    return headers.some((h) => STEP_HEADER_RE.test(h.trim()));
+    if (sheet.name.includes('快充') || sheet.name.toLowerCase().includes('fast')) {
+      return true;
+    }
+    const { headers } = findHeaderRow(sheet, ['step1_rate', '工步号', '倍率', '电池编号', 'batteryid', 'cellid']);
+    const normalized = normalizeHeaders(headers);
+    return normalized.some((h) => STEP_HEADER_RE.test(h.trim())) || (normalized.includes('cellid') && normalized.includes('rate'));
   }
 
   parse(sheet: Worksheet, experimentId: string): Partial<FastCharge>[] {
-    const headers = readHeaderRow(sheet);
+    const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['step1_rate', '工步号', '倍率', '电池编号', 'batteryid', 'cellid']);
+    const headers = normalizeHeaders(rawHeaders);
 
-    const stepColumns: Array<{ colIndex: number; stepNo: number; field: keyof FastChargeStep }> = [];
-    headers.forEach((header, colIndex) => {
-      const match = STEP_HEADER_RE.exec(header.trim());
-      if (match) {
-        const stepNo = parseInt(match[1], 10);
-        const field = FIELD_TO_KEY[match[2].toLowerCase()];
-        if (field) {
-          stepColumns.push({ colIndex, stepNo, field });
+    const cellIdCol = headers.findIndex((h) => ['cellid', 'batteryid', 'cellname'].includes(h));
+    const stepNoCol = headers.findIndex((h) => ['stepno', 'step_no', '工步号'].includes(h));
+    const cutOffVoltageCol = headers.findIndex((h) => ['cutoffvoltage', 'cut_off_voltage', '全电截止电压'].includes(h));
+    const currentCol = headers.findIndex((h) => ['current', '电流'].includes(h));
+    const rateCol = headers.findIndex((h) => ['rate', '倍率'].includes(h));
+    const stepCapacityCol = headers.findIndex((h) => ['stepcapacity', 'step_capacity', '单步容量'].includes(h));
+    const stepTimeCol = headers.findIndex((h) => ['steptime', 'step_time', '单步时间(min)', '单步时间'].includes(h));
+
+    const isVertical = cellIdCol >= 0 && stepNoCol >= 0;
+
+    if (isVertical) {
+      // VERTICAL LAYOUT: each row represents a single step of a battery
+      const cellMap = new Map<string, Array<{
+        stepNo: number;
+        rate: string | number | null;
+        cutOffVoltage: number | null;
+        current: number | null;
+        stepCapacity: number | null;
+        stepTime: number | null;
+      }>>();
+
+      sheet.eachRow((row, rowNum) => {
+        if (rowNum <= rowNumber) return;
+
+        const cellName = toStringOrNull(row.getCell(cellIdCol).value);
+        const stepNoVal = toNumberOrNull(row.getCell(stepNoCol).value);
+        if (!cellName || stepNoVal === null) return;
+
+        const rateVal = rateCol >= 0 ? toStringOrNull(row.getCell(rateCol).value) : null;
+        const cutOffVoltageVal = cutOffVoltageCol >= 0 ? toNumberOrNull(row.getCell(cutOffVoltageCol).value) : null;
+        const currentVal = currentCol >= 0 ? toNumberOrNull(row.getCell(currentCol).value) : null;
+        const stepCapacityVal = stepCapacityCol >= 0 ? toNumberOrNull(row.getCell(stepCapacityCol).value) : null;
+        
+        let stepTimeVal: number | null = null;
+        if (stepTimeCol >= 0) {
+          stepTimeVal = toNumberOrNull(row.getCell(stepTimeCol).value);
         }
-      }
-    });
 
-    const lowerHeaders = headers.map((h) => h.trim().toLowerCase());
-    const cellNameCol = lowerHeaders.findIndex((h) => ['cellname', 'cellid', 'batteryid'].includes(h));
-    const c0Col = lowerHeaders.indexOf('c0');
-    const providedTimeCol = lowerHeaders.findIndex((h) =>
-      ['providedfastchargetime', 'fastchargetime'].includes(h),
-    );
+        const steps = cellMap.get(cellName) ?? [];
+        steps.push({
+          stepNo: stepNoVal,
+          rate: rateVal,
+          cutOffVoltage: cutOffVoltageVal,
+          current: currentVal,
+          stepCapacity: stepCapacityVal,
+          stepTime: stepTimeVal,
+        });
+        cellMap.set(cellName, steps);
+      });
 
-    const rows: Partial<FastCharge>[] = [];
+      const rows: Partial<FastCharge>[] = [];
 
-    sheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
+      for (const [cellName, rawSteps] of cellMap.entries()) {
+        rawSteps.sort((a, b) => a.stepNo - b.stepNo);
 
-      const cellName = cellNameCol >= 0 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
-      if (!cellName) return;
+        const c0 = 3.0; // default nominal capacity fallback
+        let cumulativeSoc = 0;
 
-      const stepsByNo = new Map<number, Partial<FastChargeStep>>();
-      for (const { colIndex, stepNo, field } of stepColumns) {
-        const value = toNumberOrNull(row.getCell(colIndex).value);
-        const step = stepsByNo.get(stepNo) ?? { stepNo };
-        (step as Record<string, unknown>)[field] = value;
-        stepsByNo.set(stepNo, step);
-      }
-
-      const c0Raw = c0Col >= 0 ? toNumberOrNull(row.getCell(c0Col).value) : null;
-      const c0 = c0Raw ?? 0;
-
-      // ─── Build sorted steps and compute per-step SOC fields ──────────────
-      let cumulativeSoc = 0;
-      const steps = Array.from(stepsByNo.values())
-        .sort((a, b) => (a.stepNo ?? 0) - (b.stepNo ?? 0))
-        .map((s) => {
+        const steps: FastChargeStep[] = rawSteps.map((s) => {
           const stepCapacity = s.stepCapacity ?? null;
           const stepSoc = (stepCapacity !== null && c0 > 0) ? stepCapacity / c0 : null;
           cumulativeSoc += stepSoc ?? 0;
           return {
-            stepNo:       s.stepNo ?? 0,
-            rate:         s.rate ?? null,
-            cutOffVoltage: s.cutOffVoltage ?? null,
-            current:      s.current ?? null,
+            stepNo:       s.stepNo,
+            rate:         s.rate,
+            cutOffVoltage: s.cutOffVoltage,
+            current:      s.current,
             stepCapacity,
-            stepTime:     s.stepTime ?? null,
+            stepTime:     s.stepTime,
             stepSoc:      stepSoc !== null ? Number(stepSoc.toFixed(6)) : null,
             cumulativeSoc: Number(cumulativeSoc.toFixed(6)),
-          } satisfies FastChargeStep;
+          };
         });
 
-      // ─── Compute 10%–80% SOC fast-charge time ────────────────────────────
-      const providedTime = providedTimeCol >= 0 ? toNumberOrNull(row.getCell(providedTimeCol).value) : null;
-      const computedTime = computeFastChargeTime(c0, steps);
+        const computedTime = computeFastChargeTime(c0, steps);
 
-      // Use providedTime if available, otherwise fall back to computed value
-      const finalTime = providedTime ?? computedTime;
+        rows.push({
+          id: uuid(),
+          experimentId,
+          cellName,
+          c0: String(c0),
+          providedFastChargeTime: null,
+          computedFastChargeTime: computedTime !== null ? computedTime.toFixed(6) : null,
+          steps,
+        });
+      }
 
-      rows.push({
-        id: uuid(),
-        experimentId,
-        cellName,
-        c0:                    c0Raw !== null ? String(c0Raw) : null,
-        providedFastChargeTime: providedTime !== null ? String(providedTime) : null,
-        computedFastChargeTime: finalTime   !== null ? finalTime.toFixed(6) : null,
-        steps,
+      return rows;
+    } else {
+      // HORIZONTAL LAYOUT: wide format where step columns are flattened horizontally
+      const stepColumns: Array<{ colIndex: number; stepNo: number; field: keyof FastChargeStep }> = [];
+      rawHeaders.forEach((header, colIndex) => {
+        const match = STEP_HEADER_RE.exec(header.trim());
+        if (match) {
+          const stepNo = parseInt(match[1], 10);
+          const field = FIELD_TO_KEY[match[2].toLowerCase()];
+          if (field) {
+            stepColumns.push({ colIndex, stepNo, field });
+          }
+        }
       });
-    });
 
-    return rows;
+      const lowerHeaders = headers.map((h) => h.trim().toLowerCase());
+      const cellNameCol = lowerHeaders.findIndex((h) => ['cellname', 'cellid', 'batteryid'].includes(h));
+      const c0Col = lowerHeaders.indexOf('c0');
+      const providedTimeCol = lowerHeaders.findIndex((h) =>
+        ['providedfastchargetime', 'fastchargetime'].includes(h),
+      );
+
+      const rows: Partial<FastCharge>[] = [];
+
+      sheet.eachRow((row, rowNumberCurrent) => {
+        if (rowNumberCurrent <= rowNumber) return;
+
+        const cellName = cellNameCol >= 0 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
+        if (!cellName) return;
+
+        const stepsByNo = new Map<number, Partial<FastChargeStep>>();
+        for (const { colIndex, stepNo, field } of stepColumns) {
+          const value = toNumberOrNull(row.getCell(colIndex).value);
+          const step = stepsByNo.get(stepNo) ?? { stepNo };
+          (step as Record<string, unknown>)[field] = value;
+          stepsByNo.set(stepNo, step);
+        }
+
+        const c0Raw = c0Col >= 0 ? toNumberOrNull(row.getCell(c0Col).value) : null;
+        const c0 = c0Raw ?? 0;
+
+        let cumulativeSoc = 0;
+        const steps = Array.from(stepsByNo.values())
+          .sort((a, b) => (a.stepNo ?? 0) - (b.stepNo ?? 0))
+          .map((s) => {
+            const stepCapacity = s.stepCapacity ?? null;
+            const stepSoc = (stepCapacity !== null && c0 > 0) ? stepCapacity / c0 : null;
+            cumulativeSoc += stepSoc ?? 0;
+            return {
+              stepNo:       s.stepNo ?? 0,
+              rate:         s.rate ?? null,
+              cutOffVoltage: s.cutOffVoltage ?? null,
+              current:      s.current ?? null,
+              stepCapacity,
+              stepTime:     s.stepTime ?? null,
+              stepSoc:      stepSoc !== null ? Number(stepSoc.toFixed(6)) : null,
+              cumulativeSoc: Number(cumulativeSoc.toFixed(6)),
+            } satisfies FastChargeStep;
+          });
+
+        const providedTime = providedTimeCol >= 0 ? toNumberOrNull(row.getCell(providedTimeCol).value) : null;
+        const computedTime = computeFastChargeTime(c0, steps);
+
+        const finalTime = providedTime ?? computedTime;
+
+        rows.push({
+          id: uuid(),
+          experimentId,
+          cellName,
+          c0:                    c0Raw !== null ? String(c0Raw) : null,
+          providedFastChargeTime: providedTime !== null ? String(providedTime) : null,
+          computedFastChargeTime: finalTime   !== null ? finalTime.toFixed(6) : null,
+          steps,
+        });
+      });
+
+      return rows;
+    }
   }
 }

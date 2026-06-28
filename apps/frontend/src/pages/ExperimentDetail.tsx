@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { format } from "date-fns";
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import {
   ProcessDataTable,
   CalendarLifeTable,
@@ -12,6 +13,7 @@ import {
   HtCycleTable
 } from "../components/ExperimentTables";
 import { ExperimentChart } from "../components/ExperimentChart";
+import { Breadcrumb } from "../components/Breadcrumb";
 import { api, ApiError } from "../lib/api";
 import type { Experiment } from "../types";
 
@@ -21,6 +23,7 @@ interface ExperimentDetail extends Experiment {
 }
 
 export function ExperimentDetail() {
+  const { t } = useTranslation();
   const { experimentId } = useParams<{ experimentId: string }>();
   const [experiment, setExperiment] = useState<ExperimentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +49,7 @@ export function ExperimentDetail() {
     return <div className="p-10 text-sm text-red-500">{error ?? "Experiment not found"}</div>;
   }
 
-  const assayType = experiment.metadata?.assayType;
+  const assayType = experiment.metadata?.assayType || experiment.metadata?.recordType;
 
   const renderTable = () => {
     switch (assayType) {
@@ -69,19 +72,16 @@ export function ExperimentDetail() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <Link to="/projects" className="hover:text-gray-900">Projects</Link>
-          <span>/</span>
-          {experiment.projectId && (
-            <>
-              <Link to={`/projects/${experiment.projectId}`} className="hover:text-gray-900">
-                Project
-              </Link>
-              <span>/</span>
-            </>
-          )}
-          <span className="text-gray-900 font-medium">{experiment.title}</span>
-        </div>
+        <Breadcrumb
+          backTo={experiment.projectId ? `/projects/${experiment.projectId}?tab=experiments` : "/projects"}
+          items={[
+            { label: t("projects"), to: "/projects" },
+            ...(experiment.projectId
+              ? [{ label: t("project"), to: `/projects/${experiment.projectId}?tab=experiments` }]
+              : []),
+            { label: experiment.title },
+          ]}
+        />
 
         <div className="flex items-end justify-between">
           <div>

@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { StorageSwelling } from '../../entities/storage-swelling.entity';
-import { DataParser, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 /** Matches headers like v_0d, v_7d, v_14d (case-insensitive). */
 const DAY_HEADER_RE = /^v_(\d+)d$/i;
@@ -21,14 +21,19 @@ export class StorageSwellingParser implements DataParser<Partial<StorageSwelling
   readonly tableName = 'storageSwelling';
 
   detect(sheet: Worksheet): boolean {
-    const headers = readHeaderRow(sheet);
-    const hasDayVolumeCols = headers.some((h) => DAY_HEADER_RE.test(h.trim()));
-    const hasQd1st = headers.some((h) => h.trim().toLowerCase() === 'qd_1st' || h.trim().toLowerCase() === 'qd1st');
+    if (sheet.name.includes('胀气') || sheet.name.toLowerCase().includes('swelling')) {
+      return true;
+    }
+    const { headers } = findHeaderRow(sheet, ['v0d', 'v_0d', 'v7d', 'v_7d', 'qd1st', 'qd_1st']);
+    const normalized = normalizeHeaders(headers);
+    const hasDayVolumeCols = normalized.some((h) => DAY_HEADER_RE.test(h.trim()));
+    const hasQd1st = normalized.some((h) => h.trim().toLowerCase() === 'qd_1st' || h.trim().toLowerCase() === 'qd1st' || h.trim().toLowerCase() === 'q0');
     return hasDayVolumeCols && hasQd1st;
   }
 
   parse(sheet: Worksheet, experimentId: string): Partial<StorageSwelling>[] {
-    const headers = readHeaderRow(sheet);
+    const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['v0d', 'v_0d', 'v7d', 'v_7d', 'qd1st', 'qd_1st']);
+    const headers = normalizeHeaders(rawHeaders);
 
     const dayColumns: Array<{ colIndex: number; dayCount: number }> = [];
     headers.forEach((header, colIndex) => {
@@ -41,12 +46,12 @@ export class StorageSwellingParser implements DataParser<Partial<StorageSwelling
     const cellNameCol = headers.findIndex((h) =>
       ['cellname', 'cellid', 'batteryid'].includes(h.trim().toLowerCase()),
     );
-    const qd1stCol = headers.findIndex((h) => ['qd_1st', 'qd1st'].includes(h.trim().toLowerCase()));
+    const qd1stCol = headers.findIndex((h) => ['qd_1st', 'qd1st', 'q0'].includes(h.trim().toLowerCase()));
 
     const allRows: Partial<StorageSwelling>[] = [];
 
-    sheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
+    sheet.eachRow((row, rowNumberCurrent) => {
+      if (rowNumberCurrent <= rowNumber) return;
 
       const cellName = cellNameCol >= 0 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
       if (!cellName) return;

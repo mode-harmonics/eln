@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useSearchParams, Link } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, FileText, X, Loader2 } from "lucide-react";
+import { FileText, Loader2, UploadCloud, CheckCircle2 } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
+import { Button } from "../components/Button";
+import { Modal } from "../components/Modal";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { DataSummary } from "../components/DataSummary";
+import { Breadcrumb } from "../components/Breadcrumb";
 import { api, ApiError } from "../lib/api";
 import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle } from "../types";
 
@@ -15,8 +18,15 @@ export function ProjectDetail() {
   const { t } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalRecordType, setModalRecordType] = useState("ProcessData");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [viewMode, setViewMode] = useViewMode("project_detail_view_mode", "list");
-  const [activeTab, setActiveTab] = useState<"summary" | "experiments">("summary");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = (searchParams.get("tab") as "summary" | "experiments") || "summary";
 
   const [project, setProject] = useState<Project | null>(null);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
@@ -90,9 +100,41 @@ export function ProjectDetail() {
       .finally(() => setLoading(false));
   }, [projectId, currentPage, pageSize, refetchTrigger]);
 
-  const handleCreateRecord = (e: React.FormEvent) => {
-    e.preventDefault();
+  const closeModal = () => {
     setIsModalOpen(false);
+    setModalTitle("");
+    setModalRecordType("ProcessData");
+    setSelectedFile(null);
+    setUploadError(null);
+    setSubmitting(false);
+  };
+
+  const handleCreateRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFile) {
+      setUploadError(t("select_file"));
+      return;
+    }
+    setUploadError(null);
+    setSubmitting(true);
+    try {
+      // Step 1 – create the experiment (record)
+      const experiment = await api.post<{ id: string }>(
+        `/api/v1/projects/${projectId}/experiments`,
+        { title: modalTitle, recordType: modalRecordType },
+      );
+      // Step 2 – upload the Excel file and associate it with the new experiment
+      const form = new FormData();
+      form.append("file", selectedFile);
+      form.append("experimentId", experiment.id);
+      await api.upload(`/api/v1/data/upload`, form);
+      closeModal();
+      setRefetchTrigger((n) => n + 1);
+    } catch (err: any) {
+      setUploadError(err?.message ?? t("upload_error"));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -110,14 +152,13 @@ export function ProjectDetail() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-          <Link to="/projects" className="hover:text-gray-900 flex items-center gap-1">
-            <ArrowLeft className="w-4 h-4" />
-            {t("projects")}
-          </Link>
-          <span>/</span>
-          <span className="text-gray-900 font-medium">{project.name}</span>
-        </div>
+        <Breadcrumb
+          backTo="/projects"
+          items={[
+            { label: t("projects"), to: "/projects" },
+            { label: project.name },
+          ]}
+        />
         <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
         <p className="mt-2 text-gray-600">{project.description}</p>
         <div className="h-px bg-gray-200 w-full mt-6"></div>
@@ -127,7 +168,7 @@ export function ProjectDetail() {
       <div className="border-b border-gray-200 mb-6">
         <nav className="-mb-px flex space-x-8">
           <button
-            onClick={() => setActiveTab("summary")}
+            onClick={() => setSearchParams({ tab: "summary" })}
             className={cn(
               "whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors",
               activeTab === "summary"
@@ -138,7 +179,7 @@ export function ProjectDetail() {
             {t("data_summary")}
           </button>
           <button
-            onClick={() => setActiveTab("experiments")}
+            onClick={() => setSearchParams({ tab: "experiments" })}
             className={cn(
               "whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors",
               activeTab === "experiments"
@@ -173,12 +214,12 @@ export function ProjectDetail() {
                 setViewMode={setViewMode}
                 className="hidden sm:flex"
               />
-              <button
+              <Button
+                size="sm"
                 onClick={() => setIsModalOpen(true)}
-                className="px-4 py-1.5 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
               >
                 {t("new_record")}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -289,58 +330,105 @@ export function ProjectDetail() {
         </div>
       )}
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[17px] font-bold text-gray-900">
-                {t("create_new_record")}
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateRecord} className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t("title")}</label>
-                <input
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  placeholder="e.g. Initial Formulation Test"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t("record_type")}</label>
-                <select className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm">
-                  <option value="ProcessData">{t("process_data")}</option>
-                  <option value="CalendarLife">{t("calendar_life")}</option>
-                  <option value="StorageSwelling">{t("storage_swelling")}</option>
-                  <option value="EnergyEfficiency">{t("energy_efficiency")}</option>
-                  <option value="DcrTest">{t("dcr_test")}</option>
-                  <option value="FastCharge">{t("fast_charge")}</option>
-                  <option value="HtCycle">{t("ht_cycle")}</option>
-                </select>
-              </div>
-              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                >
-                  {t("cancel")}
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
-                >
-                  {t("create_record")}
-                </button>
-              </div>
-            </form>
+      <Modal open={isModalOpen} onClose={closeModal} title={t("create_new_record")}>
+        <form onSubmit={handleCreateRecord} className="p-6 space-y-5">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("title")}</label>
+            <input
+              type="text"
+              required
+              value={modalTitle}
+              onChange={(e) => setModalTitle(e.target.value)}
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+              placeholder="e.g. Initial Formulation Test"
+              disabled={submitting}
+            />
           </div>
-        </div>
-      )}
+
+          {/* Record Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("record_type")}</label>
+            <select
+              value={modalRecordType}
+              onChange={(e) => setModalRecordType(e.target.value)}
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+              disabled={submitting}
+            >
+              <option value="ProcessData">{t("process_data")}</option>
+              <option value="CalendarLife">{t("calendar_life")}</option>
+              <option value="StorageSwelling">{t("storage_swelling")}</option>
+              <option value="EnergyEfficiency">{t("energy_efficiency")}</option>
+              <option value="DcrTest">{t("dcr_test")}</option>
+              <option value="FastCharge">{t("fast_charge")}</option>
+              <option value="HtCycle">{t("ht_cycle")}</option>
+            </select>
+          </div>
+
+          {/* Excel Upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("upload_excel")}</label>
+            <label
+              htmlFor="excel-upload"
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const file = e.dataTransfer.files?.[0];
+                if (file) { setSelectedFile(file); setUploadError(null); }
+              }}
+              className={`flex flex-col items-center justify-center w-full rounded border-2 border-dashed px-4 py-7 cursor-pointer transition-colors ${
+                dragOver
+                  ? "border-[#1d74f5] bg-blue-50"
+                  : selectedFile
+                    ? "border-green-400 bg-green-50"
+                    : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
+              }`}
+            >
+              {selectedFile ? (
+                <>
+                  <CheckCircle2 className="w-7 h-7 text-green-500 mb-2" />
+                  <span className="text-sm font-medium text-green-700 text-center break-all">{selectedFile.name}</span>
+                  <span className="text-xs text-green-600 mt-1">{t("file_selected")}</span>
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="w-7 h-7 text-gray-400 mb-2" />
+                  <span className="text-sm text-gray-500 text-center">{t("select_file")}</span>
+                  <span className="text-xs text-gray-400 mt-1">拖拽或点击上传</span>
+                </>
+              )}
+              <input
+                id="excel-upload"
+                type="file"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                disabled={submitting}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) { setSelectedFile(file); setUploadError(null); }
+                }}
+              />
+            </label>
+          </div>
+
+          {/* Error */}
+          {uploadError && (
+            <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{uploadError}</p>
+          )}
+
+          {/* Actions */}
+          <div className="pt-2 flex items-center justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={closeModal} disabled={submitting}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" loading={submitting} disabled={submitting}>
+              {submitting ? t("uploading") : t("create_record")}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

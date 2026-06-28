@@ -6,6 +6,7 @@ import { Experiment } from '../entities/experiment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
 import { Project } from '../entities/project.entity';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
+import { CreateExperimentDto } from '../experiments/dto';
 
 @Injectable()
 export class ProjectsService {
@@ -114,6 +115,30 @@ export class ProjectsService {
     });
 
     return this.projectsRepo.save(project);
+  }
+
+  /**
+   * Creates a new experiment under the given project.
+   * recordType is persisted in metadata so the Excel upload parser
+   * can work independently of any enforced column.
+   */
+  async createExperiment(projectId: string, userId: string, dto: CreateExperimentDto): Promise<Experiment> {
+    const project = await this.projectsRepo.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found.');
+
+    const experiment = this.experimentsRepo.create({
+      id: uuid(),
+      projectId,
+      title: dto.title,
+      content: null,
+      status: 'Draft',
+      metadata: dto.recordType ? { recordType: dto.recordType, assayType: dto.recordType } : null,
+      aiAnalysisOutput: null,
+      versionNo: 1,
+      createdBy: userId,
+    });
+
+    return this.experimentsRepo.save(experiment);
   }
 
   async update(id: string, dto: UpdateProjectDto): Promise<Project> {

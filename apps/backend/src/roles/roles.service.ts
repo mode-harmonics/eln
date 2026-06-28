@@ -31,4 +31,11 @@ export class RolesService {
     const [items, total] = await query.getManyAndCount();
     return { items, total };
   }
+
+  async update(id: string, permissionList: string[]): Promise<Role> {
+    const role = await this.rolesRepo.findOne({ where: { id } });
+    if (!role) throw new Error('Role not found.');
+    role.permissionList = permissionList;
+    return this.rolesRepo.save(role);
+  }
 }

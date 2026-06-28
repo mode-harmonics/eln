@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { CalendarLife } from '../../entities/calendar-life.entity';
-import { DataParser, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 /** Matches headers like q_0d, ddcr_7d, u_14d, r_0D, dq_21d (case-insensitive). */
 const DAY_HEADER_RE = /^(q|dq|ddcr|cdcr|u|r)_(\d+)d$/i;
@@ -37,12 +37,17 @@ export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
   readonly tableName = 'calendarLife';
 
   detect(sheet: Worksheet): boolean {
-    const headers = readHeaderRow(sheet);
-    return headers.some((h) => DAY_HEADER_RE.test(h.trim()));
+    if (sheet.name.includes('日历') || sheet.name.toLowerCase().includes('calendar')) {
+      return true;
+    }
+    const { headers } = findHeaderRow(sheet, ['q0d', 'q_0d', 'q7d', 'q_7d', 'ddcr0d', 'ddcr_0d']);
+    const normalized = normalizeHeaders(headers);
+    return normalized.some((h) => DAY_HEADER_RE.test(h.trim()));
   }
 
   parse(sheet: Worksheet, experimentId: string): Partial<CalendarLife>[] {
-    const headers = readHeaderRow(sheet);
+    const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['q0d', 'q_0d', 'q7d', 'q_7d', 'ddcr0d', 'ddcr_0d']);
+    const headers = normalizeHeaders(rawHeaders);
     const parsedHeaders: ParsedHeader[] = [];
 
     headers.forEach((header, colIndex) => {
@@ -62,8 +67,8 @@ export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
 
     const allRows: Partial<CalendarLife>[] = [];
 
-    sheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
+    sheet.eachRow((row, rowNumberCurrent) => {
+      if (rowNumberCurrent <= rowNumber) return;
 
       const cellName = cellNameCol >= 0 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
       if (!cellName) return;

@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { X, Search, Loader2, Edit3, Trash2 } from "lucide-react";
+import { Search, Loader2, Edit3, Trash2 } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
+import { Button } from "../components/Button";
+import { Modal } from "../components/Modal";
+import { SearchInput } from "../components/SearchInput";
+import { TextInput, Textarea, Select } from "../components/FormFields";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { api, ApiError } from "../lib/api";
@@ -12,6 +16,7 @@ import type { Project, PaginatedProjects } from "../types";
 
 export function Projects() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,33 +133,17 @@ export function Projects() {
 
       <div className="space-y-6">
         <div className="flex justify-between items-center">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSearchQuery(searchInput);
-              setCurrentPage(1);
-            }}
-            className="relative w-72 flex items-center"
-          >
-            <button type="submit" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors">
-              <Search className="h-4 w-4" />
-            </button>
-            <input
-              type="text"
-              placeholder={t("search_projects")}
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="block w-full pl-9 pr-3 py-1.5 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-[#1d74f5] focus:border-[#1d74f5] sm:text-sm transition-colors"
-            />
-          </form>
+          <SearchInput
+            value={searchInput}
+            onChange={setSearchInput}
+            onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
+            placeholder={t("search_projects")}
+          />
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} />
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-4 py-1.5 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
-            >
+            <Button onClick={() => setIsModalOpen(true)} size="sm">
               {t("new_project")}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -258,7 +247,7 @@ export function Projects() {
                     <tr
                       key={project.id}
                       className="hover:bg-gray-50/50 group cursor-pointer"
-                      onClick={() => (window.location.href = `/projects/${project.id}`)}
+                      onClick={() => navigate(`/projects/${project.id}`)}
                     >
                       <td className="px-6 py-4">
                         <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">
@@ -329,143 +318,70 @@ export function Projects() {
         />
       </div>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[17px] font-bold text-gray-900">
-                {t("create_new_project")}
-              </h2>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleCreateProject} className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="projectName">
-                  {t("project_name")}
-                </label>
-                <input
-                  id="projectName"
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  placeholder="e.g. Solid State Battery V3"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="projectDesc">
-                  {t("description")}
-                </label>
-                <textarea
-                  id="projectDesc"
-                  rows={4}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  placeholder="Brief description of the project goals..."
-                  value={newProjectDesc}
-                  onChange={(e) => setNewProjectDesc(e.target.value)}
-                />
-              </div>
-              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                >
-                  {t("cancel")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors disabled:opacity-70"
-                >
-                  {creating ? "创建中..." : t("create_project")}
-                </button>
-              </div>
-            </form>
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("create_new_project")}>
+        <form onSubmit={handleCreateProject} className="p-6 space-y-5">
+          <TextInput
+            id="projectName"
+            label={t("project_name")}
+            required
+            placeholder="e.g. Solid State Battery V3"
+            value={newProjectName}
+            onChange={(e) => setNewProjectName(e.target.value)}
+          />
+          <Textarea
+            id="projectDesc"
+            label={t("description")}
+            rows={4}
+            placeholder="Brief description of the project goals..."
+            value={newProjectDesc}
+            onChange={(e) => setNewProjectDesc(e.target.value)}
+          />
+          <div className="pt-4 flex items-center justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" loading={creating}>
+              {t("create_project")}
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
 
-      {isEditModalOpen && editingProject && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded border border-gray-200 shadow-xl w-full max-w-lg animate-in fade-in zoom-in-95 duration-200 m-4">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h2 className="text-[17px] font-bold text-gray-900">
-                {t("edit_project")}
-              </h2>
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <form onSubmit={handleUpdateProject} className="p-6 space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="editName">
-                  {t("project_name")}
-                </label>
-                <input
-                  id="editName"
-                  type="text"
-                  required
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="editDesc">
-                  {t("description")}
-                </label>
-                <textarea
-                  id="editDesc"
-                  rows={4}
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  value={editDesc}
-                  onChange={(e) => setEditDesc(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="editStatus">
-                  {t("status")}
-                </label>
-                <select
-                  id="editStatus"
-                  className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                  value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value)}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-              </div>
-              <div className="pt-4 flex items-center justify-end gap-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsEditModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
-                >
-                  {t("cancel")}
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-2 bg-[#1d74f5] text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors disabled:opacity-70"
-                >
-                  {saving ? "Saving..." : t("save")}
-                </button>
-              </div>
-            </form>
+      <Modal open={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={t("edit_project")}>
+        <form onSubmit={handleUpdateProject} className="p-6 space-y-5">
+          <TextInput
+            id="editName"
+            label={t("project_name")}
+            required
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+          />
+          <Textarea
+            id="editDesc"
+            label={t("description")}
+            rows={4}
+            value={editDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
+          />
+          <Select
+            id="editStatus"
+            label={t("status")}
+            value={editStatus}
+            onChange={(e) => setEditStatus(e.target.value)}
+          >
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </Select>
+          <div className="pt-4 flex items-center justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>
+              {t("cancel")}
+            </Button>
+            <Button type="submit" loading={saving}>
+              {t("save")}
+            </Button>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }
