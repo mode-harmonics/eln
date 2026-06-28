@@ -1,0 +1,64 @@
+# =============================================================================
+# ELN — Docker Compose
+#
+# Orchestrates the full stack:
+#   db        — PostgreSQL 16
+#   backend   — NestJS API (port 3000)
+#   frontend  — Nginx SPA (port 80, proxies /api/ to backend)
+# =============================================================================
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: eln-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-eln}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-eln}
+      POSTGRES_DB: ${DB_NAME:-eln}
+    ports:
+      - "${DB_PORT_EXTERNAL:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-eln} -d ${DB_NAME:-eln}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    container_name: eln-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER:-eln}:${DB_PASSWORD:-eln}@db:5432/${DB_NAME:-eln}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      PORT: 3000
+      UPLOAD_DIR: ./uploads
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    volumes:
+      - uploads:/app/apps/backend/uploads
+
+  frontend:
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    container_name: eln-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+
+volumes:
+  pgdata:
+  uploads:

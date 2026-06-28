@@ -1,0 +1,63 @@
+# Dependencies — use **/ to ensure they're excluded at ALL levels
+# (pnpm creates symlinks in nested node_modules that confuse
+#  Docker Desktop's context loader on Windows).
+# The wildcard patterns below catch nested node_modules created by
+# pnpm in any workspace member.
+**/node_modules/**
+**/node_modules
+.pnpm-store/
+**/.pnpm-store/**
+
+# Build outputs (will be rebuilt inside Docker)
+dist/
+build/
+*.tsbuildinfo
+
+# Turbo cache
+.turbo/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+apps/*/.env
+!apps/*/.env.example
+
+# Uploads (local development only)
+uploads/
+
+# IDE
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test & coverage
+coverage/
+__tests__/
+*.spec.ts
+*.test.ts
+*.e2e-spec.ts
+
+# Documentation
+*.md
+BACKEND_SPEC.md
+
+# Demo data
+demo.xlsx
+
+# Docker
+Dockerfile
+.dockerignore
