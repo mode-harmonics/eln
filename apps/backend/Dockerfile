@@ -53,10 +53,16 @@ RUN pnpm install --frozen-lockfile --prod
 COPY --from=builder /app/apps/backend/dist ./apps/backend/dist
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
 
-RUN mkdir -p /app/apps/backend/uploads && chown -R appuser:appgroup /app
+RUN mkdir -p /app/apps/backend/uploads
+
+# Copy entrypoint script
+COPY apps/backend/docker-entrypoint.sh /app/docker-entrypoint.sh
+RUN chmod +x /app/docker-entrypoint.sh && chown -R appuser:appgroup /app
 
 USER appuser
 EXPOSE 3000
 ENV NODE_ENV=production
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
 CMD ["node", "apps/backend/dist/main.js"]

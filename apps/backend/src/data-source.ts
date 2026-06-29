@@ -9,12 +9,19 @@ const entityList = Object.values(entities);
 
 const dbUrl = process.env.DATABASE_URL;
 
+/**
+ * Migration glob — relative to __dirname so it works in both dev
+ * (src/migrations/*.ts via ts-node) and production
+ * (dist/migrations/*.js via node).
+ */
+const migrationsGlob = __dirname + '/migrations/*{.ts,.js}';
+
 const connectionOptions: DataSourceOptions = dbUrl
   ? {
     type: 'postgres',
     url: dbUrl,
     entities: entityList,
-    migrations: ['src/migrations/*{.ts,.js}'],
+    migrations: [migrationsGlob],
     synchronize: false,
   }
   : {
@@ -25,7 +32,7 @@ const connectionOptions: DataSourceOptions = dbUrl
     password: process.env.DB_PASSWORD ?? 'eln',
     database: process.env.DB_NAME ?? 'eln',
     entities: entityList,
-    migrations: ['src/migrations/*{.ts,.js}'],
+    migrations: [migrationsGlob],
     synchronize: false,
   };
 

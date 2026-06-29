@@ -23,7 +23,10 @@
     "typeorm:create": "typeorm-ts-node-commonjs migration:create",
     "typeorm:run": "typeorm-ts-node-commonjs migration:run -d src/data-source.ts",
     "typeorm:revert": "typeorm-ts-node-commonjs migration:revert -d src/data-source.ts",
-    "seed": "ts-node src/seed.ts"
+    "typeorm:run:prod": "typeorm migration:run -d dist/data-source.js",
+    "typeorm:revert:prod": "typeorm migration:revert -d dist/data-source.js",
+    "seed": "ts-node src/seed.ts",
+    "seed:prod": "node dist/seed.js"
   },
   "dependencies": {
     "@eln/shared": "workspace:*",
