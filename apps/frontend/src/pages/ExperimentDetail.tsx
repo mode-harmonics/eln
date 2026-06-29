@@ -106,7 +106,7 @@ export function ExperimentDetail() {
   }
 
   if (error || !experiment) {
-    return <div className="p-10 text-sm text-red-500">{error ?? "Experiment not found"}</div>;
+    return <div className="p-10 text-sm text-red-500">{error ?? t("experiment_not_found")}</div>;
   }
 
   const assayType = experiment.metadata?.assayType || experiment.metadata?.recordType;
@@ -129,7 +129,7 @@ export function ExperimentDetail() {
       default:
         return (
           <div className="p-8 text-center text-sm text-gray-500">
-            No data table available for {assayType || "this type"}.
+            {t("no_data_available", { type: assayType || "this type" })}
           </div>
         );
     }
@@ -168,7 +168,7 @@ export function ExperimentDetail() {
             )}
             <Button variant="secondary">
               <Download className="w-4 h-4" />
-              Export
+              {t("export")}
             </Button>
           </div>
         </div>
@@ -182,7 +182,7 @@ export function ExperimentDetail() {
           {/* Data Table Section */}
           <div className="bg-white border border-gray-200 rounded shadow-sm">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="text-[15px] font-semibold text-gray-900">Data Table</h2>
+              <h2 className="text-[15px] font-semibold text-gray-900">{t("data_table")}</h2>
               <Button variant="text">
                 <Download className="w-4 h-4" />
               </Button>
@@ -192,13 +192,21 @@ export function ExperimentDetail() {
         </div>
       ) : (
         <div className="p-8 text-center text-sm text-red-500 bg-red-50/50 rounded-lg border border-red-100">
-          You do not have permission to view this battery-science business data.
+          {t("no_permission_data")}
         </div>
       )}
 
       {/* Edit Experiment Modal */}
-      <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title={t("edit_experiment")}>
-        <form onSubmit={handleSaveExperiment} className="p-6 space-y-5">
+      <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title={t("edit_experiment")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditModalOpen(false)} disabled={saving}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-experiment-form" loading={saving} disabled={saving}>
+              {saving ? t("saving") : t("save")}
+            </Button>
+          </>
+        }>
+        <form id="modal-experiment-form" onSubmit={handleSaveExperiment} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("title")}</label>
             <input
@@ -220,30 +228,20 @@ export function ExperimentDetail() {
               disabled={saving}
             />
           </div>
-          <div className="pt-2 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setEditModalOpen(false)} disabled={saving}>
-              {t("cancel")}
-            </Button>
-            <Button type="submit" loading={saving} disabled={saving}>
-              {saving ? t("saving") : t("save")}
-            </Button>
-          </div>
         </form>
       </Modal>
 
       {/* Delete Experiment Confirmation Modal */}
-      <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title={t("delete_confirm_title")}>
-        <div className="p-6 space-y-5">
-          <p className="text-sm text-gray-600">{t("delete_experiment_confirm")}</p>
-          <div className="pt-2 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>
-              {t("cancel")}
-            </Button>
-            <Button type="button" variant="danger" onClick={handleDeleteExperiment} loading={deleting} disabled={deleting}>
+      <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title={t("delete_confirm_title")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>{t("cancel")}</Button>
+            <Button variant="danger" onClick={handleDeleteExperiment} loading={deleting} disabled={deleting}>
               {deleting ? t("deleting") : t("delete")}
             </Button>
-          </div>
-        </div>
+          </>
+        }>
+        <p className="text-sm text-gray-600">{t("delete_experiment_confirm")}</p>
       </Modal>
     </div>
   );

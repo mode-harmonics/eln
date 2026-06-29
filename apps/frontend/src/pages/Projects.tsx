@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { Search, Loader2, Edit3, Trash2 } from "lucide-react";
+import { Search, Loader2, Edit3, Trash2, Plus } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
@@ -53,7 +53,7 @@ export function Projects() {
 
     api.get<PaginatedProjects>(`/api/v1/projects?${queryParams.toString()}`)
       .then((res) => { if (!cancelled) { setProjects(res.items); setTotalItems(res.total); } })
-      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载失败"); })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : t("load_failed")); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [currentPage, searchQuery, refetchTrigger]);
@@ -75,7 +75,7 @@ export function Projects() {
       setCurrentPage(1);
       setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "创建失败");
+      alert(err instanceof ApiError ? err.message : t("create_failed"));
     } finally {
       setCreating(false);
     }
@@ -95,19 +95,19 @@ export function Projects() {
       setEditingProject(null);
       setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "更新失败");
+      alert(err instanceof ApiError ? err.message : t("update_failed"));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteProject = async (project: Project) => {
-    if (!window.confirm(`确定要删除项目「${project.name}」吗？`)) return;
+    if (!window.confirm(t("delete_project_confirm", { name: project.name }))) return;
     try {
       await api.delete(`/api/v1/projects/${project.id}`);
       setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "删除失败");
+      alert(err instanceof ApiError ? err.message : t("delete_failed"));
     }
   };
 
@@ -142,7 +142,8 @@ export function Projects() {
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} />
             {hasPermission("projects:write") && (
-              <Button onClick={() => setIsModalOpen(true)} size="sm">
+              <Button onClick={() => setIsModalOpen(true)} size="sm" variant="secondary">
+                <Plus className="w-4 h-4" />
                 {t("new_project")}
               </Button>
             )}
@@ -173,7 +174,7 @@ export function Projects() {
                         : "bg-gray-100 text-gray-600"
                       }`}
                   >
-                    {project.status}
+                    {project.status === "Active" ? t("status_active") : t("status_inactive")}
                   </span>
                 </div>
                 <p className="text-sm text-gray-600 line-clamp-2 flex-1">
@@ -201,7 +202,7 @@ export function Projects() {
             ))}
             {projects.length === 0 && (
               <div className="col-span-3 p-12 text-center text-sm text-gray-400">
-                暂无项目，点击「新建项目」开始
+                {t("no_projects")}
               </div>
             )}
           </div>
@@ -255,7 +256,7 @@ export function Projects() {
                               : "bg-gray-100 text-gray-600"
                             }`}
                         >
-                          {project.status}
+                          {project.status === "Active" ? t("status_active") : t("status_inactive")}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-500">
@@ -264,10 +265,10 @@ export function Projects() {
                       {hasPermission("projects:write") && (
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="inline-flex items-center gap-3">
-                            <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
-                              {t("edit")}
+                            <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                              <Edit3 className="w-4 h-4" />
                             </Button>
-                            <Button variant="text" onClick={(e) => { e.stopPropagation(); handleDeleteProject(project); }} className="!text-red-600 hover:!text-red-800">
+                            <Button variant="text" onClick={(e) => { e.stopPropagation(); handleDeleteProject(project); }} className="!text-gray-400 hover:!text-red-600">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>
@@ -292,13 +293,19 @@ export function Projects() {
         />
       </div>
 
-      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("create_new_project")}>
-        <form onSubmit={handleCreateProject} className="p-6 space-y-5">
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("create_new_project")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-form" loading={creating}>{t("create_project")}</Button>
+          </>
+        }>
+        <form id="modal-form" onSubmit={handleCreateProject} className="space-y-5">
           <TextInput
             id="projectName"
             label={t("project_name")}
             required
-            placeholder="e.g. Solid State Battery V3"
+            placeholder={t("project_name_placeholder")}
             value={newProjectName}
             onChange={(e) => setNewProjectName(e.target.value)}
           />
@@ -306,23 +313,21 @@ export function Projects() {
             id="projectDesc"
             label={t("description")}
             rows={4}
-            placeholder="Brief description of the project goals..."
+            placeholder={t("project_desc_placeholder")}
             value={newProjectDesc}
             onChange={(e) => setNewProjectDesc(e.target.value)}
           />
-          <div className="pt-4 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button type="submit" loading={creating}>
-              {t("create_project")}
-            </Button>
-          </div>
         </form>
       </Modal>
 
-      <Modal open={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={t("edit_project")}>
-        <form onSubmit={handleUpdateProject} className="p-6 space-y-5">
+      <Modal open={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={t("edit_project")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-edit-form" loading={saving}>{t("save")}</Button>
+          </>
+        }>
+        <form id="modal-edit-form" onSubmit={handleUpdateProject} className="space-y-5">
           <TextInput
             id="editName"
             label={t("project_name")}
@@ -343,17 +348,9 @@ export function Projects() {
             value={editStatus}
             onChange={(e) => setEditStatus(e.target.value)}
           >
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
+            <option value="Active">{t("status_active")}</option>
+            <option value="Inactive">{t("status_inactive")}</option>
           </Select>
-          <div className="pt-4 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button type="submit" loading={saving}>
-              {t("save")}
-            </Button>
-          </div>
         </form>
       </Modal>
     </div>

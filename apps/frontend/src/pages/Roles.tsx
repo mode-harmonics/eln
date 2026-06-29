@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Shield, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Shield, Loader2, ChevronDown, ChevronRight, Plus, Edit3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
+import { TextInput } from "../components/FormFields";
 import { SearchInput } from "../components/SearchInput";
 import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
@@ -29,6 +30,31 @@ export function Roles() {
   const [permissionList, setPermissionList] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Create role state
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [newRoleName, setNewRoleName] = useState("");
+  const [newRoleDesc, setNewRoleDesc] = useState("");
+
+  const handleCreateRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRoleName.trim()) return;
+    setSaving(true);
+    try {
+      await api.post("/api/v1/roles", {
+        name: newRoleName.trim(),
+        description: newRoleDesc.trim() || undefined,
+      });
+      setIsCreateModalOpen(false);
+      setNewRoleName("");
+      setNewRoleDesc("");
+      setCurrentPage(1);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : t("create_failed"));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (editingRole) {
@@ -218,6 +244,10 @@ export function Roles() {
               setViewMode={setViewMode}
               className="hidden sm:flex"
             />
+            <Button size="sm" variant="secondary" onClick={() => setIsCreateModalOpen(true)}>
+              <Plus className="w-4 h-4" />
+              {t("create_role")}
+            </Button>
           </div>
         </div>
 
@@ -260,8 +290,8 @@ export function Roles() {
                       </td>
                       {hasPermission("roles:write") && (
                         <td className="text-[13px] px-6 py-4 whitespace-nowrap text-right">
-                          <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
-                            {t("edit_permissions")}
+                          <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                            <Edit3 className="w-4 h-4" />
                           </Button>
                         </td>
                       )}
@@ -292,9 +322,9 @@ export function Roles() {
                   {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No permissions configured"}
                 </p>
                 {hasPermission("roles:write") && (
-                  <div className="text-[13px] mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
-                    <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="ml-auto !text-[#1d74f5] hover:!text-blue-700">
-                      {t("edit_permissions")}
+                  <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-center">
+                    <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                      <Edit3 className="w-4 h-4" />
                     </Button>
                   </div>
                 )}
@@ -312,8 +342,44 @@ export function Roles() {
         />
       </div>
 
-      <Modal open={isEditModalOpen && !!editingRole} onClose={() => setIsEditModalOpen(false)} title={`${t("edit_permissions")} - ${editingRole?.name}`} maxWidth="2xl">
-            <form onSubmit={handleUpdateRole} className="p-6 space-y-5">
+      {/* Create Role Modal */}
+      <Modal open={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title={t("create_new_role")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsCreateModalOpen(false)}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-create-role-form" loading={saving} disabled={saving}>{t("save_role")}</Button>
+          </>
+        }>
+        <form id="modal-create-role-form" onSubmit={handleCreateRole} className="space-y-5">
+          <TextInput
+            id="role-name"
+            label={t("role_name")}
+            required
+            placeholder={t("role_name_placeholder")}
+            value={newRoleName}
+            onChange={(e) => setNewRoleName(e.target.value)}
+          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("description")}</label>
+            <textarea
+              rows={3}
+              value={newRoleDesc}
+              onChange={(e) => setNewRoleDesc(e.target.value)}
+              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors resize-y"
+              placeholder={t("role_desc_placeholder")}
+            />
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={isEditModalOpen && !!editingRole} onClose={() => setIsEditModalOpen(false)} title={`${t("edit_permissions")} - ${editingRole?.name}`} maxWidth="2xl"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-role-form" loading={saving} disabled={saving || editingRole?.name === "Owner"}>{t("save")}</Button>
+          </>
+        }>
+            <form id="modal-role-form" onSubmit={handleUpdateRole} className="space-y-5">
               <div>
                 <p className="text-sm text-gray-600 mb-4">
                   {t("adjust_access")}
@@ -350,14 +416,6 @@ export function Roles() {
                     </tbody>
                   </table>
                 </div>
-              </div>
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-gray-100">
-                <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>
-                  {t("cancel")}
-                </Button>
-                <Button type="submit" loading={saving} disabled={saving || editingRole?.name === "Owner"}>
-                  {t("save")}
-                </Button>
               </div>
             </form>
           </Modal>

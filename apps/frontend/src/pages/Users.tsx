@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, Plus, Edit3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
@@ -121,7 +121,7 @@ export function Users() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm("确定要删除此用户吗？")) return;
+    if (!window.confirm(t("delete_project_confirm", { name: userId }))) return; // reuse generic confirm key
     try {
       await api.delete(`/api/v1/users/${userId}`);
       setRefetchTrigger((prev) => prev + 1);
@@ -167,11 +167,13 @@ export function Users() {
             {hasPermission("users:write") && (
               <Button
                 size="sm"
+                variant="secondary"
                 onClick={() => {
                   loadRolesIfNeeded();
                   setIsModalOpen(true);
                 }}
               >
+                <Plus className="w-4 h-4" />
                 {t("add_user")}
               </Button>
             )}
@@ -239,10 +241,10 @@ export function Users() {
                         {hasPermission("users:write") && (
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="inline-flex items-center gap-3">
-                              <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
-                                {t("edit")}
+                              <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                                <Edit3 className="w-4 h-4" />
                               </Button>
-                              <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="!text-red-600 hover:!text-red-800">
+                              <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="!text-gray-400 hover:!text-red-600">
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
@@ -265,9 +267,14 @@ export function Users() {
                   className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col items-center text-center relative group"
                 >
                   {hasPermission("users:write") && (
-                    <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                        <Edit3 className="w-4 h-4" />
+                      </Button>
+                      <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="!text-gray-400 hover:!text-red-600">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   )}
                   <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold border border-blue-200">
                     {initials}
@@ -290,14 +297,6 @@ export function Users() {
                       {user.isActive ? t("active") : t("inactive", "Inactive")}
                     </span>
                   </div>
-
-                  {hasPermission("users:write") && (
-                    <div className="mt-auto w-full pt-4 border-t border-gray-100">
-                      <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="w-full !text-gray-600 hover:!text-gray-900">
-                        {t("edit_user")}
-                      </Button>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -313,8 +312,14 @@ export function Users() {
         />
       </div>
 
-      <Modal open={isEditModalOpen && !!editingUser} onClose={() => setIsEditModalOpen(false)} title={t("edit_user")} maxWidth="md">
-        <form onSubmit={handleUpdateUser} className="p-6 space-y-5">
+      <Modal open={isEditModalOpen && !!editingUser} onClose={() => setIsEditModalOpen(false)} title={t("edit_user")} maxWidth="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-user-edit-form">{t("save_changes")}</Button>
+          </>
+        }>
+        <form id="modal-user-edit-form" onSubmit={handleUpdateUser} className="space-y-5">
           <TextInput
             id="edit-username"
             label="Username"
@@ -349,19 +354,17 @@ export function Users() {
             label={t("active")}
             defaultChecked={editingUser?.isActive}
           />
-          <div className="pt-4 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button type="submit">
-              {t("save_changes")}
-            </Button>
-          </div>
         </form>
       </Modal>
 
-      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("add_user")} maxWidth="md">
-        <form onSubmit={handleCreateUser} className="p-6 space-y-5">
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("add_user")} maxWidth="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-user-form">{t("create")}</Button>
+          </>
+        }>
+        <form id="modal-user-form" onSubmit={handleCreateUser} className="space-y-5">
           <TextInput
             id="username"
             label="Username"
@@ -397,14 +400,6 @@ export function Users() {
               <option key={role.id} value={role.id}>{role.name}</option>
             ))}
           </Select>
-          <div className="pt-4 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t("cancel")}
-            </Button>
-            <Button type="submit">
-              {t("create")}
-            </Button>
-          </div>
         </form>
       </Modal>
     </div>

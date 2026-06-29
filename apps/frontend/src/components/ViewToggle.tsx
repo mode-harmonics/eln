@@ -16,7 +16,7 @@ export function ViewToggle({ viewMode, setViewMode, className }: ViewToggleProps
           "p-1.5 rounded-md transition-all duration-200 flex items-center justify-center", 
           viewMode === "grid" 
             ? "bg-white shadow-sm text-gray-900" 
-            : "text-gray-500 hover:text-gray-800 hover:bg-white/50 hover:shadow-sm"
+            : "text-gray-500 hover:text-gray-800"
         )}
         title="Grid view"
       >
@@ -28,7 +28,7 @@ export function ViewToggle({ viewMode, setViewMode, className }: ViewToggleProps
           "p-1.5 rounded-md transition-all duration-200 flex items-center justify-center", 
           viewMode === "list" 
             ? "bg-white shadow-sm text-gray-900" 
-            : "text-gray-500 hover:text-gray-800 hover:bg-white/50 hover:shadow-sm"
+            : "text-gray-500 hover:text-gray-800"
         )}
         title="List view"
       >

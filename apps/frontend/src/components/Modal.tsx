@@ -33,19 +33,19 @@ export function Modal({ open, onClose, title, children, footer, maxWidth = "lg" 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/40 backdrop-blur-sm">
       <div
         className={cn(
-          "bg-white rounded-lg border border-gray-200 shadow-xl w-full flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200 m-4",
+          "bg-white rounded-xl border border-gray-200 shadow-2xl w-full flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200 m-4",
           maxWidthStyles[maxWidth],
         )}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h2 className="text-[17px] font-bold text-gray-900">{title}</h2>
-          <Button variant="text" onClick={onClose}>
+          <h2 className="text-[17px] font-semibold text-gray-900">{title}</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
             <X className="w-5 h-5" />
-          </Button>
+          </button>
         </div>
 
         {/* Scrollable body */}

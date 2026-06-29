@@ -24,7 +24,7 @@ export function SearchInput({
         e.preventDefault();
         onSubmit?.();
       }}
-      className={cn("relative w-full max-w-sm flex items-center", className)}
+      className={cn("relative w-full max-w-lg flex items-center", className)}
     >
       <Button
         type="submit"
@@ -40,7 +40,7 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          "w-full rounded-lg border border-gray-300 bg-white pl-9 text-sm placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] transition-colors",
+          "w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 text-sm placeholder-gray-400 focus:bg-white focus:border-gray-300 focus:outline-none focus:ring-0 transition-colors",
           value ? "pr-9 py-1.5" : "pr-4 py-1.5",
         )}
       />

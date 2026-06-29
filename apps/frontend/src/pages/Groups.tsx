@@ -68,7 +68,8 @@ export function Groups() {
     setModalOpen(true);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!formName.trim()) {
       setFormError("请输入分组名称");
       return;
@@ -134,8 +135,8 @@ export function Groups() {
             {t("group_management_desc")}
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="w-4 h-4 mr-1.5 inline-block" />
+        <Button onClick={openCreate} variant="secondary">
+          <Plus className="w-4 h-4" />
           {t("add_group")}
         </Button>
       </div>
@@ -204,18 +205,12 @@ export function Groups() {
         title={editingGroup ? t("edit_group") : t("add_group")}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
-              <X className="w-4 h-4 mr-1 inline-block" />
-              {t("cancel")}
-            </Button>
-            <Button onClick={handleSave} loading={saving}>
-              <Save className="w-4 h-4 mr-1 inline-block" />
-              {t("save")}
-            </Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-groups-form" loading={saving}>{t("save")}</Button>
           </>
         }
       >
-        <div className="space-y-4">
+        <form id="modal-groups-form" onSubmit={handleSave} className="space-y-4">
           {/* Group name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("group_name")}</label>
@@ -291,7 +286,7 @@ export function Groups() {
           {formError && (
             <p className="text-sm text-red-500">{formError}</p>
           )}
-        </div>
+        </form>
       </Modal>
 
       {/* Delete confirm */}
@@ -306,7 +301,7 @@ export function Groups() {
               {t("cancel")}
             </Button>
             <Button variant="danger" onClick={handleDelete}>
-              <Trash2 className="w-4 h-4 mr-1 inline-block" />
+              <Trash2 className="w-4 h-4" />
               {t("delete_row")}
             </Button>
           </>

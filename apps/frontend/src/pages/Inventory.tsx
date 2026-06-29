@@ -288,8 +288,14 @@ export function Inventory() {
         />
       </div>
 
-      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add Inventory Item">
-        <form onSubmit={handleAddItem} className="p-6 space-y-5">
+      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add Inventory Item"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+            <Button type="submit" form="modal-inventory-form">Add Item</Button>
+          </>
+        }>
+        <form id="modal-inventory-form" onSubmit={handleAddItem} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="name">Item Name</label>
             <input id="name" type="text" required className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" placeholder="e.g. Lithium Cobalt Oxide" />
@@ -333,15 +339,17 @@ export function Inventory() {
               </select>
             </div>
           </div>
-          <div className="pt-4 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button type="submit">Add Item</Button>
-          </div>
         </form>
       </Modal>
 
-      <Modal open={isEditModalOpen && !!editingItem} onClose={() => setIsEditModalOpen(false)} title="Edit Inventory Item">
-        <form onSubmit={handleUpdateItem} className="p-6 space-y-5">
+      <Modal open={isEditModalOpen && !!editingItem} onClose={() => setIsEditModalOpen(false)} title="Edit Inventory Item"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button type="submit" form="modal-inventory-edit-form">Save Changes</Button>
+          </>
+        }>
+        <form id="modal-inventory-edit-form" onSubmit={handleUpdateItem} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-name">Item Name</label>
             <input id="edit-name" type="text" required className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.name} />
@@ -384,10 +392,6 @@ export function Inventory() {
                 <option value="Out of Stock">Out of Stock</option>
               </select>
             </div>
-          </div>
-          <div className="pt-4 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
-            <Button type="submit">Save Changes</Button>
           </div>
         </form>
       </Modal>

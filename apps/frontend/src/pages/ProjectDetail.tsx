@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link, useRouteLoaderData } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { FileText, Loader2, UploadCloud, CheckCircle2, Settings2 } from "lucide-react";
+import { FileText, Loader2, UploadCloud, CheckCircle2, Settings2, Plus } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
@@ -251,7 +251,7 @@ export function ProjectDetail() {
             className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#1d74f5] transition-colors"
           >
             <Settings2 className="w-4 h-4" />
-            分组管理
+            {t("group_management")}
           </Link>
         </div>
         <div className="h-px bg-gray-200 w-full mt-6"></div>
@@ -310,6 +310,7 @@ export function ProjectDetail() {
               {hasPermission("projects:write") && recordOptions.length > 0 && (
                 <Button
                   size="sm"
+                  variant="secondary"
                   onClick={() => {
                     setIsModalOpen(true);
                     if (recordOptions.length > 0) {
@@ -317,6 +318,7 @@ export function ProjectDetail() {
                     }
                   }}
                 >
+                  <Plus className="w-4 h-4" />
                   {t("new_record")}
                 </Button>
               )}
@@ -357,7 +359,7 @@ export function ProjectDetail() {
                               : "bg-gray-100 text-gray-600"
                         }`}
                       >
-                        {exp.status}
+                        {exp.status === "Approved" ? t("status_approved") : exp.status === "In Review" ? t("status_in_review") : t("status_draft")}
                       </span>
                     </div>
                   </Link>
@@ -406,7 +408,7 @@ export function ProjectDetail() {
                               : "bg-gray-100 text-gray-600"
                         }`}
                       >
-                        {exp.status}
+                        {exp.status === "Approved" ? t("status_approved") : exp.status === "In Review" ? t("status_in_review") : t("status_draft")}
                       </span>
                       <span className="text-[13px] text-gray-500">v{exp.versionNo}</span>
                     </div>
@@ -430,8 +432,16 @@ export function ProjectDetail() {
         </div>
       )}
 
-      <Modal open={isModalOpen} onClose={closeModal} title={t("create_new_record")}>
-        <form onSubmit={handleCreateRecord} className="p-6 space-y-5">
+      <Modal open={isModalOpen} onClose={closeModal} title={t("create_new_record")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal} disabled={submitting}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-record-form" loading={submitting} disabled={submitting}>
+              {submitting ? t("uploading") : t("create_record")}
+            </Button>
+          </>
+        }>
+        <form id="modal-record-form" onSubmit={handleCreateRecord} className="space-y-5">
           {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("title")}</label>
@@ -441,7 +451,7 @@ export function ProjectDetail() {
               value={modalTitle}
               onChange={(e) => setModalTitle(e.target.value)}
               className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-              placeholder="e.g. Initial Formulation Test"
+              placeholder={t("title_placeholder")}
               disabled={submitting}
             />
           </div>
@@ -492,7 +502,7 @@ export function ProjectDetail() {
                 <>
                   <UploadCloud className="w-7 h-7 text-gray-400 mb-2" />
                   <span className="text-sm text-gray-500 text-center">{t("select_file")}</span>
-                  <span className="text-xs text-gray-400 mt-1">拖拽或点击上传</span>
+                  <span className="text-xs text-gray-400 mt-1">{t("drag_hint")}</span>
                 </>
               )}
               <input
@@ -513,16 +523,6 @@ export function ProjectDetail() {
           {uploadError && (
             <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{uploadError}</p>
           )}
-
-          {/* Actions */}
-          <div className="pt-2 flex items-center justify-end gap-3">
-            <Button type="button" variant="secondary" onClick={closeModal} disabled={submitting}>
-              {t("cancel")}
-            </Button>
-            <Button type="submit" loading={submitting} disabled={submitting}>
-              {submitting ? t("uploading") : t("create_record")}
-            </Button>
-          </div>
         </form>
       </Modal>
     </div>

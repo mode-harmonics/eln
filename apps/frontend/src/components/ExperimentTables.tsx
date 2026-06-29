@@ -124,10 +124,15 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
   const editableFields = Object.keys(form).filter((key) => !EXCLUDED_FIELDS.has(key));
 
   return (
-    <Modal open={open} onClose={onClose} title={`${t("edit_row")} - ${row.cellId || row.cellName || row.id}`} maxWidth="2xl">
-      <form onSubmit={handleSave} className="flex flex-col" style={{ maxHeight: "calc(90vh - 80px)" }}>
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+    <Modal open={open} onClose={onClose} title={`${t("edit_row")} - ${row.cellId || row.cellName || row.id}`} maxWidth="2xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={saving}>{t("cancel")}</Button>
+          <Button type="submit" form="modal-row-form" loading={saving} disabled={saving}>{saving ? t("saving") : t("save")}</Button>
+        </>
+      }>
+      <form id="modal-row-form" onSubmit={handleSave} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
             {editableFields.map((key) => (
               <div key={key}>
                 <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{key}</label>
@@ -153,15 +158,6 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
               </div>
             ))}
           </div>
-        </div>
-        <div className="sticky bottom-0 bg-white px-6 py-4 flex items-center justify-end gap-3 border-t border-gray-100 rounded-b-lg">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>
-            {t("cancel")}
-          </Button>
-          <Button type="submit" loading={saving} disabled={saving}>
-            {saving ? t("saving") : t("save")}
-          </Button>
-        </div>
       </form>
     </Modal>
   );
@@ -193,18 +189,14 @@ function DeleteRowConfirm({ open, onClose, rowId, type, onDeleted }: DeleteRowCo
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={t("delete_confirm_title")}>
-      <div className="p-6 space-y-5">
-        <p className="text-sm text-gray-600">{t("delete_row_confirm")}</p>
-        <div className="pt-2 flex items-center justify-end gap-3">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={deleting}>
-            {t("cancel")}
-          </Button>
-          <Button type="button" variant="danger" onClick={handleDelete} loading={deleting} disabled={deleting}>
-            {deleting ? t("deleting") : t("delete")}
-          </Button>
-        </div>
-      </div>
+    <Modal open={open} onClose={onClose} title={t("delete_confirm_title")}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={deleting}>{t("cancel")}</Button>
+          <Button variant="danger" onClick={handleDelete} loading={deleting} disabled={deleting}>{deleting ? t("deleting") : t("delete")}</Button>
+        </>
+      }>
+      <p className="text-sm text-gray-600">{t("delete_row_confirm")}</p>
     </Modal>
   );
 }

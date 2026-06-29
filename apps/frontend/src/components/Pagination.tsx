@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 
 interface PaginationProps {
@@ -18,6 +19,7 @@ export function Pagination({
   onPageSizeChange,
   className,
 }: PaginationProps) {
+  const { t } = useTranslation();
   const totalPages = totalItems > 0 ? Math.ceil(totalItems / pageSize) : 0;
   const fromIndex = totalItems > 0 ? (currentPage - 1) * pageSize + 1 : 0;
   const toIndex = Math.min(currentPage * pageSize, totalItems);
@@ -50,19 +52,19 @@ export function Pagination({
               <span className="font-medium text-gray-900">{toIndex}</span>
               {" / "}
               <span className="font-medium text-gray-900">{totalItems}</span>
-              {" 条"}
+              {t("pagination_item_unit")}
             </p>
             {onPageSizeChange && (
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-400">每页</span>
+                <span className="text-xs text-gray-400">{t("pagination_per_page")}</span>
                 <select
                   value={pageSize}
                   onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                  className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1d74f5] focus:border-[#1d74f5] cursor-pointer hover:border-gray-300 transition-colors"
+                  className="rounded-lg border-0 bg-gray-100 px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-300 cursor-pointer transition-colors"
                 >
                   {[5, 10, 20, 50].map((size) => (
                     <option key={size} value={size}>
-                      {size} 条/页
+                      {t("pagination_items_per_page", { size })}
                     </option>
                   ))}
                 </select>
@@ -70,7 +72,7 @@ export function Pagination({
             )}
           </>
         ) : (
-          <p className="text-sm text-gray-400">共 0 条</p>
+          <p className="text-sm text-gray-400">{t("pagination_total_zero")}</p>
         )}
       </div>
 
@@ -108,9 +110,9 @@ export function Pagination({
                   key={page}
                   onClick={() => onPageChange?.(page)}
                   className={cn(
-                    "cursor-pointer select-none px-2 text-sm leading-8 transition-colors",
+                    "cursor-pointer select-none px-2.5 text-sm leading-8 transition-colors rounded-md",
                     isCurrent
-                      ? "text-[#1d74f5] font-bold"
+                      ? "bg-gray-100 text-gray-900 font-medium"
                       : "text-gray-500 hover:text-gray-900",
                   )}
                 >
