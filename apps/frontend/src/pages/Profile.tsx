@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { User, Mail, Shield, Key, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "../components/Button";
 import { api, ApiError } from "../lib/api";
 
 export function Profile() {
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +34,8 @@ export function Profile() {
   const initial = profile.fullName ? profile.fullName.charAt(0).toUpperCase() : "U";
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-800">My Profile</h2>
-      </div>
+    <div className="space-y-8">
+      <h1 className="text-2xl font-bold text-gray-900">{t("my_profile")}</h1>
 
       <div className="bg-white rounded border border-gray-200 overflow-hidden">
         <div className="p-8 flex flex-col md:flex-row gap-8 items-start">
@@ -75,7 +75,7 @@ export function Profile() {
             <div className="pt-6 border-t border-gray-100">
               <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Key className="w-4 h-4" />
-                Security
+                {t("settings")}
               </h3>
               <Button disabled variant="secondary">
                 Change Password (Controlled by Identity Service)

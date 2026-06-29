@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
+import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
@@ -14,6 +15,7 @@ import { api, ApiError } from "../lib/api";
 import type { InventoryItem } from "../types";
 
 export function Inventory() {
+  const { t } = useTranslation();
   const { hasPermission } = usePermissions();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,8 +137,7 @@ export function Inventory() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">Inventory</h1>
-        <div className="h-px bg-gray-200 w-full mb-6"></div>
+        <h1 className="text-2xl font-bold text-gray-900">{t("inventory")}</h1>
       </div>
 
       <div className="space-y-6">
@@ -145,13 +146,13 @@ export function Inventory() {
             value={searchInput}
             onChange={setSearchInput}
             onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
-            placeholder="Search inventory..."
+            placeholder={t("search")}
           />
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} className="hidden sm:flex" />
             {hasPermission("data:write") && (
               <Button size="sm" onClick={() => setIsModalOpen(true)}>
-                Add Item
+                {t("add_item")}
               </Button>
             )}
           </div>

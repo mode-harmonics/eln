@@ -1,43 +1,47 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { Link, useMatches } from "react-router-dom";
+import { ChevronRight, Home } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
-export interface BreadcrumbItem {
-  label: string;
-  to?: string;
-}
+export function Breadcrumb() {
+  const { t } = useTranslation();
+  const matches = useMatches();
 
-interface BreadcrumbProps {
-  backTo?: string;
-  items: BreadcrumbItem[];
-}
+  const crumbs: { label: string; pathname: string }[] = [];
+  for (const m of matches) {
+    const h = m.handle as { breadcrumb?: string | ((match: any) => string) } | undefined;
+    if (h?.breadcrumb) {
+      const label =
+        typeof h.breadcrumb === "function" ? h.breadcrumb(m) : t(h.breadcrumb);
+      crumbs.push({ label, pathname: m.pathname });
+    }
+  }
 
-export function Breadcrumb({ backTo, items }: BreadcrumbProps) {
+  if (crumbs.length === 0) return null;
+
   return (
-    <div className="flex items-center gap-3 mb-4">
-      {backTo && (
-        <Link
-          to={backTo}
-          className="flex items-center justify-center w-8 h-8 rounded-full border border-gray-200 bg-white text-gray-500 hover:text-gray-900 hover:border-gray-300 shadow-sm transition-all"
-          title="Back"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </Link>
-      )}
-      <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-        {items.map((item, index) => (
-          <React.Fragment key={index}>
-            {index > 0 && <span>/</span>}
-            {item.to ? (
-              <Link to={item.to} className="hover:text-gray-900 transition-colors">
-                {item.label}
-              </Link>
-            ) : (
-              <span className="text-gray-900 font-semibold">{item.label}</span>
-            )}
-          </React.Fragment>
-        ))}
-      </div>
-    </div>
+    <nav className="flex items-center gap-1.5 text-[13px] text-gray-400">
+      <Link
+        to="/projects"
+        className="flex items-center gap-1 text-gray-400 hover:text-[#1d74f5] transition-colors"
+      >
+        <Home className="w-3.5 h-3.5" />
+      </Link>
+      {crumbs.map((crumb, index) => (
+        <React.Fragment key={index}>
+          <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+          {index < crumbs.length - 1 ? (
+            <Link
+              to={crumb.pathname}
+              className="flex items-center gap-1 text-gray-400 hover:text-[#1d74f5] transition-colors"
+            >
+              {crumb.label}
+            </Link>
+          ) : (
+            <span className="text-gray-600 font-medium">{crumb.label}</span>
+          )}
+        </React.Fragment>
+      ))}
+    </nav>
   );
 }

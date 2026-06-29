@@ -8,6 +8,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl";
 }
 
@@ -19,7 +20,7 @@ const maxWidthStyles = {
   "2xl": "max-w-2xl",
 };
 
-export function Modal({ open, onClose, title, children, maxWidth = "lg" }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, maxWidth = "lg" }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -35,17 +36,29 @@ export function Modal({ open, onClose, title, children, maxWidth = "lg" }: Modal
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
       <div
         className={cn(
-          "bg-white rounded-lg border border-gray-200 shadow-xl w-full animate-in fade-in zoom-in-95 duration-200 m-4",
+          "bg-white rounded-lg border border-gray-200 shadow-xl w-full flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200 m-4",
           maxWidthStyles[maxWidth],
         )}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h2 className="text-[17px] font-bold text-gray-900">{title}</h2>
           <Button variant="text" onClick={onClose}>
             <X className="w-5 h-5" />
           </Button>
         </div>
-        {children}
+
+        {/* Scrollable body */}
+        <div className="overflow-y-auto px-6 py-4">
+          {children}
+        </div>
+
+        {/* Fixed footer */}
+        {footer && (
+          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-100 shrink-0">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

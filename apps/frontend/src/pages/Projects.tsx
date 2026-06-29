@@ -126,10 +126,9 @@ export function Projects() {
   return (
     <div className="space-y-8 relative">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">
           {t("projects")}
         </h1>
-        <div className="h-px bg-gray-200 w-full mb-6"></div>
       </div>
 
       <div className="space-y-6">

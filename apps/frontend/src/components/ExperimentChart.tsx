@@ -85,17 +85,22 @@ function pivotSwelling(data: any[], metric: string): any[] {
   return pivotCalendarLife(data, metric);
 }
 
-/** Extract unique cell names from HtCycle caps dict */
-function htCycleCellKeys(data: any[]): string[] {
-  const keys = new Set<string>();
-  for (const row of data) {
-    if (row.caps) {
-      for (const k of Object.keys(row.caps)) {
-        if (!k.endsWith('_ret')) keys.add(k);
-      }
-    }
+/** Pivot HtCycle rows → { cycle, cellA: capacityRetention, cellB: capacityRetention, ... } */
+function pivotHtCycle(data: any[], metric: string): any[] {
+  const cells = [...new Set(data.map((r) => r.cellName))];
+  const cycles = [...new Set(data.map((r) => r.cycle))].sort((a, b) => a - b);
+  const map = new Map<string, any>();
+  for (const r of data) {
+    map.set(`${r.cycle}_${r.cellName}`, r);
   }
-  return [...keys].sort();
+  return cycles.map((cycle) => {
+    const point: any = { cycle };
+    for (const cell of cells) {
+      const row = map.get(`${cycle}_${cell}`);
+      point[cell] = row ? n(row[metric]) : null;
+    }
+    return point;
+  });
 }
 
 /* ── shared chart config ──────────────────────────────── */
@@ -310,39 +315,60 @@ function FastChargeChart({ data, groupMap }: { data: any[]; groupMap?: Record<st
 }
 
 function HtCycleChart({ data, groupMap }: { data: any[]; groupMap?: Record<string, GroupAssignment> }) {
-  const cellKeys = useMemo(() => htCycleCellKeys(data), [data]);
+  const cells = useMemo(() => [...new Set(data.map((r) => r.cellName))], [data]);
+  const [metric, setMetric] = useState<'capacityRetention' | 'ironDissolution'>('capacityRetention');
+  const lineData = useMemo(() => pivotHtCycle(data, metric), [data, metric]);
 
-  if (cellKeys.length === 0) return <EmptyChart />;
+  if (cells.length === 0) return <EmptyChart />;
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-        <CartesianGrid {...GRID_STYLE} />
-        <XAxis dataKey="cycle" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
-        <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
-        <Tooltip
-          contentStyle={TOOLTIP_STYLE}
-          formatter={(value: any, name: any) => [
-            n(value).toFixed(2),
-            `${name} ${cellGroupName(name, groupMap) ? `· ${cellGroupName(name, groupMap)}` : ''}`,
-          ]}
-        />
-        <Legend content={<GroupLegend groupMap={groupMap} />} />
-        {cellKeys.map((cell) => (
-          <Line
-            key={cell}
-            type="monotone"
-            dataKey={(d: any) => d.caps?.[cell] ?? null}
-            stroke={cellColor(cell, groupMap)}
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            activeDot={{ r: 5 }}
-            name={cell}
-            connectNulls
-          />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col gap-2 h-full">
+      {/* Metric toggle */}
+      <div className="flex items-center gap-2 text-xs shrink-0">
+        <button
+          className={`px-3 py-1 rounded-full font-medium transition-colors ${metric === 'capacityRetention' ? 'bg-[#1d74f5] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          onClick={() => setMetric('capacityRetention')}
+        >
+          Capacity Retention
+        </button>
+        <button
+          className={`px-3 py-1 rounded-full font-medium transition-colors ${metric === 'ironDissolution' ? 'bg-[#1d74f5] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          onClick={() => setMetric('ironDissolution')}
+        >
+          Iron Dissolution (ppm)
+        </button>
+      </div>
+      <div className="flex-1 min-h-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={lineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="cycle" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
+            <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
+            <Tooltip
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(value: any, name: any) => [
+                n(value).toFixed(2),
+                `${name} ${cellGroupName(name, groupMap) ? `· ${cellGroupName(name, groupMap)}` : ''}`,
+              ]}
+            />
+            <Legend content={<GroupLegend groupMap={groupMap} />} />
+            {cells.map((cell) => (
+              <Line
+                key={cell}
+                type="monotone"
+                dataKey={cell}
+                stroke={cellColor(cell, groupMap)}
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
+                name={cell}
+                connectNulls
+              />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }
 

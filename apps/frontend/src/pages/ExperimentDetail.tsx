@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLoaderData } from "react-router-dom";
 import { format } from "date-fns";
 import { Download, Edit3, Loader2, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -13,7 +13,6 @@ import {
   HtCycleTable
 } from "../components/ExperimentTables";
 import { ExperimentChart } from "../components/ExperimentChart";
-import { Breadcrumb } from "../components/Breadcrumb";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { api, ApiError } from "../lib/api";
@@ -40,9 +39,12 @@ export function ExperimentDetail() {
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const { experimentId } = useParams<{ experimentId: string }>();
-  const [experiment, setExperiment] = useState<ExperimentDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const loaderData = useLoaderData<ExperimentDetail | null>();
+  const [experiment, setExperiment] = useState<ExperimentDetail | null>(loaderData);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(
+    loaderData ? null : t("loading_failed")
+  );
 
   // Edit modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -53,24 +55,6 @@ export function ExperimentDetail() {
   // Delete confirm state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  const fetchExperiment = () => {
-    if (!experimentId) return;
-    api.get<ExperimentDetail>(`/api/v1/experiments/${experimentId}`)
-      .then((data) => setExperiment(data))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载失败"))
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => {
-    if (!experimentId) return;
-    let cancelled = false;
-    api.get<ExperimentDetail>(`/api/v1/experiments/${experimentId}`)
-      .then((data) => { if (!cancelled) setExperiment(data); })
-      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载失败"); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [experimentId]);
 
   const openEditModal = () => {
     if (!experiment) return;
@@ -154,17 +138,6 @@ export function ExperimentDetail() {
   return (
     <div className="space-y-8">
       <div>
-        <Breadcrumb
-          backTo={experiment.projectId ? `/projects/${experiment.projectId}?tab=experiments` : "/projects"}
-          items={[
-            { label: t("projects"), to: "/projects" },
-            ...(experiment.projectId
-              ? [{ label: t("project"), to: `/projects/${experiment.projectId}?tab=experiments` }]
-              : []),
-            { label: experiment.title },
-          ]}
-        />
-
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{experiment.title}</h1>

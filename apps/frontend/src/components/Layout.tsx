@@ -19,6 +19,7 @@ import { api } from "../lib/api";
 import { usePermissions } from "../hooks/usePermissions";
 import { Button } from "./Button";
 import { Logo } from "./Logo";
+import { Breadcrumb } from "./Breadcrumb";
 
 const NAVIGATION = [
   { nameKey: "projects", href: "/projects", icon: Grid, requiredPermission: "projects:read" },
@@ -142,7 +143,8 @@ export function Layout() {
               const isActive =
                 location.pathname.startsWith(item.href) ||
                 (item.href === "/projects" &&
-                  location.pathname.startsWith("/experiments"));
+                  (location.pathname.startsWith("/experiments") ||
+                   location.pathname.includes("/experiments/")));
               return (
                 <Link
                   key={item.nameKey}
@@ -218,9 +220,16 @@ export function Layout() {
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-6xl mx-auto p-6 md:p-10">
-            <Outlet />
+          {/* Breadcrumb: wider, full-width */}
+          <div className="w-full px-6 md:px-10 pt-6 md:pt-10 pb-4">
+            <div className="max-w-screen-xl mx-auto">
+              <Breadcrumb />
+            </div>
           </div>
+            {/* Content: original width */}
+            <div className="max-w-6xl mx-auto p-6 md:p-10">
+              <Outlet />
+            </div>
         </main>
       </div>
     </div>

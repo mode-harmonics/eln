@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useSearchParams, Link } from "react-router-dom";
+import { useParams, useSearchParams, Link, useRouteLoaderData } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { FileText, Loader2, UploadCloud, CheckCircle2, Settings2 } from "lucide-react";
@@ -11,7 +11,6 @@ import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { DataSummary } from "../components/DataSummary";
-import { Breadcrumb } from "../components/Breadcrumb";
 import { SkeletonCard } from "../components/Skeleton";
 import { api, ApiError } from "../lib/api";
 import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle, CellGroup } from "../types";
@@ -31,7 +30,8 @@ export function ProjectDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get("tab") as "summary" | "experiments") || "summary";
 
-  const [project, setProject] = useState<Project | null>(null);
+  const loaderProject = useRouteLoaderData("project") as Project | null;
+  const [project, setProject] = useState<Project | null>(loaderProject);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,15 +64,6 @@ export function ProjectDetail() {
     { value: "FastCharge", label: t("fast_charge"), permission: "data_fastcharge:write" },
     { value: "HtCycle", label: t("ht_cycle"), permission: "data_htcycle:write" },
   ].filter((opt) => hasPermission("experiments:write") || hasPermission("data:write") || hasPermission(opt.permission)), [t, hasPermission]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    let cancelled = false;
-    api.get<Project>(`/api/v1/projects/${projectId}`)
-      .then((data) => { if (!cancelled) setProject(data); })
-      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载项目详情失败"); });
-    return () => { cancelled = true; };
-  }, [projectId]);
 
   // Load groups for DataSummary cell → group name mapping
   useEffect(() => {
@@ -203,13 +194,6 @@ export function ProjectDetail() {
   return (
     <div className="space-y-8">
       <div>
-        <Breadcrumb
-          backTo="/projects"
-          items={[
-            { label: t("projects"), to: "/projects" },
-            { label: project.name },
-          ]}
-        />
         <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
         <p className="mt-2 text-gray-600">{project.description}</p>
         <div className="flex items-center gap-3 mt-4">
@@ -296,7 +280,7 @@ export function ProjectDetail() {
                 {experiments.map((exp) => (
                   <Link
                     key={exp.id}
-                    to={`/experiments/${exp.id}`}
+                    to={`/projects/${projectId}/experiments/${exp.id}`}
                     className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors group"
                   >
                     <div className="flex items-center gap-4">
@@ -351,7 +335,7 @@ export function ProjectDetail() {
               {experiments.map((exp) => (
                 <Link
                   key={exp.id}
-                  to={`/experiments/${exp.id}`}
+                  to={`/projects/${projectId}/experiments/${exp.id}`}
                   className="group flex flex-col border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors relative"
                 >
                   <div className="absolute top-6 right-6 text-gray-400 group-hover:text-gray-600">

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLoaderData } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Plus, Pencil, Trash2, Save, X, ChevronLeft, Settings2, Loader2 } from "lucide-react";
-import { Breadcrumb } from "../components/Breadcrumb";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SkeletonCard } from "../components/Skeleton";
@@ -14,6 +13,9 @@ export function Groups() {
   const { t } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+
+  const loaderData = useLoaderData<{ projectName: string } | null>();
+  const [projectName, setProjectName] = useState(loaderData?.projectName ?? "");
 
   const [groups, setGroups] = useState<CellGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,7 +40,7 @@ export function Groups() {
     setError(null);
     api.get<CellGroup[]>(`/api/v1/projects/${projectId}/groups`)
       .then(setGroups)
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载分组失败"))
+      .catch((err) => setError(err instanceof ApiError ? err.message : t("upload_error")))
       .finally(() => setLoading(false));
   };
 
@@ -121,40 +123,33 @@ export function Groups() {
   );
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <Breadcrumb
-        backTo={`/projects/${projectId}`}
-        items={[
-          { label: t("projects"), to: "/projects" },
-          { label: t("project_detail"), to: `/projects/${projectId}` },
-          { label: t("group_management") || "分组管理" },
-        ]}
-      />
-
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Settings2 className="w-6 h-6" />
-            {t("group_management") || "分组管理"}
+            {t("group_management")}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            {t("group_management_desc") || "管理电池分组配置，自动按前缀匹配或手动指定电芯归属"}
+            {t("group_management_desc")}
           </p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="w-4 h-4 mr-1.5 inline-block" />
-          {t("add_group") || "添加分组"}
+          {t("add_group")}
         </Button>
       </div>
+
+      <div className="border-b border-gray-200" />
 
       {loading ? (
         <SkeletonCard rows={4} />
       ) : error ? (
         <div className="text-red-500 text-sm">{error}</div>
       ) : groups.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-gray-400 bg-white rounded-lg border border-gray-200">
           <Settings2 className="w-12 h-12 mx-auto mb-3 opacity-40" />
-          <p className="text-sm">{t("no_groups") || "暂无分组，点击上方按钮创建"}</p>
+          <p className="text-sm">{t("no_groups")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -178,12 +173,12 @@ export function Groups() {
                       ? "bg-blue-50 text-blue-600"
                       : "bg-purple-50 text-purple-600"
                   }`}>
-                    {g.matchMode === "prefix" ? "前缀匹配" : "手动指定"}
+                    {g.matchMode === "prefix" ? t("prefix_match") : t("manual_match")}
                   </span>
                 </div>
                 {g.matchMode === "prefix" && g.matchValue && (
                   <p className="text-xs text-gray-500 mt-0.5">
-                    前缀: <code className="bg-gray-100 px-1 rounded">{g.matchValue}</code>
+                    {t("prefix_value")}: <code className="bg-gray-100 px-1 rounded">{g.matchValue}</code>
                   </p>
                 )}
               </div>
@@ -206,24 +201,36 @@ export function Groups() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editingGroup ? "编辑分组" : "添加分组"}
+        title={editingGroup ? t("edit_group") : t("add_group")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>
+              <X className="w-4 h-4 mr-1 inline-block" />
+              {t("cancel")}
+            </Button>
+            <Button onClick={handleSave} loading={saving}>
+              <Save className="w-4 h-4 mr-1 inline-block" />
+              {t("save")}
+            </Button>
+          </>
+        }
       >
         <div className="space-y-4">
           {/* Group name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">分组名称</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("group_name")}</label>
             <input
               type="text"
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d74f5] focus:border-transparent"
-              placeholder="如: 方案A, 对照组"
+              placeholder={t("group_name_placeholder")}
             />
           </div>
 
           {/* Match mode */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">匹配模式</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("match_mode")}</label>
             <div className="flex gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -233,7 +240,7 @@ export function Groups() {
                   onChange={() => setFormMode("prefix")}
                   className="text-[#1d74f5]"
                 />
-                <span className="text-sm">前缀匹配</span>
+                <span className="text-sm">{t("prefix_match")}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -243,7 +250,7 @@ export function Groups() {
                   onChange={() => setFormMode("manual")}
                   className="text-[#1d74f5]"
                 />
-                <span className="text-sm">手动指定</span>
+                <span className="text-sm">{t("manual_match")}</span>
               </label>
             </div>
           </div>
@@ -251,21 +258,21 @@ export function Groups() {
           {/* Prefix value */}
           {formMode === "prefix" && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">前缀值</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t("prefix_value")}</label>
               <input
                 type="text"
                 value={formMatchValue}
                 onChange={(e) => setFormMatchValue(e.target.value)}
                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1d74f5] focus:border-transparent"
-                placeholder="如: A-, B-2024, CELL-01"
+                placeholder={t("prefix_value_placeholder")}
               />
-              <p className="text-xs text-gray-400 mt-1">电芯名称以此前缀开头时将自动归入此分组</p>
+              <p className="text-xs text-gray-400 mt-1">{t("prefix_value_hint")}</p>
             </div>
           )}
 
           {/* Color */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">颜色</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("color")}</label>
             <div className="flex flex-wrap gap-2">
               {unusedColors.map((c) => (
                 <button
@@ -284,17 +291,6 @@ export function Groups() {
           {formError && (
             <p className="text-sm text-red-500">{formError}</p>
           )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>
-              <X className="w-4 h-4 mr-1 inline-block" />
-              取消
-            </Button>
-            <Button onClick={handleSave} loading={saving}>
-              <Save className="w-4 h-4 mr-1 inline-block" />
-              保存
-            </Button>
-          </div>
         </div>
       </Modal>
 
@@ -302,21 +298,26 @@ export function Groups() {
       <Modal
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        title="确认删除"
+        title={t("delete_confirm_title")}
         maxWidth="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+              {t("cancel")}
+            </Button>
+            <Button variant="danger" onClick={handleDelete}>
+              <Trash2 className="w-4 h-4 mr-1 inline-block" />
+              {t("delete_row")}
+            </Button>
+          </>
+        }
       >
-        <p className="text-sm text-gray-600 mb-4">
-          确定要删除分组 <strong>{deleteTarget?.name}</strong> 吗？此操作不可撤销。
-        </p>
-        <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
-            取消
-          </Button>
-          <Button variant="danger" onClick={handleDelete}>
-            <Trash2 className="w-4 h-4 mr-1 inline-block" />
-            删除
-          </Button>
-        </div>
+        <p
+          className="text-sm text-gray-600"
+          dangerouslySetInnerHTML={{
+            __html: t("delete_group_confirm", { name: deleteTarget?.name ?? "" }),
+          }}
+        />
       </Modal>
     </div>
   );

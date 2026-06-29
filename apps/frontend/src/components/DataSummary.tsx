@@ -12,7 +12,6 @@ import {
   ChevronDown,
   ChevronRight,
   Settings2,
-  X,
   HelpCircle,
   Loader2,
 } from "lucide-react";
@@ -218,13 +217,6 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
   const [baseGroup, setBaseGroup] = useState<string>("");
-  const [groupingStrategy, setGroupingStrategy] = useState<"prefix" | "custom">(
-    "prefix",
-  );
-  const [customGrouping, setCustomGrouping] = useState<Record<string, string>>(
-    {},
-  );
-  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   const allCellNames = useMemo(() => {
@@ -242,17 +234,6 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
     return Array.from(names).sort();
   }, [props]);
-
-  const handleStrategyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value as "prefix" | "custom";
-    setGroupingStrategy(val);
-    if (val === "custom" && Object.keys(customGrouping).length === 0) {
-      const initial: Record<string, string> = {};
-      allCellNames.forEach((c) => (initial[c] = getGroupName(c, "prefix", {}, props.groups)));
-      setCustomGrouping(initial);
-      setIsGroupModalOpen(true);
-    }
-  };
 
   const toggleRow = (key: string) => {
     const newSet = new Set(expandedRows);
@@ -281,7 +262,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
 
     // 1. Process Data
     props.processData.forEach((d) => {
-      const g = getGroupName(d.cellId, groupingStrategy, customGrouping, props.groups);
+      const g = getGroupName(d.cellId, "prefix", {}, props.groups);
       const fq = parseFloat(d.fq || "0");
       const gqc1 = parseFloat(d.gqc1 || "0");
       const gqd1 = parseFloat(d.gqd1 || "0");
@@ -301,7 +282,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     Object.keys(clByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, groupingStrategy, customGrouping, props.groups);
+      const g = getGroupName(cellName, "prefix", {}, props.groups);
       const items = clByCell[cellName].sort((a, b) => a.dayCount - b.dayCount);
       const latest = items[items.length - 1];
 
@@ -341,7 +322,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     Object.keys(ssByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, groupingStrategy, customGrouping, props.groups);
+      const g = getGroupName(cellName, "prefix", {}, props.groups);
       const items = ssByCell[cellName].sort((a, b) => a.dayCount - b.dayCount);
       const latest = items[items.length - 1];
       if (latest && latest.dayCount > 0) {
@@ -350,18 +331,18 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     props.energyEfficiency.forEach((d: any) => {
-      const g = getGroupName(d.cellName, groupingStrategy, customGrouping, props.groups);
+      const g = getGroupName(d.cellName, "prefix", {}, props.groups);
       addMetric(g, "energy_eff", d.cellName, parseFloat(d.eePct || d.ee || "0"));
     });
 
     props.dcrTest.forEach((d: any) => {
-      const g = getGroupName(d.cellName, groupingStrategy, customGrouping, props.groups);
+      const g = getGroupName(d.cellName, "prefix", {}, props.groups);
       if (d.ddcr) addMetric(g, "dcr_discharge", d.cellName, parseFloat(d.ddcr));
       if (d.cdcr) addMetric(g, "dcr_charge", d.cellName, parseFloat(d.cdcr));
     });
 
     props.fastCharge.forEach((d: any) => {
-      const g = getGroupName(d.cellName, groupingStrategy, customGrouping, props.groups);
+      const g = getGroupName(d.cellName, "prefix", {}, props.groups);
       addMetric(g, "fc_time", d.cellName, parseFloat(d.computedFastChargeTime || d.fcTime || "0"));
     });
 
@@ -374,7 +355,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
       }
     });
     Object.keys(htByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, groupingStrategy, customGrouping, props.groups);
+      const g = getGroupName(cellName, "prefix", {}, props.groups);
       const sorted = htByCell[cellName].sort((a: any, b: any) => a.cycle - b.cycle);
       const latest = sorted[sorted.length - 1];
       if (latest && latest.cycle > 0) {
@@ -402,14 +383,22 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
       });
     });
     return { computedMetrics, groups: Array.from(groupsSet).sort() };
-  }, [props, groupingStrategy, customGrouping]);
+  }, [props]);
 
   const groupsToUse = useMemo(() => {
+    // Prefer server-defined groups from API
+    if (props.groups && props.groups.length > 0) {
+      return props.groups
+        .slice()
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+        .map((g) => g.name);
+    }
+    // Fallback to computed groups from data
     if (metrics.groups.length > 0) return metrics.groups;
     const groupsSet = new Set<string>();
-    allCellNames.forEach((name) => groupsSet.add(getGroupName(name, groupingStrategy, customGrouping, props.groups)));
+    allCellNames.forEach((name) => groupsSet.add(getGroupName(name, "prefix", {}, props.groups)));
     return Array.from(groupsSet).sort();
-  }, [metrics.groups, allCellNames, groupingStrategy, customGrouping]);
+  }, [props.groups, metrics.groups, allCellNames]);
 
   const activeBaseGroup = baseGroup || (groupsToUse.length > 0 ? groupsToUse[0] : "");
 
@@ -444,24 +433,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
             {t("data_aggregation_heatmap")}
           </h2>
         </div>
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-200 rounded-md shadow-sm w-full sm:w-auto">
-            <label className="text-[10px] font-medium text-gray-500 whitespace-nowrap uppercase">
-              {t("grouping")}:
-            </label>
-            <select
-              className="text-xs border-none bg-transparent font-medium text-gray-900 focus:ring-0 cursor-pointer p-0 pr-4"
-              value={groupingStrategy}
-              onChange={(e) => {
-                setGroupingStrategy(e.target.value as "prefix" | "custom");
-                if (e.target.value === "custom") setIsGroupModalOpen(true);
-              }}
-            >
-              <option value="prefix">By Prefix</option>
-              <option value="custom">Custom</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-200 rounded-md shadow-sm w-full sm:w-auto">
+        <div className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-200 rounded-md shadow-sm">
             <label className="text-[10px] font-medium text-gray-500 whitespace-nowrap uppercase">
               {t("base_group")}:
             </label>
@@ -477,7 +449,6 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
               ))}
             </select>
           </div>
-        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -571,59 +542,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
           </tbody>
         </table>
       </div>
-      {isGroupModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 flex flex-col max-h-[85vh]">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <h3 className="text-base font-semibold text-gray-900">
-                {t("custom_grouping")}
-              </h3>
-              <button
-                onClick={() => setIsGroupModalOpen(false)}
-                className="text-gray-400 hover:text-gray-500 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="p-6 overflow-y-auto flex-grow bg-gray-50/50">
-              <div className="space-y-3">
-                {allCellNames.map((cellName) => (
-                  <div
-                    key={cellName}
-                    className="flex items-center justify-between bg-white px-4 py-2 border border-gray-200 rounded"
-                  >
-                    <span className="text-[13px] font-mono font-medium text-gray-700">
-                      {cellName}
-                    </span>
-                    <input
-                      type="text"
-                      className="text-[13px] border border-gray-300 rounded px-2 py-1 w-32 focus:outline-none focus:ring-1 focus:ring-[#1d74f5] focus:border-[#1d74f5]"
-                      value={customGrouping[cellName] || ""}
-                      onChange={(e) =>
-                        setCustomGrouping((prev) => ({
-                          ...prev,
-                          [cellName]: e.target.value,
-                        }))
-                      }
-                      placeholder="Group name"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-white rounded-b-lg">
-              <button
-                onClick={() => setIsGroupModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-white bg-[#1d74f5] rounded hover:bg-blue-600 transition-colors"
-              >
-                {t("apply")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
