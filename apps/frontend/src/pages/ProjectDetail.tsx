@@ -15,6 +15,19 @@ import { SkeletonCard } from "../components/Skeleton";
 import { api, ApiError } from "../lib/api";
 import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle, CellGroup } from "../types";
 
+/** Maps experiment metadata.recordType to the API route path segment used by /api/v1/data/:type/:expId */
+const RECORD_TYPE_TO_API_TYPE: Record<string, string> = {
+  ProcessData: "process",
+  CalendarLife: "calendar",
+  StorageSwelling: "swelling",
+  EnergyEfficiency: "efficiency",
+  DcrTest: "dcr",
+  FastCharge: "fastcharge",
+  HtCycle: "htcycle",
+};
+
+const ALL_API_TYPES = Object.values(RECORD_TYPE_TO_API_TYPE);
+
 export function ProjectDetail() {
   const { t } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
@@ -75,10 +88,34 @@ export function ProjectDetail() {
     return () => { cancelled = true; };
   }, [projectId]);
 
+  // Paginated experiments for the list/grid tab
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
     setLoading(true);
+
+    const queryParams = new URLSearchParams();
+    queryParams.append("page", String(currentPage));
+    queryParams.append("limit", String(pageSize));
+
+    api.get<{ items: Experiment[]; total: number }>(`/api/v1/projects/${projectId}/experiments?${queryParams.toString()}`)
+      .then((res) => {
+        if (cancelled) return;
+        setExperiments(res.items);
+        setTotalItems(res.total);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "加载实验数据失败");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [projectId, currentPage, pageSize, refetchTrigger]);
+
+  // Summary tab: fetch ALL experiments (no pagination), group by recordType, only request matching data
+  useEffect(() => {
+    if (!projectId || activeTab !== "summary") return;
+    let cancelled = false;
+
     setProcessData([]);
     setCalendarLife([]);
     setStorageSwelling([]);
@@ -89,58 +126,70 @@ export function ProjectDetail() {
     setLoadedTypes([]);
     setDataLoading(true);
 
-    const queryParams = new URLSearchParams();
-    queryParams.append("page", String(currentPage));
-    queryParams.append("limit", String(pageSize));
-
-    api.get<{ items: Experiment[]; total: number }>(`/api/v1/projects/${projectId}/experiments?${queryParams.toString()}`)
-      .then((res) => {
+    // Fetch ALL experiments without pagination to guarantee completeness
+    api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`)
+      .then((allExps) => {
         if (cancelled) return;
-        const exps = res.items;
-        setExperiments(exps);
-        setTotalItems(res.total);
 
-        const expIds = exps.map((e) => e.id);
-        if (expIds.length === 0) {
-          setLoadedTypes(["process", "calendar", "swelling", "efficiency", "dcr", "fastcharge", "htcycle"]);
+        if (!Array.isArray(allExps) || allExps.length === 0) {
+          setLoadedTypes(ALL_API_TYPES);
           setDataLoading(false);
           return;
         }
 
-        const dataTypes = [
-          { type: "process", setter: setProcessData as any },
-          { type: "calendar", setter: setCalendarLife as any },
-          { type: "swelling", setter: setStorageSwelling as any },
-          { type: "efficiency", setter: setEnergyEfficiency as any },
-          { type: "dcr", setter: setDcrTest as any },
-          { type: "fastcharge", setter: setFastCharge as any },
-          { type: "htcycle", setter: setHtCycle as any },
-        ];
+        // Group experiment IDs by their metadata.recordType
+        const expIdsByType: Record<string, string[]> = {};
+        for (const exp of allExps) {
+          const recordType = exp.metadata?.recordType as string | undefined;
+          if (recordType && RECORD_TYPE_TO_API_TYPE[recordType]) {
+            if (!expIdsByType[recordType]) expIdsByType[recordType] = [];
+            expIdsByType[recordType].push(exp.id);
+          }
+        }
 
-        let completed = 0;
-        dataTypes.forEach(({ type, setter }) => {
-          Promise.all(
+        // Only request the matching data table for each experiment group
+        const settleRecordType = (
+          recordType: string,
+          apiType: string,
+          setter: (data: any[]) => void,
+          expIds: string[],
+        ) => {
+          if (expIds.length === 0) {
+            setter([]);
+            setLoadedTypes((prev) => [...prev, apiType]);
+            return;
+          }
+          return Promise.all(
             expIds.map((expId) =>
-              api.get<any[]>(`/api/v1/data/${type}/${expId}`).catch(() => [] as any[])
+              api.get<any[]>(`/api/v1/data/${apiType}/${expId}`).catch(() => [] as any[])
             )
           ).then((results) => {
             if (cancelled) return;
-            const allRows = results.flat();
-            setter(allRows);
-            setLoadedTypes((prev) => [...prev, type]);
-            completed++;
-            if (completed === dataTypes.length) {
-              setDataLoading(false);
-            }
+            setter(results.flat());
+            setLoadedTypes((prev) => [...prev, apiType]);
           });
+        };
+
+        const tasks = [
+          settleRecordType("ProcessData", "process", setProcessData, expIdsByType["ProcessData"] || []),
+          settleRecordType("CalendarLife", "calendar", setCalendarLife, expIdsByType["CalendarLife"] || []),
+          settleRecordType("StorageSwelling", "swelling", setStorageSwelling, expIdsByType["StorageSwelling"] || []),
+          settleRecordType("EnergyEfficiency", "efficiency", setEnergyEfficiency, expIdsByType["EnergyEfficiency"] || []),
+          settleRecordType("DcrTest", "dcr", setDcrTest, expIdsByType["DcrTest"] || []),
+          settleRecordType("FastCharge", "fastcharge", setFastCharge, expIdsByType["FastCharge"] || []),
+          settleRecordType("HtCycle", "htcycle", setHtCycle, expIdsByType["HtCycle"] || []),
+        ];
+
+        Promise.all(tasks.filter(Boolean)).finally(() => {
+          if (!cancelled) setDataLoading(false);
         });
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.message : "加载实验数据失败");
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
+        if (!cancelled) console.error("Summary data fetch failed:", err);
+      });
+
     return () => { cancelled = true; };
-  }, [projectId, currentPage, pageSize, refetchTrigger]);
+  }, [projectId, activeTab, refetchTrigger]);
 
   const closeModal = () => {
     setIsModalOpen(false);
