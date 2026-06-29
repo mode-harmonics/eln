@@ -12,6 +12,7 @@ import { StorageSwelling } from '../entities/storage-swelling.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { ParserRegistry } from './parsers/parser.registry';
 import { computeFastChargeTime } from './parsers/fast-charge.parser';
+import { GroupsService } from '../groups/groups.service';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
@@ -48,6 +49,7 @@ export class DataService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly parserRegistry: ParserRegistry,
+    private readonly groupsService: GroupsService,
   ) { }
 
   async getExperiment(id: string): Promise<Experiment | null> {
@@ -125,6 +127,28 @@ export class DataService {
 
     const repo = this.dataSource.getRepository(EntityClass);
     return repo.find({ where: { experimentId } as Record<string, unknown> });
+  }
+
+  /**
+   * GET /data/:type/:expId?withGroups=true&projectId=...
+   * Returns rows + groupMap so the frontend can colour each cell by group.
+   */
+  async findByTypeWithGroups(
+    type: string,
+    experimentId: string,
+    projectId: string,
+  ): Promise<{ rows: unknown[]; groupMap: Record<string, { groupId: string | null; groupName: string | null; color: string }> }> {
+    const rows = await this.findByType(type, experimentId) as Record<string, unknown>[];
+
+    // Collect all cell identifiers from the rows
+    const cellIdentifiers: string[] = [];
+    for (const row of rows) {
+      const ci = (row.cellName as string) ?? (row.cellId as string);
+      if (ci) cellIdentifiers.push(ci);
+    }
+
+    const groupMap = await this.groupsService.getGroupMap(cellIdentifiers, projectId);
+    return { rows, groupMap };
   }
 
   /** PUT /data/:type/:id — update a single data row. */

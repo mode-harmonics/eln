@@ -204,7 +204,7 @@ export function ExperimentDetail() {
 
       {hasReadPermission ? (
         <div className="space-y-8">
-          <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} />
+          <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} projectId={experiment.projectId} />
 
           {/* Data Table Section */}
           <div className="bg-white border border-gray-200 rounded shadow-sm">

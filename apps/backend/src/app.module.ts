@@ -12,6 +12,7 @@ import { ExperimentsModule } from './experiments/experiments.module';
 import { DataModule } from './data/data.module';
 import { AiModule } from './ai/ai.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { GroupsModule } from './groups/groups.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { InventoryModule } from './inventory/inventory.module';
     DataModule,
     AiModule,
     InventoryModule,
+    GroupsModule,
   ],
   providers: [ConfigService],
 })

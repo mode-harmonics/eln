@@ -248,7 +248,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     setGroupingStrategy(val);
     if (val === "custom" && Object.keys(customGrouping).length === 0) {
       const initial: Record<string, string> = {};
-      allCellNames.forEach((c) => (initial[c] = getGroupName(c, "prefix")));
+      allCellNames.forEach((c) => (initial[c] = getGroupName(c, "prefix", {}, props.groups)));
       setCustomGrouping(initial);
       setIsGroupModalOpen(true);
     }
@@ -281,7 +281,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
 
     // 1. Process Data
     props.processData.forEach((d) => {
-      const g = getGroupName(d.cellId, groupingStrategy, customGrouping);
+      const g = getGroupName(d.cellId, groupingStrategy, customGrouping, props.groups);
       const fq = parseFloat(d.fq || "0");
       const gqc1 = parseFloat(d.gqc1 || "0");
       const gqd1 = parseFloat(d.gqd1 || "0");
@@ -301,7 +301,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     Object.keys(clByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, groupingStrategy, customGrouping);
+      const g = getGroupName(cellName, groupingStrategy, customGrouping, props.groups);
       const items = clByCell[cellName].sort((a, b) => a.dayCount - b.dayCount);
       const latest = items[items.length - 1];
 
@@ -341,7 +341,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     Object.keys(ssByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, groupingStrategy, customGrouping);
+      const g = getGroupName(cellName, groupingStrategy, customGrouping, props.groups);
       const items = ssByCell[cellName].sort((a, b) => a.dayCount - b.dayCount);
       const latest = items[items.length - 1];
       if (latest && latest.dayCount > 0) {
@@ -350,18 +350,18 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     props.energyEfficiency.forEach((d: any) => {
-      const g = getGroupName(d.cellName, groupingStrategy, customGrouping);
+      const g = getGroupName(d.cellName, groupingStrategy, customGrouping, props.groups);
       addMetric(g, "energy_eff", d.cellName, parseFloat(d.eePct || d.ee || "0"));
     });
 
     props.dcrTest.forEach((d: any) => {
-      const g = getGroupName(d.cellName, groupingStrategy, customGrouping);
+      const g = getGroupName(d.cellName, groupingStrategy, customGrouping, props.groups);
       if (d.ddcr) addMetric(g, "dcr_discharge", d.cellName, parseFloat(d.ddcr));
       if (d.cdcr) addMetric(g, "dcr_charge", d.cellName, parseFloat(d.cdcr));
     });
 
     props.fastCharge.forEach((d: any) => {
-      const g = getGroupName(d.cellName, groupingStrategy, customGrouping);
+      const g = getGroupName(d.cellName, groupingStrategy, customGrouping, props.groups);
       addMetric(g, "fc_time", d.cellName, parseFloat(d.computedFastChargeTime || d.fcTime || "0"));
     });
 
@@ -374,7 +374,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
       }
     });
     Object.keys(htByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, groupingStrategy, customGrouping);
+      const g = getGroupName(cellName, groupingStrategy, customGrouping, props.groups);
       const sorted = htByCell[cellName].sort((a: any, b: any) => a.cycle - b.cycle);
       const latest = sorted[sorted.length - 1];
       if (latest && latest.cycle > 0) {
@@ -407,7 +407,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
   const groupsToUse = useMemo(() => {
     if (metrics.groups.length > 0) return metrics.groups;
     const groupsSet = new Set<string>();
-    allCellNames.forEach((name) => groupsSet.add(getGroupName(name, groupingStrategy, customGrouping)));
+    allCellNames.forEach((name) => groupsSet.add(getGroupName(name, groupingStrategy, customGrouping, props.groups)));
     return Array.from(groupsSet).sort();
   }, [metrics.groups, allCellNames, groupingStrategy, customGrouping]);
 

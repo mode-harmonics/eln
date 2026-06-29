@@ -5,6 +5,7 @@ import { Login } from "./pages/Login";
 import { Projects } from "./pages/Projects";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { ExperimentDetail } from "./pages/ExperimentDetail";
+import { Groups } from "./pages/Groups";
 import { Inventory } from "./pages/Inventory";
 import { Users } from "./pages/Users";
 import { Roles } from "./pages/Roles";
@@ -36,6 +37,7 @@ export default function App() {
           <Route index element={<Navigate to="/projects" replace />} />
           <Route path="projects" element={<Projects />} />
           <Route path="projects/:projectId" element={<ProjectDetail />} />
+          <Route path="projects/:projectId/groups" element={<Groups />} />
           <Route path="experiments/:experimentId" element={<ExperimentDetail />} />
           <Route path="inventory" element={<Inventory />} />
           <Route path="users" element={<Users />} />

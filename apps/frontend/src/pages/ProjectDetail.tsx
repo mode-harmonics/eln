@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { FileText, Loader2, UploadCloud, CheckCircle2 } from "lucide-react";
+import { FileText, Loader2, UploadCloud, CheckCircle2, Settings2 } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
@@ -14,7 +14,7 @@ import { DataSummary } from "../components/DataSummary";
 import { Breadcrumb } from "../components/Breadcrumb";
 import { SkeletonCard } from "../components/Skeleton";
 import { api, ApiError } from "../lib/api";
-import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle } from "../types";
+import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle, CellGroup } from "../types";
 
 export function ProjectDetail() {
   const { t } = useTranslation();
@@ -52,6 +52,9 @@ export function ProjectDetail() {
   const [loadedTypes, setLoadedTypes] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
+  // Group data for DataSummary
+  const [groups, setGroups] = useState<CellGroup[]>([]);
+
   const recordOptions = React.useMemo(() => [
     { value: "ProcessData", label: t("process_data"), permission: "data_process:write" },
     { value: "CalendarLife", label: t("calendar_life"), permission: "data_calendar:write" },
@@ -68,6 +71,16 @@ export function ProjectDetail() {
     api.get<Project>(`/api/v1/projects/${projectId}`)
       .then((data) => { if (!cancelled) setProject(data); })
       .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载项目详情失败"); });
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  // Load groups for DataSummary cell → group name mapping
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    api.get<CellGroup[]>(`/api/v1/projects/${projectId}/groups`)
+      .then((data) => { if (!cancelled) setGroups(data); })
+      .catch(() => { /* groups are optional */ });
     return () => { cancelled = true; };
   }, [projectId]);
 
@@ -199,6 +212,15 @@ export function ProjectDetail() {
         />
         <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
         <p className="mt-2 text-gray-600">{project.description}</p>
+        <div className="flex items-center gap-3 mt-4">
+          <Link
+            to={`/projects/${projectId}/groups`}
+            className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#1d74f5] transition-colors"
+          >
+            <Settings2 className="w-4 h-4" />
+            分组管理
+          </Link>
+        </div>
         <div className="h-px bg-gray-200 w-full mt-6"></div>
       </div>
 
@@ -237,6 +259,7 @@ export function ProjectDetail() {
             dcrTest={dcrTest}
             fastCharge={fastCharge}
             htCycle={htCycle}
+            groups={groups}
           />
         )
       ) : (

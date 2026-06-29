@@ -16,3 +16,7 @@ export * from './energy-efficiency.entity';
 export * from './dcr-test.entity';
 export * from './fast-charge.entity';
 export * from './ht-cycle.entity';
+
+// Cell grouping entities
+export * from './cell-group.entity';
+export * from './cell-group-member.entity';

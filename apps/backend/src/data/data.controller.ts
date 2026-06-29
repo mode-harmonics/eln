@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -78,6 +79,8 @@ export class DataController {
   async findByType(
     @Param('type') type: string,
     @Param('expId') expId: string,
+    @Query('withGroups') withGroups: string | undefined,
+    @Query('projectId') projectId: string | undefined,
     @CurrentUser() user: RequestUser,
   ) {
     const requiredPermission = `data_${type}:read`;
@@ -87,6 +90,9 @@ export class DataController {
       throw new ForbiddenException(
         `You do not have the required permission: ${requiredPermission} or data:read`,
       );
+    }
+    if (withGroups === 'true' && projectId) {
+      return this.dataService.findByTypeWithGroups(type, expId, projectId);
     }
     return this.dataService.findByType(type, expId);
   }
