@@ -11,14 +11,7 @@ import { CellGroup } from '../entities/cell-group.entity';
 import { CellGroupMember } from '../entities/cell-group-member.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
-
-const GROUP_PALETTE = [
-  '#1d74f5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#f97316', '#ec4899', '#84cc16', '#6366f1',
-  '#14b8a6', '#e11d48', '#a855f7', '#0ea5e9', '#d946ef',
-];
-
-const UNGROUPED_COLOR = '#9ca3af';
+import { GROUP_PALETTE, UNGROUPED_COLOR } from '@eln/shared';
 
 export interface GroupAssignment {
   groupId: string | null;

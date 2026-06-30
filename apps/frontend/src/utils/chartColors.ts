@@ -1,13 +1,8 @@
+import { GROUP_PALETTE, UNGROUPED_COLOR } from "@eln/shared";
 import type { CellGroupDto } from "@eln/shared";
 
-/** Cell group palette — duplicated from @eln/shared to avoid CJS tree-shaking issues */
-export const GROUP_PALETTE = [
-  '#1d74f5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#06b6d4', '#f97316', '#ec4899', '#84cc16', '#6366f1',
-  '#14b8a6', '#e11d48', '#a855f7', '#0ea5e9', '#d946ef',
-] as const;
-
-export const UNGROUPED_COLOR = '#9ca3af';
+// Re-export shared constants
+export { GROUP_PALETTE, UNGROUPED_COLOR };
 
 /**
  * Returns the hex colour for a given group name, looking it up in the groups list.

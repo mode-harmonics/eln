@@ -42,53 +42,55 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/projects" replace /> },
       {
         path: "projects",
-        element: <Projects />,
         handle: { breadcrumb: "projects" },
-      },
-      {
-        id: "project",
-        path: "projects/:projectId",
-        element: <ProjectScaffold />,
-        loader: async ({ params }) => {
-          try {
-            return await api.get<Project>(`/api/v1/projects/${params.projectId}`);
-          } catch {
-            return null;
-          }
-        },
-        handle: {
-          breadcrumb: (match: any) => match.data?.name ?? match.params.projectId,
-        },
         children: [
-          { index: true, element: <ProjectDetail /> },
+          { index: true, element: <Projects /> },
           {
-            path: "groups",
-            element: <Groups />,
+            id: "project",
+            path: ":projectId",
+            element: <ProjectScaffold />,
             loader: async ({ params }) => {
               try {
-                const project = await api.get<{ name: string }>(`/api/v1/projects/${params.projectId}`);
-                return { projectName: project.name };
-              } catch {
-                return { projectName: params.projectId };
-              }
-            },
-            handle: {
-              breadcrumb: "group_management",
-            },
-          },
-          {
-            path: "experiments/:experimentId",
-            element: <ExperimentDetail />,
-            loader: async ({ params }) => {
-              try {
-                return await api.get<any>(`/api/v1/experiments/${params.experimentId}`);
+                return await api.get<Project>(`/api/v1/projects/${params.projectId}`);
               } catch {
                 return null;
               }
             },
             handle: {
-              breadcrumb: (match: any) => match.data?.title ?? match.params.experimentId,
+              breadcrumb: (match: any) => match.data?.name ?? match.params.projectId,
             },
+            children: [
+              { index: true, element: <ProjectDetail /> },
+              {
+                path: "groups",
+                element: <Groups />,
+                loader: async ({ params }) => {
+                  try {
+                    const project = await api.get<{ name: string }>(`/api/v1/projects/${params.projectId}`);
+                    return { projectName: project.name };
+                  } catch {
+                    return { projectName: params.projectId };
+                  }
+                },
+                handle: {
+                  breadcrumb: "group_management",
+                },
+              },
+              {
+                path: "experiments/:experimentId",
+                element: <ExperimentDetail />,
+                loader: async ({ params }) => {
+                  try {
+                    return await api.get<any>(`/api/v1/experiments/${params.experimentId}`);
+                  } catch {
+                    return null;
+                  }
+                },
+                handle: {
+                  breadcrumb: (match: any) => match.data?.title ?? match.params.experimentId,
+                },
+              },
+            ],
           },
         ],
       },
