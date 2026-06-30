@@ -8,6 +8,9 @@ build/
 *.tsbuildinfo
 
 # Turbo
+# Uploads
+uploads/*
+!uploads/.gitkeep
 .turbo/
 
 # Env

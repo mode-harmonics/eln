@@ -69,7 +69,21 @@ export class DataController {
       );
     }
 
-    return this.dataService.uploadWorkbook(file.buffer, dto.experimentId);
+    return this.dataService.uploadWorkbook(file.buffer, dto.experimentId)
+      .then(async (result) => {
+        // Persist original file to disk asynchronously (non-blocking)
+        this.dataService.saveAttachment(
+          file.buffer,
+          file.originalname,
+          file.mimetype,
+          dto.experimentId,
+          user.id,
+        ).catch((err) => {
+          // Log but don't fail the request — data is already committed
+          console.error('Failed to save attachment:', err);
+        });
+        return result;
+      });
   }
 
   @Get(':type/:expId')

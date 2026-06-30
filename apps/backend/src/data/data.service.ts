@@ -1,7 +1,11 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
+import * as fs from 'fs';
+import * as path from 'path';
 import { DataSource } from 'typeorm';
+import { v4 as uuid } from 'uuid';
+import { Attachment } from '../entities/attachment.entity';
 import { CalendarLife } from '../entities/calendar-life.entity';
 import { DcrTest } from '../entities/dcr-test.entity';
 import { EnergyEfficiency } from '../entities/energy-efficiency.entity';
@@ -114,6 +118,38 @@ export class DataService {
     }
 
     return { sheetsProcessed, sheetsSkipped, rowsInsertedByTable };
+  }
+
+  /** Persist the uploaded file to disk and create an attachment record. */
+  async saveAttachment(
+    buffer: Buffer,
+    originalName: string,
+    mimeType: string,
+    experimentId: string,
+    uploadedBy: string,
+  ): Promise<Attachment> {
+    const id = uuid();
+    const ext = path.extname(originalName) || '.xlsx';
+    const storedName = `${id}${ext}`;
+    const dir = path.resolve('uploads', experimentId);
+
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const filePath = path.join(dir, storedName);
+    fs.writeFileSync(filePath, buffer);
+
+    const attachment = new Attachment();
+    attachment.id = id;
+    attachment.experimentId = experimentId;
+    attachment.fileName = originalName;
+    attachment.filePath = filePath;
+    attachment.fileSize = buffer.length;
+    attachment.mimeType = mimeType;
+    attachment.uploadedBy = uploadedBy;
+
+    return this.dataSource.getRepository(Attachment).save(attachment);
   }
 
   /** GET /data/:type/:expId — returns all rows for the given table + experiment. */
