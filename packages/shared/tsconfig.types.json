@@ -3,7 +3,9 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "outDir": "dist/cjs"
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "outDir": "dist/types"
   },
   "include": ["src"]
 }

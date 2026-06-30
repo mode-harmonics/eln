@@ -5,25 +5,30 @@
   "type": "module",
   "exports": {
     ".": {
+      "types": "./dist/types/index.d.ts",
       "import": "./dist/esm/index.js",
-      "require": "./dist/index.cjs"
+      "require": "./dist/cjs/index.js",
+      "default": "./dist/esm/index.js"
     },
     "./colors": {
+      "types": "./dist/types/colors.d.ts",
       "import": "./dist/esm/colors.js",
-      "require": "./dist/colors.cjs"
+      "require": "./dist/cjs/colors.js"
     },
     "./enums": {
+      "types": "./dist/types/enums.d.ts",
       "import": "./dist/esm/enums.js",
-      "require": "./dist/enums.cjs"
+      "require": "./dist/cjs/enums.js"
     }
   },
-  "main": "dist/index.cjs",
-  "types": "dist/index.d.ts",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.cjs.json && tsc -p tsconfig.esm.json && node -e \"const fs=require('fs'),p=require('path');['dist','dist/dto'].forEach(dir=>{if(!fs.existsSync(dir))return;fs.readdirSync(dir).forEach(f=>{const fp=p.join(dir,f);if(f.endsWith('.js')){const n=f.slice(0,-3)+'.cjs';fs.renameSync(fp,p.join(dir,n))}})})\"",
-    "dev": "tsc -p tsconfig.cjs.json --watch",
+    "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && tsc -p tsconfig.types.json",
+    "dev": "tsc -p tsconfig.esm.json --watch",
     "lint": "echo 'no lint configured'",
-    "type-check": "tsc -p tsconfig.cjs.json --noEmit"
+    "type-check": "tsc -p tsconfig.esm.json --noEmit"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

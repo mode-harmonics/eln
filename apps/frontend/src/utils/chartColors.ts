@@ -1,7 +1,6 @@
 import { GROUP_PALETTE, UNGROUPED_COLOR } from "@eln/shared";
 import type { CellGroupDto } from "@eln/shared";
 
-// Re-export shared constants
 export { GROUP_PALETTE, UNGROUPED_COLOR };
 
 /**
