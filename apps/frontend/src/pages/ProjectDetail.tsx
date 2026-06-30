@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link, useRouteLoaderData } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { Loader2, UploadCloud, CheckCircle2, Settings2, Plus, ChartColumn } from "lucide-react";
+import { Loader2, UploadCloud, CheckCircle2, Settings2, Plus, ChartColumn, Info, Search } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
@@ -14,7 +14,7 @@ import { DataSummary } from "../components/DataSummary";
 import { SkeletonCard } from "../components/Skeleton";
 import { api, ApiError } from "../lib/api";
 import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle, CellGroup } from "../types";
-import { RECORD_TYPE_TO_API_TYPE, ALL_API_TYPES } from "../utils/recordTypes";
+import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY, ALL_API_TYPES } from "../utils/recordTypes";
 
 export function ProjectDetail() {
   const { t } = useTranslation();
@@ -23,13 +23,13 @@ export function ProjectDetail() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalRecordType, setModalRecordType] = useState("ProcessData");
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [viewMode, setViewMode] = useViewMode("project_detail_view_mode", "list");
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get("tab") as "summary" | "experiments") || "summary";
+  const activeTab = (searchParams.get("tab") as "summary" | "experiments") || "experiments";
 
   const loaderProject = useRouteLoaderData("project") as Project | null;
   const [project, setProject] = useState<Project | null>(loaderProject);
@@ -41,6 +41,8 @@ export function ProjectDetail() {
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
 
   // Business data for DataSummary tab
   const [processData, setProcessData] = useState<ProcessData[]>([]);
@@ -57,13 +59,13 @@ export function ProjectDetail() {
   const [groups, setGroups] = useState<CellGroup[]>([]);
 
   const recordOptions = React.useMemo(() => [
-    { value: "ProcessData", label: t("process_data"), permission: "data_process:write" },
-    { value: "CalendarLife", label: t("calendar_life"), permission: "data_calendar:write" },
-    { value: "StorageSwelling", label: t("storage_swelling"), permission: "data_swelling:write" },
-    { value: "EnergyEfficiency", label: t("energy_efficiency"), permission: "data_efficiency:write" },
-    { value: "DcrTest", label: t("dcr_test"), permission: "data_dcr:write" },
-    { value: "FastCharge", label: t("fast_charge"), permission: "data_fastcharge:write" },
-    { value: "HtCycle", label: t("ht_cycle"), permission: "data_htcycle:write" },
+    { value: "ProcessData", label: t("process_data"), permission: "data_process:write", sheetType: "step" },
+    { value: "CalendarLife", label: t("calendar_life"), permission: "data_calendar:write", sheetType: "step" },
+    { value: "StorageSwelling", label: t("storage_swelling"), permission: "data_swelling:write", sheetType: "step" },
+    { value: "EnergyEfficiency", label: t("energy_efficiency"), permission: "data_efficiency:write", sheetType: "step" },
+    { value: "DcrTest", label: t("dcr_test"), permission: "data_dcr:write", sheetType: "step" },
+    { value: "FastCharge", label: t("fast_charge"), permission: "data_fastcharge:write", sheetType: "step" },
+    { value: "HtCycle", label: t("ht_cycle"), permission: "data_htcycle:write", sheetType: "cycle" },
   ].filter((opt) => hasPermission("experiments:write") || hasPermission("data:write") || hasPermission(opt.permission)), [t, hasPermission]);
 
   // Load groups for DataSummary cell → group name mapping
@@ -85,6 +87,9 @@ export function ProjectDetail() {
     const queryParams = new URLSearchParams();
     queryParams.append("page", String(currentPage));
     queryParams.append("limit", String(pageSize));
+    if (searchQuery.trim()) {
+      queryParams.append("search", searchQuery.trim());
+    }
 
     api.get<{ items: Experiment[]; total: number }>(`/api/v1/projects/${projectId}/experiments?${queryParams.toString()}`)
       .then((res) => {
@@ -97,7 +102,7 @@ export function ProjectDetail() {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [projectId, currentPage, pageSize, refetchTrigger]);
+  }, [projectId, currentPage, pageSize, searchQuery, refetchTrigger]);
 
   // Summary tab: fetch ALL experiments (no pagination), group by recordType, only request matching data
   useEffect(() => {
@@ -183,14 +188,14 @@ export function ProjectDetail() {
     setIsModalOpen(false);
     setModalTitle("");
     setModalRecordType("ProcessData");
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setUploadError(null);
     setSubmitting(false);
   };
 
   const handleCreateRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile) {
+    if (selectedFiles.length === 0) {
       setUploadError(t("select_file"));
       return;
     }
@@ -202,11 +207,13 @@ export function ProjectDetail() {
         `/api/v1/projects/${projectId}/experiments`,
         { title: modalTitle, recordType: modalRecordType },
       );
-      // Step 2 – upload the Excel file and associate it with the new experiment
-      const form = new FormData();
-      form.append("file", selectedFile);
-      form.append("experimentId", experiment.id);
-      await api.upload(`/api/v1/data/upload`, form);
+      // Step 2 – upload each file
+      for (const file of selectedFiles) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("experimentId", experiment.id);
+        await api.upload(`/api/v1/data/upload`, form);
+      }
       closeModal();
       setRefetchTrigger((n) => n + 1);
     } catch (err: any) {
@@ -229,67 +236,63 @@ export function ProjectDetail() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-        <p className="mt-2 text-gray-600">{project.description}</p>
-        <div className="flex items-center gap-3 mt-4">
-          <Link
-            to={`/projects/${projectId}/groups`}
-            className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#1d74f5] transition-colors"
-          >
-            <Settings2 className="w-4 h-4" />
-            {t("group_management")}
-          </Link>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+          <p className="text-sm text-gray-500 mt-1 truncate">{project.description}</p>
         </div>
-        <div className="h-px bg-gray-200 w-full mt-6"></div>
+        <Link
+          to={`/projects/${projectId}/groups`}
+          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#1d74f5] transition-colors shrink-0 mt-1"
+        >
+          <Settings2 className="w-4 h-4" />
+          {t("group_management")}
+        </Link>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="-mb-px flex space-x-8">
+      <div className="border-b border-gray-200">
+        <nav className="-mb-px flex space-x-6">
+          <Button variant="text" onClick={() => { setSearchParams({ tab: "experiments" }); setSearchQuery(""); setSearchInput(""); }} className={cn(
+            "!pb-3 border-b-2 font-medium text-sm relative",
+            activeTab === "experiments"
+              ? "border-[#1d74f5] text-[#1d74f5]"
+              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
+          )}>
+            {t("experiments_records")}
+            {totalItems > 0 && (
+              <span className="ml-1.5 text-[11px] text-gray-400 font-normal">({totalItems})</span>
+            )}
+          </Button>
           <Button variant="text" onClick={() => setSearchParams({ tab: "summary" })} className={cn(
-            "!pb-4 border-b-2 font-medium text-sm",
+            "!pb-3 border-b-2 font-medium text-sm",
             activeTab === "summary"
               ? "border-[#1d74f5] text-[#1d74f5]"
               : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
           )}>
             {t("data_summary")}
           </Button>
-          <Button variant="text" onClick={() => setSearchParams({ tab: "experiments" })} className={cn(
-            "!pb-4 border-b-2 font-medium text-sm",
-            activeTab === "experiments"
-              ? "border-[#1d74f5] text-[#1d74f5]"
-              : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300",
-          )}>
-            {t("experiments_records")}
-          </Button>
         </nav>
       </div>
 
-      {activeTab === "summary" ? (
-        dataLoading ? (
-          <SkeletonCard rows={5} />
-        ) : (
-          <DataSummary
-            loadedTypes={loadedTypes}
-            processData={processData}
-            calendarLife={calendarLife}
-            storageSwelling={storageSwelling}
-            energyEfficiency={energyEfficiency}
-            dcrTest={dcrTest}
-            fastCharge={fastCharge}
-            htCycle={htCycle}
-            groups={groups}
-          />
-        )
-      ) : (
+      {activeTab === "experiments" ? (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-sm font-semibold text-gray-800">
-              {t("experiments_records")}
-            </h2>
-            <div className="flex items-center gap-4">
+          {/* Toolbar */}
+          <div className="flex items-center gap-4">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { setSearchQuery(searchInput); setCurrentPage(1); } }}
+                placeholder={t("search_projects")}
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 pr-3 py-1.5 text-sm placeholder-gray-400 focus:bg-white focus:border-gray-300 focus:outline-none focus:ring-0 transition-colors"
+              />
+            </div>
+            <div className="ml-auto flex items-center gap-3">
               <ViewToggle
                 viewMode={viewMode}
                 setViewMode={setViewMode}
@@ -316,28 +319,37 @@ export function ProjectDetail() {
           {viewMode === "list" ? (
             <div className="border border-gray-200 rounded bg-white">
               <div className="divide-y divide-gray-100">
-                {experiments.map((exp) => (
+                {experiments.map((exp) => {
+                  const recordType = (exp.metadata?.recordType || exp.metadata?.assayType) as string | undefined;
+                  return (
                   <Link
                     key={exp.id}
                     to={`/projects/${projectId}/experiments/${exp.id}`}
-                    className="flex items-center justify-between p-5 hover:bg-gray-50 transition-colors group"
+                    className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="text-gray-400 group-hover:text-gray-600">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="text-gray-300 group-hover:text-gray-500 shrink-0">
                         <ChartColumn className="w-5 h-5" />
                       </div>
-                      <div>
-                        <h3 className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">
-                          {exp.title}
-                        </h3>
-                        <div className="mt-1 flex items-center gap-3 text-[13px] text-gray-500">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5] truncate">
+                            {exp.title}
+                          </h3>
+                          {recordType && RECORD_TYPE_TO_I18N_KEY[recordType] && (
+                            <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 shrink-0">
+                              {t(RECORD_TYPE_TO_I18N_KEY[recordType])}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-3 text-[13px] text-gray-500">
                           <span>{t("updated")}{" "}{format(new Date(exp.updatedAt), "MMM d, yyyy")}</span>
                           <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
                           <span>v{exp.versionNo}</span>
                         </div>
                       </div>
                     </div>
-                    <div>
+                    <div className="shrink-0">
                       <span
                         className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
                           exp.status === "Approved"
@@ -351,10 +363,10 @@ export function ProjectDetail() {
                       </span>
                     </div>
                   </Link>
-                ))}
+                );})}
                 {experiments.length === 0 && (
                   <div className="p-8 text-center text-sm text-gray-500">
-                    {t("no_experiments_found")}
+                    {searchQuery ? "未找到匹配的实验" : t("no_experiments_found")}
                   </div>
                 )}
               </div>
@@ -370,54 +382,84 @@ export function ProjectDetail() {
               )}
             </div>
           ) : (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {experiments.map((exp) => (
-                <Link
-                  key={exp.id}
-                  to={`/projects/${projectId}/experiments/${exp.id}`}
-                  className="group flex flex-col border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors relative"
-                >
-                  <div className="absolute top-6 right-6 text-gray-400 group-hover:text-gray-600">
-                    <ChartColumn className="w-5 h-5" />
-                  </div>
-                  <div className="pr-8 mb-4">
-                    <h3 className="text-[17px] font-semibold text-gray-900 group-hover:text-[#1d74f5] leading-tight">
-                      {exp.title}
-                    </h3>
-                  </div>
-                  <div className="mt-auto pt-6 flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
-                          exp.status === "Approved"
-                            ? "bg-[#f0f9f4] text-[#1e8b4e]"
-                            : exp.status === "In Review"
-                              ? "bg-[#fff8e6] text-[#b28200]"
-                              : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {exp.status === "Approved" ? t("status_approved") : exp.status === "In Review" ? t("status_in_review") : t("status_draft")}
-                      </span>
-                      <span className="text-[13px] text-gray-500">v{exp.versionNo}</span>
-                    </div>
-                    <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[13px] text-gray-500">
-                      <span>{format(new Date(exp.updatedAt), "MMM d")}</span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-          {viewMode === "grid" && experiments.length > 0 && (
-            <Pagination
-              currentPage={currentPage}
-              totalItems={totalItems}
-              pageSize={pageSize}
-              onPageChange={setCurrentPage}
-              onPageSizeChange={setPageSize}
-            />
+            <>
+              {experiments.length === 0 ? (
+                <div className="p-12 text-center text-sm text-gray-400 bg-white border border-gray-200 rounded">
+                  <ChartColumn className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                  {searchQuery ? "未找到匹配的实验" : t("no_experiments_found")}
+                </div>
+              ) : (
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {experiments.map((exp) => {
+                    const recordType = (exp.metadata?.recordType || exp.metadata?.assayType) as string | undefined;
+                    return (
+                    <Link
+                      key={exp.id}
+                      to={`/projects/${projectId}/experiments/${exp.id}`}
+                      className="group flex flex-col border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors relative"
+                    >
+                      <div className="absolute top-5 right-5 text-gray-300 group-hover:text-gray-500">
+                        <ChartColumn className="w-5 h-5" />
+                      </div>
+                      <div className="pr-8 mb-3">
+                        <h3 className="text-[15px] font-semibold text-gray-900 group-hover:text-[#1d74f5] leading-tight">
+                          {exp.title}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-2 mb-4">
+                        {recordType && RECORD_TYPE_TO_I18N_KEY[recordType] && (
+                          <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+                            {t(RECORD_TYPE_TO_I18N_KEY[recordType])}
+                          </span>
+                        )}
+                        <span
+                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${
+                            exp.status === "Approved"
+                              ? "bg-[#f0f9f4] text-[#1e8b4e]"
+                              : exp.status === "In Review"
+                                ? "bg-[#fff8e6] text-[#b28200]"
+                                : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {exp.status === "Approved" ? t("status_approved") : exp.status === "In Review" ? t("status_in_review") : t("status_draft")}
+                        </span>
+                      </div>
+                      <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between text-[13px] text-gray-500">
+                        <span>v{exp.versionNo}</span>
+                        <span>{format(new Date(exp.updatedAt), "MMM d")}</span>
+                      </div>
+                    </Link>
+                  );})}
+                </div>
+              )}
+              {experiments.length > 0 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalItems={totalItems}
+                  pageSize={pageSize}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setPageSize}
+                />
+              )}
+            </>
           )}
         </div>
+      ) : (
+        dataLoading ? (
+          <SkeletonCard rows={5} />
+        ) : (
+          <DataSummary
+            loadedTypes={loadedTypes}
+            processData={processData}
+            calendarLife={calendarLife}
+            storageSwelling={storageSwelling}
+            energyEfficiency={energyEfficiency}
+            dcrTest={dcrTest}
+            fastCharge={fastCharge}
+            htCycle={htCycle}
+            groups={groups}
+          />
+        )
       )}
 
       <Modal open={isModalOpen} onClose={closeModal} title={t("create_new_record")}
@@ -430,6 +472,12 @@ export function ProjectDetail() {
           </>
         }>
         <form id="modal-record-form" onSubmit={handleCreateRecord} className="space-y-5">
+          {/* Info hint */}
+          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+            <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+            <p className="text-xs text-blue-700">{t("upload_raw_data_hint")}</p>
+          </div>
+
           {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("title")}</label>
@@ -457,6 +505,15 @@ export function ProjectDetail() {
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
+            {/* Sheet format hint */}
+            <p className="mt-1.5 text-xs text-gray-500">
+              <span className="inline-flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                {recordOptions.find((o) => o.value === modalRecordType)?.sheetType === "cycle"
+                  ? t("upload_cycle_hint")
+                  : t("upload_step_hint")}
+              </span>
+            </p>
           </div>
 
           {/* Excel Upload */}
@@ -469,21 +526,32 @@ export function ProjectDetail() {
               onDrop={(e) => {
                 e.preventDefault();
                 setDragOver(false);
-                const file = e.dataTransfer.files?.[0];
-                if (file) { setSelectedFile(file); setUploadError(null); }
+                const files = Array.from(e.dataTransfer.files ?? []);
+                if (files.length > 0) { setSelectedFiles(files); setUploadError(null); }
               }}
               className={`flex flex-col items-center justify-center w-full rounded border-2 border-dashed px-4 py-7 cursor-pointer transition-colors ${
                 dragOver
                   ? "border-[#1d74f5] bg-blue-50"
-                  : selectedFile
+                  : selectedFiles.length > 0
                     ? "border-green-400 bg-green-50"
                     : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
               }`}
             >
-              {selectedFile ? (
+              {selectedFiles.length > 0 ? (
                 <>
                   <CheckCircle2 className="w-7 h-7 text-green-500 mb-2" />
-                  <span className="text-sm font-medium text-green-700 text-center break-all">{selectedFile.name}</span>
+                  {selectedFiles.length === 1 ? (
+                    <span className="text-sm font-medium text-green-700 text-center break-all">{selectedFiles[0].name}</span>
+                  ) : (
+                    <div className="text-center">
+                      <span className="text-sm font-medium text-green-700">{selectedFiles.length} files selected</span>
+                      <div className="text-xs text-green-600 mt-1 max-h-20 overflow-y-auto">
+                        {selectedFiles.map((f, i) => (
+                          <span key={i} className="block truncate max-w-[260px]">{f.name}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <span className="text-xs text-green-600 mt-1">{t("file_selected")}</span>
                 </>
               ) : (
@@ -496,12 +564,13 @@ export function ProjectDetail() {
               <input
                 id="excel-upload"
                 type="file"
+                multiple
                 accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="hidden"
                 disabled={submitting}
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) { setSelectedFile(file); setUploadError(null); }
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length > 0) { setSelectedFiles(files); setUploadError(null); }
                 }}
               />
             </label>

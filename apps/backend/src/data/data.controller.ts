@@ -86,6 +86,14 @@ export class DataController {
       });
   }
 
+  @Get('raw/:expId')
+  @ApiOperation({
+    summary: 'Query raw step data rows for an experiment.',
+  })
+  async findRawSteps(@Param('expId') expId: string) {
+    return this.dataService.findRawSteps(expId);
+  }
+
   @Get(':type/:expId')
   @ApiOperation({
     summary: 'Query rows for a business table by type (process/calendar/swelling/efficiency/dcr/fastcharge/htcycle) and experiment.',

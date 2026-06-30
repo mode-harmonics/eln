@@ -9,8 +9,10 @@ export interface DataParser<TRow = Record<string, unknown>> {
   /** Logical table name this parser produces rows for, e.g. 'processData'. */
   readonly tableName: string;
 
-  /** Returns true if this worksheet's shape/headers match this parser. */
-  detect(sheet: Worksheet): boolean;
+  /** Returns true if this worksheet's shape/headers match this parser.
+   *  Optional `recordType` helps disambiguate when multiple parsers
+   *  match the same sheet format (e.g. step sheets for CalendarLife vs DcrTest). */
+  detect(sheet: Worksheet, recordType?: string): boolean;
 
   /** Parses the worksheet into row objects ready for repository.save(). */
   parse(sheet: Worksheet, experimentId: string): TRow[];
@@ -186,4 +188,4 @@ export function normalizeHeaders(headers: string[]): string[] {
   }
   return result;
 }
-
+

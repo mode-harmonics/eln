@@ -6,6 +6,8 @@ import { api } from "../lib/api";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
 import { Tooltip, TooltipTh } from "./Tooltip";
+import { cn } from "../lib/utils";
+import { isComputedField } from "../utils/computedFields";
 
 /** Shared hook: fetch /api/v1/data/:type/:expId and return { data, loading, error, refresh } */
 function useTableData<T>(type: string, experimentId: string) {
@@ -136,13 +138,19 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
         <div className="grid grid-cols-2 gap-4">
             {editableFields.map((key) => (
               <div key={key}>
-                <label className="block text-xs font-medium text-gray-500 mb-1 uppercase">{key}</label>
+                <label className={cn(
+                  "block text-xs font-medium mb-1 uppercase",
+                  isComputedField(type, key) ? "text-blue-500" : "text-gray-500",
+                )}>
+                  {key}
+                  {isComputedField(type, key) && <span className="ml-1 text-[10px]">(计算)</span>}
+                </label>
                 {key === "isHorizontal" ? (
                   <select
                     value={form[key]}
                     onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-                    disabled={saving}
+                    className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                    disabled={saving || isComputedField(type, key)}
                   >
                     <option value="false">No</option>
                     <option value="true">Yes</option>
@@ -153,7 +161,7 @@ function EditRowModal({ open, onClose, row, type, onSaved }: EditRowModalProps) 
                     value={form[key] ?? ""}
                     onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                     className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm font-mono text-xs disabled:bg-gray-50 disabled:text-gray-400"
-                    disabled={saving || (type === "fastcharge" && key === "stepNo")}
+                    disabled={saving || isComputedField(type, key) || (type === "fastcharge" && key === "stepNo")}
                   />
                 )}
               </div>

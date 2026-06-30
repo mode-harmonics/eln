@@ -1,12 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { Worksheet } from 'exceljs';
 import { CalendarLifeParser } from './calendar-life.parser';
+import { CalendarLifeStepParser } from './calendar-life-step.parser';
 import { DcrTestParser } from './dcr-test.parser';
+import { DcrTestStepParser } from './dcr-test-step.parser';
 import { EnergyEfficiencyParser } from './energy-efficiency.parser';
+import { EnergyEfficiencyStepParser } from './energy-efficiency-step.parser';
 import { FastChargeParser } from './fast-charge.parser';
+import { FastChargeStepParser } from './fast-charge-step.parser';
 import { HtCycleParser } from './ht-cycle.parser';
+import { HtCycleStepParser } from './ht-cycle-step.parser';
 import { DataParser } from './parser.interface';
 import { ProcessDataParser } from './process-data.parser';
+import { ProcessDataStepParser } from './process-data-step.parser';
 import { StorageSwellingParser } from './storage-swelling.parser';
 
 /**
@@ -17,22 +23,28 @@ import { StorageSwellingParser } from './storage-swelling.parser';
  */
 @Injectable()
 export class ParserRegistry {
-  private readonly parsers: DataParser[] = [
+  private readonly parsers: DataParser<any>[] = [
+    new CalendarLifeStepParser(),
+    new DcrTestStepParser(),
+    new EnergyEfficiencyStepParser(),
+    new FastChargeStepParser(),
+    new HtCycleStepParser(),
+    new ProcessDataStepParser(),
     new CalendarLifeParser(),
     new StorageSwellingParser(),
     new FastChargeParser(),
-    new HtCycleParser(),
     new DcrTestParser(),
     new EnergyEfficiencyParser(),
     new ProcessDataParser(),
+    new HtCycleParser(),
   ];
 
   /** Returns the first parser whose detect() matches this sheet, or null. */
-  resolve(sheet: Worksheet): DataParser | null {
-    return this.parsers.find((parser) => parser.detect(sheet)) ?? null;
+  resolve(sheet: Worksheet, recordType?: string): DataParser<any> | null {
+    return this.parsers.find((parser) => parser.detect(sheet, recordType)) ?? null;
   }
 
-  getAll(): DataParser[] {
+  getAll(): DataParser<any>[] {
     return this.parsers;
   }
 }

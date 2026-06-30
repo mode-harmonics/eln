@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useLoaderData } from "react-router-dom";
 import { format } from "date-fns";
-import { Download, Edit3, Loader2, Trash2 } from "lucide-react";
+import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   ProcessDataTable,
@@ -14,8 +14,10 @@ import {
 } from "../components/ExperimentTables";
 import { ExperimentChart } from "../components/ExperimentChart";
 import { Button } from "../components/Button";
+import { Dropdown } from "../components/Dropdown";
 import { Modal } from "../components/Modal";
 import { api, ApiError } from "../lib/api";
+import { cn } from "../lib/utils";
 import type { Experiment } from "../types";
 import { usePermissions } from "../hooks/usePermissions";
 
@@ -111,6 +113,23 @@ export function ExperimentDetail() {
     hasPermission(`data_${permissionType}:read`);
   const canWrite = hasPermission("experiments:write");
 
+  // Data view mode: summary / raw
+  const [dataView, setDataView] = useState<"summary" | "raw">("summary");
+  const [rawSteps, setRawSteps] = useState<any[]>([]);
+  const [rawLoading, setRawLoading] = useState(false);
+  const [rawLoaded, setRawLoaded] = useState(false);
+
+  useEffect(() => {
+    if (dataView !== "raw" || rawLoaded || !experiment) return;
+    let cancelled = false;
+    setRawLoading(true);
+    api.get<any[]>(`/api/v1/data/raw/${experiment.id}`)
+      .then((data) => { if (!cancelled) { setRawSteps(data ?? []); setRawLoaded(true); } })
+      .catch(() => { if (!cancelled) setRawSteps([]); })
+      .finally(() => { if (!cancelled) setRawLoading(false); });
+    return () => { cancelled = true; };
+  }, [dataView, rawLoaded, experiment]);
+
   const renderTable = () => {
     switch (assayType) {
       case "ProcessData": return <ProcessDataTable experimentId={experiment.id} />;
@@ -161,10 +180,28 @@ export function ExperimentDetail() {
                 </Button>
               </>
             )}
-            <Button variant="secondary">
-              <Download className="w-4 h-4" />
-              {t("export")}
-            </Button>
+            <Dropdown
+              trigger={
+                <Button variant="secondary">
+                  <Download className="w-4 h-4" />
+                  {t("export")}
+                  <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+                </Button>
+              }
+            >
+              <button
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
+              >
+                <Table2 className="w-4 h-4 text-gray-400" />
+                导出汇总数据
+              </button>
+              <button
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
+              >
+                <FileDigit className="w-4 h-4 text-gray-400" />
+                导出原始数据
+              </button>
+            </Dropdown>
           </div>
         </div>
         <div className="h-px bg-gray-200 w-full mt-6"></div>
@@ -176,10 +213,81 @@ export function ExperimentDetail() {
 
           {/* Data Table Section */}
           <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-            <div className="px-6 py-4 border-b border-gray-100">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-900">{t("data_table")}</h2>
+              <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 border border-gray-200/60">
+                <button
+                  onClick={() => { setDataView("summary"); setRawLoaded(false); }}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                    dataView === "summary"
+                      ? "bg-white shadow-sm text-gray-900"
+                      : "text-gray-500 hover:text-gray-700",
+                  )}
+                >
+                  <Table2 className="w-3.5 h-3.5" />
+                  汇总
+                </button>
+                <button
+                  onClick={() => setDataView("raw")}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                    dataView === "raw"
+                      ? "bg-white shadow-sm text-gray-900"
+                      : "text-gray-500 hover:text-gray-700",
+                  )}
+                >
+                  <FileDigit className="w-3.5 h-3.5" />
+                  原始
+                </button>
+              </div>
             </div>
-            {renderTable()}
+            {dataView === "summary" ? (
+              renderTable()
+            ) : rawLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+              </div>
+            ) : rawSteps.length === 0 ? (
+              <div className="p-8 text-center text-sm text-gray-500">暂无原始工步数据</div>
+            ) : (
+              <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-[13px]">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">工步号</th>
+                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">工步序号</th>
+                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">循环号</th>
+                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">电芯</th>
+                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">工步类型</th>
+                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">容量</th>
+                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">起始电压</th>
+                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">结束电压</th>
+                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">起始电流</th>
+                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">结束电流</th>
+                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">工步时间</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {rawSteps.map((s: any) => (
+                      <tr key={s.id} className="hover:bg-gray-50/50">
+                        <td className="px-3 py-2 font-mono">{s.stepNo}</td>
+                        <td className="px-3 py-2 font-mono text-gray-500">{s.stepSeqNo}</td>
+                        <td className="px-3 py-2">{s.cycleNo}</td>
+                        <td className="px-3 py-2 text-gray-500">{s.cellName}</td>
+                        <td className="px-3 py-2">{s.stepType}</td>
+                        <td className="px-3 py-2 text-right font-mono">{s.capacity ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-gray-500">{s.startVoltage ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-gray-500">{s.endVoltage ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-gray-500">{s.startCurrent ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-gray-500">{s.endCurrent ?? "—"}</td>
+                        <td className="px-3 py-2 font-mono text-gray-500">{s.stepTime ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       ) : (

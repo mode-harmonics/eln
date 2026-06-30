@@ -7,6 +7,7 @@ import { DataSource } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { Attachment } from '../entities/attachment.entity';
 import { CalendarLife } from '../entities/calendar-life.entity';
+import { RawStepData } from '../entities/raw-step-data.entity';
 import { DcrTest } from '../entities/dcr-test.entity';
 import { EnergyEfficiency } from '../entities/energy-efficiency.entity';
 import { FastCharge } from '../entities/fast-charge.entity';
@@ -15,6 +16,11 @@ import { ProcessData } from '../entities/process-data.entity';
 import { StorageSwelling } from '../entities/storage-swelling.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { ParserRegistry } from './parsers/parser.registry';
+import { CalendarLifeStepParser } from './parsers/calendar-life-step.parser';
+import { DcrTestStepParser } from './parsers/dcr-test-step.parser';
+import { EnergyEfficiencyStepParser } from './parsers/energy-efficiency-step.parser';
+import { FastChargeStepParser } from './parsers/fast-charge-step.parser';
+import { ProcessDataStepParser } from './parsers/process-data-step.parser';
 import { computeFastChargeTime } from './parsers/fast-charge.parser';
 import { GroupsService } from '../groups/groups.service';
 
@@ -22,6 +28,7 @@ import { GroupsService } from '../groups/groups.service';
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
   processData: ProcessData,
   calendarLife: CalendarLife,
+  RawStepData: RawStepData,
   storageSwelling: StorageSwelling,
   energyEfficiency: EnergyEfficiency,
   dcrTest: DcrTest,
@@ -63,10 +70,13 @@ export class DataService {
   /**
    * Loads the uploaded workbook with ExcelJS, runs every sheet through the
    * ParserRegistry, and bulk-inserts the parsed rows for all 7 tables in a
-   * single queryRunner transaction — either everything commits or nothing
+   * single queryRunner transaction �?either everything commits or nothing
    * does, so a malformed sheet can't leave partial data behind.
    */
   async uploadWorkbook(buffer: Buffer<ArrayBufferLike>, experimentId: string): Promise<UploadSummary> {
+    const experiment = await this.getExperiment(experimentId);
+    const recordType = (experiment?.metadata?.assayType || experiment?.metadata?.recordType) as string | undefined;
+
     const workbook = new ExcelJS.Workbook();
     try {
       // @ts-expect-error: ExcelJS typings expect pre-generic Buffer; runtime behavior is identical
@@ -78,9 +88,10 @@ export class DataService {
     const rowsByTable: Record<string, Record<string, unknown>[]> = {};
     const sheetsSkipped: string[] = [];
     let sheetsProcessed = 0;
+    const rawSteps: Partial<RawStepData>[] = [];
 
     for (const sheet of workbook.worksheets) {
-      const parser = this.parserRegistry.resolve(sheet);
+      const parser = this.parserRegistry.resolve(sheet, recordType);
       if (!parser) {
         sheetsSkipped.push(sheet.name);
         continue;
@@ -90,7 +101,18 @@ export class DataService {
       if (rows.length > 0) {
         rowsByTable[parser.tableName] = (rowsByTable[parser.tableName] ?? []).concat(rows);
       }
+
+      // Collect raw step data from any step parser
+      if (parser instanceof CalendarLifeStepParser || parser instanceof DcrTestStepParser || parser instanceof EnergyEfficiencyStepParser || parser instanceof FastChargeStepParser || parser instanceof ProcessDataStepParser) {
+        rawSteps.push(...parser.getRawSteps());
+      }
+
       sheetsProcessed += 1;
+    }
+
+    // Queue raw steps for save
+    if (rawSteps.length > 0) {
+      rowsByTable['RawStepData'] = (rowsByTable['RawStepData'] ?? []).concat(rawSteps);
     }
 
     const rowsInsertedByTable: Record<string, number> = {};
@@ -118,6 +140,14 @@ export class DataService {
     }
 
     return { sheetsProcessed, sheetsSkipped, rowsInsertedByTable };
+  }
+
+  /** Return raw step rows for a given experiment. */
+  async findRawSteps(experimentId: string): Promise<RawStepData[]> {
+    return this.dataSource.getRepository(RawStepData).find({
+      where: { experimentId },
+      order: { stepSeqNo: 'ASC' },
+    });
   }
 
   /** Persist the uploaded file to disk and create an attachment record. */
@@ -152,7 +182,7 @@ export class DataService {
     return this.dataSource.getRepository(Attachment).save(attachment);
   }
 
-  /** GET /data/:type/:expId — returns all rows for the given table + experiment. */
+  /** GET /data/:type/:expId �?returns all rows for the given table + experiment. */
   async findByType(type: string, experimentId: string): Promise<unknown[]> {
     const EntityClass = TYPE_PARAM_TO_ENTITY[type];
     if (!EntityClass) {
@@ -187,7 +217,7 @@ export class DataService {
     return { rows, groupMap };
   }
 
-  /** PUT /data/:type/:id — update a single data row. */
+  /** PUT /data/:type/:id �?update a single data row. */
   async updateRow(type: string, id: string, body: Record<string, unknown>): Promise<unknown> {
     const EntityClass = TYPE_PARAM_TO_ENTITY[type];
     if (!EntityClass) {
@@ -233,7 +263,7 @@ export class DataService {
     return repo.save(row);
   }
 
-  /** DELETE /data/:type/:id — delete a single data row. */
+  /** DELETE /data/:type/:id �?delete a single data row. */
   async deleteRow(type: string, id: string): Promise<{ success: boolean }> {
     const EntityClass = TYPE_PARAM_TO_ENTITY[type];
     if (!EntityClass) {

@@ -11,6 +11,7 @@ export * from './version-history.entity';
 // Battery-science business data entities
 export * from './process-data.entity';
 export * from './calendar-life.entity';
+export * from './raw-step-data.entity';
 export * from './storage-swelling.entity';
 export * from './energy-efficiency.entity';
 export * from './dcr-test.entity';
