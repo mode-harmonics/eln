@@ -120,7 +120,7 @@ export function Groups() {
   };
 
   const unusedColors = GROUP_PALETTE.filter(
-    (c) => !groups.some((g) => g.color === c) || editingGroup?.color === c,
+    (c: string) => !groups.some((g) => g.color === c) || editingGroup?.color === c,
   );
 
   return (
@@ -269,7 +269,7 @@ export function Groups() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("color")}</label>
             <div className="flex flex-wrap gap-2">
-              {unusedColors.map((c) => (
+              {unusedColors.map((c: string) => (
                 <button
                   key={c}
                   type="button"

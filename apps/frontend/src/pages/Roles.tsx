@@ -84,7 +84,7 @@ export function Roles() {
         childKeys.forEach((c) => expanded.add(`${c}:write`));
       }
 
-      setPermissionList([...expanded]);
+      setPermissionList(Array.from(expanded));
     } else {
       setPermissionList([]);
     }

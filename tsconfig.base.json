@@ -21,10 +21,6 @@
     "skipLibCheck": true,
     "strict": true,
     "resolveJsonModule": true,
-    // "baseUrl": ".",
-    "paths": {
-      "@eln/shared": ["packages/shared/dist"],
-      "@eln/shared/*": ["packages/shared/dist/*"]
-    }
+    "paths": {}
   }
 }
