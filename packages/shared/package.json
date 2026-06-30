@@ -6,21 +6,21 @@
   "exports": {
     ".": {
       "import": "./dist/esm/index.js",
-      "require": "./dist/index.js"
+      "require": "./dist/index.cjs"
     },
     "./colors": {
       "import": "./dist/esm/colors.js",
-      "require": "./dist/colors.js"
+      "require": "./dist/colors.cjs"
     },
     "./enums": {
       "import": "./dist/esm/enums.js",
-      "require": "./dist/enums.js"
+      "require": "./dist/enums.cjs"
     }
   },
-  "main": "dist/index.js",
+  "main": "dist/index.cjs",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.cjs.json && tsc -p tsconfig.esm.json",
+    "build": "tsc -p tsconfig.cjs.json && tsc -p tsconfig.esm.json && node -e \"const fs=require('fs'),p=require('path');['dist','dist/dto'].forEach(dir=>{if(!fs.existsSync(dir))return;fs.readdirSync(dir).forEach(f=>{const fp=p.join(dir,f);if(f.endsWith('.js')){const n=f.slice(0,-3)+'.cjs';fs.renameSync(fp,p.join(dir,n))}})})\"",
     "dev": "tsc -p tsconfig.cjs.json --watch",
     "lint": "echo 'no lint configured'",
     "type-check": "tsc -p tsconfig.cjs.json --noEmit"
