@@ -149,99 +149,91 @@ export function ExperimentDetail() {
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <div className="flex items-start justify-between gap-6">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold text-gray-900 truncate">{experiment.title}</h1>
-              {assayType && (
-                <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 shrink-0">
-                  {t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3 text-sm text-gray-500">
-              <span>{t("updated")} {format(new Date(experiment.updatedAt), "MMM d, yyyy")}</span>
-              <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-              <span>v{experiment.versionNo}</span>
-            </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-6">
+        <div className="min-w-0">
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-2xl font-bold text-gray-900 truncate">{experiment.title}</h1>
+            {assayType && (
+              <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 shrink-0">
+                {t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            {canWrite && (
+          <div className="flex items-center gap-3 text-sm text-gray-500">
+            <span>{t("updated")} {format(new Date(experiment.updatedAt), "MMM d, yyyy")}</span>
+            <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+            <span>v{experiment.versionNo}</span>
+            {experiment.content && (
               <>
-                <Button variant="secondary" onClick={openEditModal}>
-                  <Edit3 className="w-4 h-4" />
-                  {t("edit")}
-                </Button>
-                <Button variant="danger" size="sm" onClick={() => setDeleteModalOpen(true)}>
-                  <Trash2 className="w-4 h-4" />
-                  {t("delete")}
-                </Button>
+                <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+                <span>{experiment.content}</span>
               </>
             )}
-            <Dropdown
-              trigger={
-                <Button variant="secondary">
-                  <Download className="w-4 h-4" />
-                  {t("export")}
-                  <ChevronDown className="w-3.5 h-3.5 opacity-50" />
-                </Button>
-              }
-            >
-              <button
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
-              >
-                <Table2 className="w-4 h-4 text-gray-400" />
-                导出汇总数据
-              </button>
-              <button
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left"
-              >
-                <FileDigit className="w-4 h-4 text-gray-400" />
-                导出原始数据
-              </button>
-            </Dropdown>
           </div>
         </div>
-        <div className="h-px bg-gray-200 w-full mt-6"></div>
+        <div className="flex items-center gap-2 shrink-0">
+          {canWrite && (
+            <>
+              <Button variant="secondary" size="sm" onClick={openEditModal}>
+                <Edit3 className="w-4 h-4" />
+                {t("edit")}
+              </Button>
+              <Button variant="danger" size="sm" onClick={() => setDeleteModalOpen(true)}>
+                <Trash2 className="w-4 h-4" />
+                {t("delete")}
+              </Button>
+            </>
+          )}
+          <Dropdown
+            trigger={
+              <Button variant="secondary" size="sm">
+                <Download className="w-4 h-4" />
+                {t("export")}
+                <ChevronDown className="w-3.5 h-3.5 opacity-50" />
+              </Button>
+            }
+          >
+            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+              <Table2 className="w-4 h-4 text-gray-400" />
+              导出汇总数据
+            </button>
+            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+              <FileDigit className="w-4 h-4 text-gray-400" />
+              导出原始数据
+            </button>
+          </Dropdown>
+        </div>
       </div>
 
       {hasReadPermission ? (
-        <div className="space-y-8">
+        <div className="space-y-6">
           <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} projectId={experiment.projectId} />
 
-          {/* Data Table Section */}
-          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+          {/* Data Section */}
+          <div className="bg-white border border-gray-200 rounded-lg">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-gray-900">{t("data_table")}</h2>
-              <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 border border-gray-200/60">
-                <button
-                  onClick={() => { setDataView("summary"); setRawLoaded(false); }}
-                  className={cn(
-                    "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
-                    dataView === "summary"
-                      ? "bg-white shadow-sm text-gray-900"
-                      : "text-gray-500 hover:text-gray-700",
-                  )}
-                >
-                  <Table2 className="w-3.5 h-3.5" />
-                  汇总
-                </button>
-                <button
-                  onClick={() => setDataView("raw")}
-                  className={cn(
-                    "px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
-                    dataView === "raw"
-                      ? "bg-white shadow-sm text-gray-900"
-                      : "text-gray-500 hover:text-gray-700",
-                  )}
-                >
-                  <FileDigit className="w-3.5 h-3.5" />
-                  原始
-                </button>
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold text-gray-900">{t("data_table")}</h2>
+                <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 border border-gray-200/60">
+                  <button onClick={() => { setDataView("summary"); setRawLoaded(false); }}
+                    className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                      dataView === "summary" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
+                    <Table2 className="w-3.5 h-3.5" />汇总
+                  </button>
+                  <button onClick={() => setDataView("raw")}
+                    className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
+                      dataView === "raw" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
+                    <FileDigit className="w-3.5 h-3.5" />原始
+                  </button>
+                </div>
               </div>
+              {dataView === "raw" && rawSteps.length > 0 && (
+                <span className="text-xs text-gray-400">{rawSteps.length} 行</span>
+              )}
             </div>
+
             {dataView === "summary" ? (
               renderTable()
             ) : rawLoading ? (
@@ -249,39 +241,32 @@ export function ExperimentDetail() {
                 <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
               </div>
             ) : rawSteps.length === 0 ? (
-              <div className="p-8 text-center text-sm text-gray-500">暂无原始工步数据</div>
+              <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                <FileDigit className="w-8 h-8 mb-2 opacity-40" />
+                <p className="text-sm">暂无原始工步数据</p>
+              </div>
             ) : (
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-[13px]">
                   <thead className="bg-gray-50 sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">工步号</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">工步序号</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">循环号</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">电芯</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">工步类型</th>
-                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">容量</th>
-                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">起始电压</th>
-                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">结束电压</th>
-                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">起始电流</th>
-                      <th className="px-3 py-2 text-right text-[11px] font-semibold text-gray-500 uppercase">结束电流</th>
-                      <th className="px-3 py-2 text-left text-[11px] font-semibold text-gray-500 uppercase">工步时间</th>
-                    </tr>
+                    <tr>{["工步号","工步序号","循环号","电芯","工步类型","容量","起始电压","结束电压","起始电流","结束电流","工步时间"].map((h) => (
+                      <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase whitespace-nowrap">{h}</th>
+                    ))}</tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {rawSteps.map((s: any) => (
-                      <tr key={s.id} className="hover:bg-gray-50/50">
-                        <td className="px-3 py-2 font-mono">{s.stepNo}</td>
-                        <td className="px-3 py-2 font-mono text-gray-500">{s.stepSeqNo}</td>
-                        <td className="px-3 py-2">{s.cycleNo}</td>
-                        <td className="px-3 py-2 text-gray-500">{s.cellName}</td>
-                        <td className="px-3 py-2">{s.stepType}</td>
-                        <td className="px-3 py-2 text-right font-mono">{s.capacity ?? "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-500">{s.startVoltage ?? "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-500">{s.endVoltage ?? "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-500">{s.startCurrent ?? "—"}</td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-500">{s.endCurrent ?? "—"}</td>
-                        <td className="px-3 py-2 font-mono text-gray-500">{s.stepTime ?? "—"}</td>
+                      <tr key={s.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-3 py-2 font-mono text-xs">{s.stepNo}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-400">{s.stepSeqNo}</td>
+                        <td className="px-3 py-2 text-xs">{s.cycleNo}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{s.cellName}</td>
+                        <td className="px-3 py-2 text-xs">{s.stepType}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs">{s.capacity ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.startVoltage ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.endVoltage ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.startCurrent ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.endCurrent ?? "—"}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-400">{s.stepTime ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -296,7 +281,7 @@ export function ExperimentDetail() {
         </div>
       )}
 
-      {/* Edit Experiment Modal */}
+      {/* Edit Modal */}
       <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title={t("edit_experiment")}
         footer={
           <>
@@ -309,29 +294,18 @@ export function ExperimentDetail() {
         <form id="modal-experiment-form" onSubmit={handleSaveExperiment} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("title")}</label>
-            <input
-              type="text"
-              required
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-              disabled={saving}
-            />
+            <input type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm" disabled={saving} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("notes")}</label>
-            <textarea
-              rows={4}
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-              disabled={saving}
-            />
+            <textarea rows={4} value={editContent} onChange={(e) => setEditContent(e.target.value)}
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm" disabled={saving} />
           </div>
         </form>
       </Modal>
 
-      {/* Delete Experiment Confirmation Modal */}
+      {/* Delete Modal */}
       <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title={t("delete_confirm_title")}
         footer={
           <>

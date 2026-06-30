@@ -2,7 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link, useRouteLoaderData } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { Loader2, UploadCloud, CheckCircle2, Settings2, Plus, ChartColumn, Info, Search } from "lucide-react";
+import {
+  Loader2, UploadCloud, CheckCircle2, Settings2, Plus, ChartColumn, Info, Search,
+  Calendar, User, Layers, ArrowUpRight,
+} from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
