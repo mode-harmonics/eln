@@ -19,6 +19,7 @@
     "type-check": "turbo run type-check"
   },
   "devDependencies": {
+    "tsup": "^8.5.1",
     "turbo": "^2.1.0",
     "typescript": "^5.5.0"
   }

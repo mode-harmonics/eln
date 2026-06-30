@@ -4,9 +4,8 @@
     "outDir": "dist",
     "rootDir": "./src",
     "declaration": true,
-    "composite": true,
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "paths": {}
   },
   "include": [
