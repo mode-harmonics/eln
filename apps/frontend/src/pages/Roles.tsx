@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Shield, Loader2, ChevronDown, ChevronRight, Plus, Edit3 } from "lucide-react";
+import { Shield, Loader2, ChevronDown, ChevronRight, Plus, Edit3, HelpCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
@@ -7,6 +7,7 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { TextInput } from "../components/FormFields";
 import { SearchInput } from "../components/SearchInput";
+import { Tooltip } from "../components/Tooltip";
 import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
@@ -65,14 +66,24 @@ export function Roles() {
         "data_dcr", "data_fastcharge", "data_htcycle",
       ];
       const expanded = new Set(raw);
-      for (const action of ["read", "write"]) {
-        if (raw.includes(`data:${action}`)) {
+
+      // data:* → all child perms (all actions)
+      if (raw.includes("data:*")) {
+        expanded.add("data:read");
+        expanded.add("data:write");
+        for (const action of ["read", "write", "*"]) {
           childKeys.forEach((c) => expanded.add(`${c}:${action}`));
         }
       }
-      if (raw.includes("data:*")) {
-        childKeys.forEach((c) => expanded.add(`${c}:*`));
+      // data:read → all child :read (only if data:* not present)
+      if (!raw.includes("data:*") && raw.includes("data:read")) {
+        childKeys.forEach((c) => expanded.add(`${c}:read`));
       }
+      // data:write → all child :write (only if data:* not present)
+      if (!raw.includes("data:*") && raw.includes("data:write")) {
+        childKeys.forEach((c) => expanded.add(`${c}:write`));
+      }
+
       setPermissionList([...expanded]);
     } else {
       setPermissionList([]);
@@ -151,6 +162,21 @@ export function Roles() {
   };
 
   // ── Data (7 business tables) — expandable group ──
+  const DATA_CHILD_KEYS = [
+    "data_process", "data_calendar", "data_swelling", "data_efficiency",
+    "data_dcr", "data_fastcharge", "data_htcycle",
+  ];
+
+  const DATA_CHILD_RESOURCES = [
+    { key: "data_process",    label: t("process_data") },
+    { key: "data_calendar",   label: t("calendar_life") },
+    { key: "data_swelling",   label: t("storage_swelling") },
+    { key: "data_efficiency", label: t("energy_efficiency") },
+    { key: "data_dcr",        label: t("dcr_test") },
+    { key: "data_fastcharge", label: t("fast_charge") },
+    { key: "data_htcycle",    label: t("ht_cycle") },
+  ];
+
   const dataGroup = () => {
     const groupKey = "data_group";
     const isExpanded = expandedGroups.has(groupKey);
@@ -162,34 +188,44 @@ export function Roles() {
         return next;
       });
 
-    // Parent row uses "data" key — when checked, auto-sets all child permissions
-    const parentKey = "data";
-    const parentFC = permissionList.includes(`${parentKey}:*`);
-    const parentRead = parentFC || permissionList.includes(`${parentKey}:read`);
-    const parentWrite = parentFC || permissionList.includes(`${parentKey}:write`);
+    const parentFC = permissionList.includes("data:*");
+    const parentRead = parentFC || permissionList.includes("data:read");
+    const parentWrite = parentFC || permissionList.includes("data:write");
+    const disabled = editingRole?.name === "Owner";
+
     const handleParent = (action: string, checked: boolean) => {
-      const perm = `${parentKey}:${action}`;
-      const childKeys = [
-        "data_process", "data_calendar", "data_swelling", "data_efficiency",
-        "data_dcr", "data_fastcharge", "data_htcycle",
-      ];
       if (checked) {
-        const additions = [perm, ...childKeys.map((c) => `${c}:${action}`)];
+        const additions: string[] = [`data:${action}`];
+        if (action === "*") {
+          // data:* → data:read + data:write + all children *:read:write
+          additions.push("data:read", "data:write");
+          for (const c of DATA_CHILD_KEYS) {
+            additions.push(`${c}:*`, `${c}:read`, `${c}:write`);
+          }
+        } else {
+          // data:read or data:write → only matching child action
+          for (const c of DATA_CHILD_KEYS) {
+            additions.push(`${c}:${action}`);
+          }
+        }
         setPermissionList((prev) => [...new Set([...prev, ...additions])]);
       } else {
-        setPermissionList((prev) => prev.filter((p) => p !== perm && !childKeys.some((c) => p.startsWith(c))));
+        // Uncheck: remove parent perm and matching child perms
+        const removeKeys: string[] = [`data:${action}`];
+        for (const c of DATA_CHILD_KEYS) {
+          if (action === "*") {
+            removeKeys.push(`${c}:read`, `${c}:write`, `${c}:*`);
+          } else {
+            removeKeys.push(`${c}:${action}`);
+          }
+        }
+        if (action === "*") {
+          removeKeys.push("data:read", "data:write");
+        }
+        const removeSet = new Set(removeKeys);
+        setPermissionList((prev) => prev.filter((p) => !removeSet.has(p)));
       }
     };
-
-    const childResources = [
-      { key: "data_process",    label: t("process_data") },
-      { key: "data_calendar",   label: t("calendar_life") },
-      { key: "data_swelling",   label: t("storage_swelling") },
-      { key: "data_efficiency", label: t("energy_efficiency") },
-      { key: "data_dcr",        label: t("dcr_test") },
-      { key: "data_fastcharge", label: t("fast_charge") },
-      { key: "data_htcycle",    label: t("ht_cycle") },
-    ];
 
     return (
       <React.Fragment key="data-group">
@@ -199,6 +235,9 @@ export function Roles() {
             <span className="inline-flex items-center gap-1.5">
               {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               {t("data")}
+              <Tooltip content={`${t("data")}: read/write/* → 控制所有子表`}>
+                <HelpCircle className="w-3.5 h-3.5 text-gray-400" />
+              </Tooltip>
             </span>
           </td>
           <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
@@ -213,7 +252,7 @@ export function Roles() {
         </tr>
 
         {/* Child rows */}
-        {isExpanded && childResources.map((r) => {
+        {isExpanded && DATA_CHILD_RESOURCES.map((r) => {
           const isFC = permissionList.includes(`${r.key}:*`);
           const isRead = isFC || permissionList.includes(`${r.key}:read`);
           const isWrite = isFC || permissionList.includes(`${r.key}:write`);
