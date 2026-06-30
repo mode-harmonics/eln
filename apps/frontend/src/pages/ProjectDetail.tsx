@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useSearchParams, Link, useRouteLoaderData } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { FileText, Loader2, UploadCloud, CheckCircle2, Settings2, Plus } from "lucide-react";
+import { Loader2, UploadCloud, CheckCircle2, Settings2, Plus, ChartColumn } from "lucide-react";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
@@ -14,19 +14,7 @@ import { DataSummary } from "../components/DataSummary";
 import { SkeletonCard } from "../components/Skeleton";
 import { api, ApiError } from "../lib/api";
 import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle, CellGroup } from "../types";
-
-/** Maps experiment metadata.recordType to the API route path segment used by /api/v1/data/:type/:expId */
-const RECORD_TYPE_TO_API_TYPE: Record<string, string> = {
-  ProcessData: "process",
-  CalendarLife: "calendar",
-  StorageSwelling: "swelling",
-  EnergyEfficiency: "efficiency",
-  DcrTest: "dcr",
-  FastCharge: "fastcharge",
-  HtCycle: "htcycle",
-};
-
-const ALL_API_TYPES = Object.values(RECORD_TYPE_TO_API_TYPE);
+import { RECORD_TYPE_TO_API_TYPE, ALL_API_TYPES } from "../utils/recordTypes";
 
 export function ProjectDetail() {
   const { t } = useTranslation();
@@ -336,7 +324,7 @@ export function ProjectDetail() {
                   >
                     <div className="flex items-center gap-4">
                       <div className="text-gray-400 group-hover:text-gray-600">
-                        <FileText className="w-5 h-5" />
+                        <ChartColumn className="w-5 h-5" />
                       </div>
                       <div>
                         <h3 className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">
@@ -390,7 +378,7 @@ export function ProjectDetail() {
                   className="group flex flex-col border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors relative"
                 >
                   <div className="absolute top-6 right-6 text-gray-400 group-hover:text-gray-600">
-                    <FileText className="w-5 h-5" />
+                    <ChartColumn className="w-5 h-5" />
                   </div>
                   <div className="pr-8 mb-4">
                     <h3 className="text-[17px] font-semibold text-gray-900 group-hover:text-[#1d74f5] leading-tight">

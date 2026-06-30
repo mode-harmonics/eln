@@ -58,7 +58,22 @@ export function Roles() {
 
   useEffect(() => {
     if (editingRole) {
-      setPermissionList(editingRole.permissionList || []);
+      const raw = editingRole.permissionList || [];
+      // Expand implied child permissions for the "data" parent group
+      const childKeys = [
+        "data_process", "data_calendar", "data_swelling", "data_efficiency",
+        "data_dcr", "data_fastcharge", "data_htcycle",
+      ];
+      const expanded = new Set(raw);
+      for (const action of ["read", "write"]) {
+        if (raw.includes(`data:${action}`)) {
+          childKeys.forEach((c) => expanded.add(`${c}:${action}`));
+        }
+      }
+      if (raw.includes("data:*")) {
+        childKeys.forEach((c) => expanded.add(`${c}:*`));
+      }
+      setPermissionList([...expanded]);
     } else {
       setPermissionList([]);
     }
@@ -100,6 +115,15 @@ export function Roles() {
   };
 
   // ── Permission row helper ──
+  const Cb = ({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) => (
+    <label className={`flex items-center justify-center w-5 h-5 flex-none rounded border-2 transition-colors cursor-pointer mx-auto ${checked ? 'bg-[#1d74f5] border-[#1d74f5]' : 'border-gray-300 hover:border-gray-400'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
+      <svg className={`w-3 h-3 text-white pointer-events-none ${checked ? 'block' : 'hidden'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+    </label>
+  );
+
   const permRow = (key: string, label: string) => {
     const isFC = permissionList.includes(`${key}:*`);
     const isRead = isFC || permissionList.includes(`${key}:read`);
@@ -109,17 +133,18 @@ export function Roles() {
       if (checked) setPermissionList((prev) => [...prev, perm]);
       else setPermissionList((prev) => prev.filter((p) => p !== perm));
     };
+    const disabled = editingRole?.name === "Owner";
     return (
-      <tr key={key} className="hover:bg-gray-50/50">
+      <tr key={key} className="hover:bg-gray-50/50 transition-colors">
         <td className="px-4 py-3 text-sm font-medium text-gray-700">{label}</td>
         <td className="px-4 py-3 text-center">
-          <input type="checkbox" checked={isRead} disabled={isFC || editingRole?.name === "Owner"} onChange={(e) => toggle("read", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+          <Cb checked={isRead} disabled={disabled || isFC} onChange={(v) => toggle("read", v)} />
         </td>
         <td className="px-4 py-3 text-center">
-          <input type="checkbox" checked={isWrite} disabled={isFC || editingRole?.name === "Owner"} onChange={(e) => toggle("write", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+          <Cb checked={isWrite} disabled={disabled || isFC} onChange={(v) => toggle("write", v)} />
         </td>
         <td className="px-4 py-3 text-center">
-          <input type="checkbox" checked={isFC} disabled={editingRole?.name === "Owner"} onChange={(e) => toggle("*", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+          <Cb checked={isFC} disabled={disabled} onChange={(v) => toggle("*", v)} />
         </td>
       </tr>
     );
@@ -177,13 +202,13 @@ export function Roles() {
             </span>
           </td>
           <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-            <input type="checkbox" checked={parentRead} disabled={parentFC || editingRole?.name === "Owner"} onChange={(e) => handleParent("read", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+            <Cb checked={parentRead} disabled={parentFC || editingRole?.name === "Owner"} onChange={(v) => handleParent("read", v)} />
           </td>
           <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-            <input type="checkbox" checked={parentWrite} disabled={parentFC || editingRole?.name === "Owner"} onChange={(e) => handleParent("write", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+            <Cb checked={parentWrite} disabled={parentFC || editingRole?.name === "Owner"} onChange={(v) => handleParent("write", v)} />
           </td>
           <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-            <input type="checkbox" checked={parentFC} disabled={editingRole?.name === "Owner"} onChange={(e) => handleParent("*", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" />
+            <Cb checked={parentFC} disabled={editingRole?.name === "Owner"} onChange={(v) => handleParent("*", v)} />
           </td>
         </tr>
 
@@ -197,12 +222,13 @@ export function Roles() {
             if (checked) setPermissionList((prev) => [...prev, perm]);
             else setPermissionList((prev) => prev.filter((p) => p !== perm));
           };
+          const disabled = editingRole?.name === "Owner";
           return (
             <tr key={r.key} className="bg-gray-50/80 hover:bg-gray-100/60 border-l-2 border-[#1d74f5]/30">
               <td className="pl-9 pr-4 py-2.5 text-sm text-gray-600">{r.label}</td>
-              <td className="px-4 py-2.5 text-center"><input type="checkbox" checked={isRead} disabled={isFC || editingRole?.name === "Owner"} onChange={(e) => toggle("read", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" /></td>
-              <td className="px-4 py-2.5 text-center"><input type="checkbox" checked={isWrite} disabled={isFC || editingRole?.name === "Owner"} onChange={(e) => toggle("write", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" /></td>
-              <td className="px-4 py-2.5 text-center"><input type="checkbox" checked={isFC} disabled={editingRole?.name === "Owner"} onChange={(e) => toggle("*", e.target.checked)} className="w-4 h-4 text-[#1d74f5] rounded border-gray-300 focus:ring-[#1d74f5]" /></td>
+              <td className="px-4 py-2.5 text-center"><Cb checked={isRead} disabled={disabled || isFC} onChange={(v) => toggle("read", v)} /></td>
+              <td className="px-4 py-2.5 text-center"><Cb checked={isWrite} disabled={disabled || isFC} onChange={(v) => toggle("write", v)} /></td>
+              <td className="px-4 py-2.5 text-center"><Cb checked={isFC} disabled={disabled} onChange={(v) => toggle("*", v)} /></td>
             </tr>
           );
         })}
@@ -372,53 +398,60 @@ export function Roles() {
         </form>
       </Modal>
 
-      <Modal open={isEditModalOpen && !!editingRole} onClose={() => setIsEditModalOpen(false)} title={`${t("edit_permissions")} - ${editingRole?.name}`} maxWidth="2xl"
+      <Modal open={isEditModalOpen && !!editingRole} onClose={() => setIsEditModalOpen(false)} title={`${t("edit_permissions")}`} maxWidth="2xl"
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
             <Button type="submit" form="modal-role-form" loading={saving} disabled={saving || editingRole?.name === "Owner"}>{t("save")}</Button>
           </>
         }>
-            <form id="modal-role-form" onSubmit={handleUpdateRole} className="space-y-5">
-              <div>
-                <p className="text-sm text-gray-600 mb-4">
-                  {t("adjust_access")}
-                </p>
-                <div className="border border-gray-200 rounded overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          {t("module_resource")}
-                        </th>
-                        <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          {t("read")}
-                        </th>
-                        <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          {t("write")}
-                        </th>
-                        <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                          {t("full_control")}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
-                      {/* ── projects ── */}
-                      {permRow("projects", t("projects"))}
-                      {/* ── experiments (simple row) ── */}
-                      {permRow("experiments", t("experiments"))}
-                      {/* ── data (7 business tables, expandable) ── */}
-                      {dataGroup()}
-                      {/* ── users ── */}
-                      {permRow("users", t("user_management"))}
-                      {/* ── roles ── */}
-                      {permRow("roles", t("role_management"))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </form>
-          </Modal>
+        <form id="modal-role-form" onSubmit={handleUpdateRole} className="space-y-5">
+          {/* Role info header */}
+          <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
+            <div className="p-2 bg-gray-50 rounded-lg text-gray-600">
+              <Shield className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{editingRole?.name}</p>
+            </div>
+            {editingRole?.name === "Owner" && (
+              <span className="ml-auto inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">
+                {t("full_control")}
+              </span>
+            )}
+          </div>
+
+          <p className="text-sm text-gray-600">{t("adjust_access")}</p>
+
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-100">
+              <thead>
+                <tr className="bg-gray-50/80">
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {t("module_resource")}
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {t("read")}
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {t("write")}
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {t("full_control")}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {permRow("projects", t("projects"))}
+                {permRow("experiments", t("experiments"))}
+                {dataGroup()}
+                {permRow("users", t("user_management"))}
+                {permRow("roles", t("role_management"))}
+              </tbody>
+            </table>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

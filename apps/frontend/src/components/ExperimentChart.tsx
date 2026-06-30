@@ -13,6 +13,7 @@ import {
   Legend,
   LegendProps,
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { getGroupColor, UNGROUPED_COLOR } from '../utils/chartColors';
 
@@ -29,15 +30,9 @@ interface ExperimentChartProps {
   groupMap?: Record<string, GroupAssignment>;
 }
 
-const TYPE_MAP: Record<string, string> = {
-  ProcessData: 'process',
-  CalendarLife: 'calendar',
-  StorageSwelling: 'swelling',
-  EnergyEfficiency: 'efficiency',
-  DcrTest: 'dcr',
-  FastCharge: 'fastcharge',
-  HtCycle: 'htcycle',
-};
+import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
+
+const TYPE_MAP = RECORD_TYPE_TO_API_TYPE;
 
 /* ── helpers ───────────────────────────────────────────── */
 
@@ -431,17 +426,21 @@ export function ExperimentChart({ assayType, experimentId, projectId, groupMap: 
       default:
         return (
           <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
-            No chart available for {assayType}
+            No chart available for {displayName}
           </div>
         );
     }
   };
 
+  const { t } = useTranslation();
+
+  const displayName = t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType);
+
   return (
     <div className="bg-white border border-gray-200 rounded shadow-sm p-5 h-72 w-full">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-900">
-          {assayType} Overview
+          {displayName}
         </h3>
       </div>
       <div className="h-52 w-full">

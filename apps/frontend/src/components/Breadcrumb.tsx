@@ -20,16 +20,16 @@ export function Breadcrumb() {
   if (crumbs.length === 0) return null;
 
   return (
-    <nav className="flex items-center gap-1.5 text-[13px] text-gray-400">
+    <nav className="flex items-center gap-1.5 text-sm text-gray-400">
       <Link
         to="/projects"
         className="flex items-center gap-1 text-gray-400 hover:text-[#1d74f5] transition-colors"
       >
-        <Home className="w-3.5 h-3.5" />
+        <Home className="w-4 h-4" />
       </Link>
       {crumbs.map((crumb, index) => (
         <React.Fragment key={index}>
-          <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+          <ChevronRight className="w-4 h-4 text-gray-300" />
           {index < crumbs.length - 1 ? (
             <Link
               to={crumb.pathname}

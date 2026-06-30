@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
+import { Tooltip, TooltipTh } from "./Tooltip";
 
 /** Shared hook: fetch /api/v1/data/:type/:expId and return { data, loading, error, refresh } */
 function useTableData<T>(type: string, experimentId: string) {
@@ -216,20 +217,22 @@ function RowActions({ row, type, onRefresh }: RowActionsProps) {
   return (
     <>
       <div className="flex items-center gap-1">
-        <button
-          onClick={() => setEditOpen(true)}
-          className="p-1 text-gray-400 hover:text-[#1d74f5] transition-colors"
-          title="Edit"
-        >
-          <Edit3 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={() => setDeleteOpen(true)}
-          className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-          title="Delete"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        <Tooltip content="Edit">
+          <button
+            onClick={() => setEditOpen(true)}
+            className="p-1 text-gray-400 hover:text-[#1d74f5] transition-colors"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
+        <Tooltip content="Delete">
+          <button
+            onClick={() => setDeleteOpen(true)}
+            className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </Tooltip>
       </div>
       <EditRowModal open={editOpen} onClose={() => setEditOpen(false)} row={row} type={type} onSaved={onRefresh} />
       <DeleteRowConfirm open={deleteOpen} onClose={() => setDeleteOpen(false)} rowId={rowId} type={type} onDeleted={onRefresh} />
@@ -258,12 +261,8 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_m2")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Injection Mass = m1 - m0">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_mIn")}</span>
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Hold Mass = m4 - m0">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_mHold")}</span>
-            </th>
+            <TooltipTh content="Injection Mass = m1 - m0" label={t("col_comp_mIn")} />
+            <TooltipTh content="Hold Mass = m4 - m0" label={t("col_comp_mHold")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_v0")}
             </th>
@@ -279,15 +278,11 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_fq2")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Formation Charge Capacity = fq1 + fq2">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_fq")}</span>
-            </th>
+            <TooltipTh content="Formation Charge Capacity = fq1 + fq2" label={t("col_comp_fq")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_v1")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Formation Gas Volume = (v1 - v0) / qdFirst">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_fvg")}</span>
-            </th>
+            <TooltipTh content="Formation Gas Volume = (v1 - v0) / qdFirst" label={t("col_comp_fvg")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_fu1")}
             </th>
@@ -300,18 +295,14 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_fr2")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Aging Voltage Drop = fu1 - fu2">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ku")}</span>
-            </th>
+            <TooltipTh content="Aging Voltage Drop = fu1 - fu2" label={t("col_comp_ku")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_m3")}
             </th>
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_m4")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Loss Mass = m1 - m2">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_mLoss")}</span>
-            </th>
+            <TooltipTh content="Loss Mass = m1 - m2" label={t("col_comp_mLoss")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_gu0")}
             </th>
@@ -333,15 +324,9 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("col_gr1")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="1st Charge Capacity = fq + gqc1">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_qcFirst")}</span>
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="1st Discharge Capacity = gqd1">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_qdFirst")}</span>
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="1st Coulombic Efficiency = qdFirst / qcFirst * 100">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ceFirst")}</span>
-            </th>
+            <TooltipTh content="1st Charge Capacity = fq + gqc1" label={t("col_comp_qcFirst")} />
+            <TooltipTh content="1st Discharge Capacity = gqd1" label={t("col_comp_qdFirst")} />
+            <TooltipTh content="1st Coulombic Efficiency = qdFirst / qcFirst * 100" label={t("col_comp_ceFirst")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
             </th>
@@ -479,36 +464,24 @@ export function CalendarLifeTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_q_cap")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Capacity Retention = (dq / q_0d) * 100">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_qRetention")}</span>
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Capacity Recovery = (q / q_0d) * 100">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_qRecovery")}</span>
-            </th>
+            <TooltipTh content="Capacity Retention = (dq / q_0d) * 100" label={t("col_comp_qRetention")} />
+            <TooltipTh content="Capacity Recovery = (q / q_0d) * 100" label={t("col_comp_qRecovery")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_ddcr")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="D-DCR Increase = (ddcr / ddcr_0d - 1) * 100">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ddcrGrowth")}</span>
-            </th>
+            <TooltipTh content="D-DCR Increase = (ddcr / ddcr_0d - 1) * 100" label={t("col_comp_ddcrGrowth")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_cdcr")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="C-DCR Increase = (cdcr / cdcr_0d - 1) * 100">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_cdcrGrowth")}</span>
-            </th>
+            <TooltipTh content="C-DCR Increase = (cdcr / cdcr_0d - 1) * 100" label={t("col_comp_cdcrGrowth")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_u_voltage")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Voltage Increase = (u / u_0d - 1) * 100">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_uGrowth")}</span>
-            </th>
+            <TooltipTh content="Voltage Increase = (u / u_0d - 1) * 100" label={t("col_comp_uGrowth")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_r_acir")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Internal Resistance Increase = (r / r_0d - 1) * 100">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_rGrowth")}</span>
-            </th>
+            <TooltipTh content="Internal Resistance Increase = (r / r_0d - 1) * 100" label={t("col_comp_rGrowth")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
             </th>
@@ -593,14 +566,7 @@ export function StorageSwellingTable({ experimentId }: { experimentId: string })
               {t("col_v_volume")}
             </th>
             {/* Computed fields */}
-            <th
-              className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help"
-              title="Gas Volume = (v - v_0d) / qd1st (mL/Ah)"
-            >
-              <span className="underline decoration-dotted underline-offset-2">
-                {t("col_comp_vg")}
-              </span>
-            </th>
+            <TooltipTh content="Gas Volume = (v - v_0d) / qd1st (mL/Ah)" label={t("col_comp_vg")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
             </th>
@@ -655,9 +621,7 @@ export function EnergyEfficiencyTable({ experimentId }: { experimentId: string }
               {t("col_ce")}
             </th>
             {/* Computed fields */}
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Energy Efficiency Ratio = de / ce">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ee")}</span>
-            </th>
+            <TooltipTh content="Energy Efficiency Ratio = de / ce" label={t("col_comp_ee")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
             </th>
@@ -714,9 +678,7 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_di")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Discharge DCR = |du1 - du0| / di (Ω)">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_ddcr")}</span>
-            </th>
+            <TooltipTh content="Discharge DCR = |du1 - du0| / di (Ω)" label={t("col_comp_ddcr")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_cu0")}
             </th>
@@ -726,15 +688,9 @@ export function DcrTestTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_ci")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Charge DCR = |cu1 - cu0| / ci (Ω)">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_cdcr")}</span>
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Discharge R-C Product = q0 * ddcr (Ah·Ω)">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_dRcProduct")}</span>
-            </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="Charge R-C Product = q0 * cdcr (Ah·Ω)">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_cRcProduct")}</span>
-            </th>
+            <TooltipTh content="Charge DCR = |cu1 - cu0| / ci (Ω)" label={t("col_comp_cdcr")} />
+            <TooltipTh content="Discharge R-C Product = q0 * ddcr (Ah·Ω)" label={t("col_comp_dRcProduct")} />
+            <TooltipTh content="Charge R-C Product = q0 * cdcr (Ah·Ω)" label={t("col_comp_cRcProduct")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
             </th>
@@ -861,9 +817,7 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               {t("col_step_time")}
             </th>
-            <th className="px-4 py-2 text-left text-xs font-medium text-[#1d74f5] uppercase tracking-wider whitespace-nowrap cursor-help" title="10%-80% SOC Fast Charge Time (min)">
-              <span className="underline decoration-dotted underline-offset-2">{t("col_comp_computedTime")}</span>
-            </th>
+            <TooltipTh content="10%-80% SOC Fast Charge Time (min)" label={t("col_comp_computedTime")} />
             <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
               {t("actions")}
             </th>

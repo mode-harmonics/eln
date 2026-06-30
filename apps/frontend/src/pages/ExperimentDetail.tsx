@@ -24,15 +24,9 @@ interface ExperimentDetail extends Experiment {
   collaborators?: unknown[];
 }
 
-const ASSAY_TYPE_TO_PERMISSION: Record<string, string> = {
-  ProcessData: "process",
-  CalendarLife: "calendar",
-  StorageSwelling: "swelling",
-  EnergyEfficiency: "efficiency",
-  DcrTest: "dcr",
-  FastCharge: "fastcharge",
-  HtCycle: "htcycle",
-};
+import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
+
+const ASSAY_TYPE_TO_PERMISSION = RECORD_TYPE_TO_API_TYPE;
 
 export function ExperimentDetail() {
   const { t } = useTranslation();
@@ -138,29 +132,30 @@ export function ExperimentDetail() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{experiment.title}</h1>
-            <div className="mt-2 flex items-center gap-4 text-[13px] text-gray-500">
-              <span>Updated {format(new Date(experiment.updatedAt), "PPp")}</span>
-              <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-              <span>v{experiment.versionNo}</span>
+        <div className="flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-2xl font-bold text-gray-900 truncate">{experiment.title}</h1>
               {assayType && (
-                <>
-                  <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                  <span>{assayType}</span>
-                </>
+                <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 shrink-0">
+                  {t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
+                </span>
               )}
             </div>
+            <div className="flex items-center gap-3 text-sm text-gray-500">
+              <span>{t("updated")} {format(new Date(experiment.updatedAt), "MMM d, yyyy")}</span>
+              <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
+              <span>v{experiment.versionNo}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             {canWrite && (
               <>
                 <Button variant="secondary" onClick={openEditModal}>
                   <Edit3 className="w-4 h-4" />
                   {t("edit")}
                 </Button>
-                <Button variant="secondary" onClick={() => setDeleteModalOpen(true)} className="[&>svg]:text-red-500 hover:bg-red-50">
+                <Button variant="danger" size="sm" onClick={() => setDeleteModalOpen(true)}>
                   <Trash2 className="w-4 h-4" />
                   {t("delete")}
                 </Button>
@@ -180,12 +175,9 @@ export function ExperimentDetail() {
           <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} projectId={experiment.projectId} />
 
           {/* Data Table Section */}
-          <div className="bg-white border border-gray-200 rounded shadow-sm">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="text-[15px] font-semibold text-gray-900">{t("data_table")}</h2>
-              <Button variant="text">
-                <Download className="w-4 h-4" />
-              </Button>
+          <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-900">{t("data_table")}</h2>
             </div>
             {renderTable()}
           </div>

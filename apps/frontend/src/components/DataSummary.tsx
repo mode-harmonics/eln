@@ -16,6 +16,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { usePermissions } from "../hooks/usePermissions";
+import { Tooltip } from "./Tooltip";
 
 interface HeatmapCellProps {
   value: number;
@@ -96,10 +97,12 @@ const MiniErrorBar: React.FC<{
   };
 
   return (
-    <div
-      className="relative h-4 w-full flex items-center my-3"
-      title={`Range: ${minVal.toFixed(2)} - ${maxVal.toFixed(2)}\nMean: ${mean.toFixed(2)}\nSD: ±${sd.toFixed(2)}`}
+    <Tooltip
+      content={`Range: ${minVal.toFixed(2)} - ${maxVal.toFixed(2)}\nMean: ${mean.toFixed(2)}\nSD: ±${sd.toFixed(2)}`}
+      multiline
+      className="w-full"
     >
+      <div className="relative h-4 w-full flex items-center my-3">
       <div className="absolute left-0 right-0 h-px bg-gray-200"></div>
 
       {/* SD range */}
@@ -127,6 +130,7 @@ const MiniErrorBar: React.FC<{
         style={{ left: toPct(mean) }}
       />
     </div>
+    </Tooltip>
   );
 };
 
