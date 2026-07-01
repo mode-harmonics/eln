@@ -18,6 +18,7 @@ export interface ExperimentDto {
   metadata: ExperimentMetadataDto | null;
   aiAnalysisOutput: string | null;
   versionNo: number;
+  cellPicked: boolean;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

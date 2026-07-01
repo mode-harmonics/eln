@@ -20,6 +20,7 @@ import { PermissionsGuard, hasPermission } from '../common/guards/permissions.gu
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { DataService } from './data.service';
 import { UploadDataDto } from './dto/upload-data.dto';
+import { PickCellsDto } from '../experiments/dto/pick-cells.dto';
 
 const RECORD_TYPE_TO_PERMISSION: Record<string, string> = {
   ProcessData: 'process',
@@ -69,7 +70,7 @@ export class DataController {
       );
     }
 
-    return this.dataService.uploadWorkbook(file.buffer, dto.experimentId)
+    return this.dataService.uploadWorkbook(file.buffer, dto.experimentId, dto.mode)
       .then(async (result) => {
         // Persist original file to disk asynchronously (non-blocking)
         this.dataService.saveAttachment(
@@ -87,11 +88,32 @@ export class DataController {
   }
 
   @Get('raw/:expId')
-  @ApiOperation({
-    summary: 'Query raw step data rows for an experiment.',
-  })
+  @ApiOperation({ summary: 'Query raw step data rows for an experiment.' })
   async findRawSteps(@Param('expId') expId: string) {
     return this.dataService.findRawSteps(expId);
+  }
+
+  @Post('pick-cells/:expId')
+  @ApiOperation({ summary: 'Auto or manual pick cells for an experiment.' })
+  async pickCells(
+    @Param('expId') expId: string,
+    @Body() dto: PickCellsDto,
+    @Query('projectId') projectId: string,
+  ) {
+    const topN = dto.mode === 'auto' ? undefined : undefined;
+    return this.dataService.autoPickCells(expId, projectId, topN);
+  }
+
+  @Get('picked-cells/:expId')
+  @ApiOperation({ summary: 'Get picked cells for an experiment.' })
+  async getPickedCells(@Param('expId') expId: string) {
+    return this.dataService.getPickedCells(expId);
+  }
+
+  @Post('sync-cells/:expId')
+  @ApiOperation({ summary: 'Sync picked cells to 5 target business tables.' })
+  async syncCells(@Param('expId') expId: string) {
+    return this.dataService.syncCellsToTables(expId);
   }
 
   @Get(':type/:expId')

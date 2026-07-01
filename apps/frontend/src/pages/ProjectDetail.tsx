@@ -15,6 +15,7 @@ import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { DataSummary } from "../components/DataSummary";
 import { SkeletonCard } from "../components/Skeleton";
+import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import type { Project, Experiment, ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle, CellGroup } from "../types";
 import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY, ALL_API_TYPES } from "../utils/recordTypes";
@@ -217,10 +218,15 @@ export function ProjectDetail() {
         form.append("experimentId", experiment.id);
         await api.upload(`/api/v1/data/upload`, form);
       }
+      toast("上传成功", "success");
       closeModal();
       setRefetchTrigger((n) => n + 1);
     } catch (err: any) {
-      setUploadError(err?.message ?? t("upload_error"));
+      if (err?.status === 409) {
+        toast("检测到已有数据，请选择覆盖或合并模式", "error");
+      } else {
+        setUploadError(err?.message ?? t("upload_error"));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -344,6 +350,11 @@ export function ProjectDetail() {
                               {t(RECORD_TYPE_TO_I18N_KEY[recordType])}
                             </span>
                           )}
+                          {(exp as any).cellPicked && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600 shrink-0 border border-green-200/50">
+                              <CheckCircle2 className="w-3 h-3" />已选
+                            </span>
+                          )}
                         </div>
                         <div className="mt-0.5 flex items-center gap-3 text-[13px] text-gray-500">
                           <span>{t("updated")}{" "}{format(new Date(exp.updatedAt), "MMM d, yyyy")}</span>
@@ -413,6 +424,11 @@ export function ProjectDetail() {
                         {recordType && RECORD_TYPE_TO_I18N_KEY[recordType] && (
                           <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
                             {t(RECORD_TYPE_TO_I18N_KEY[recordType])}
+                          </span>
+                        )}
+                        {(exp as any).cellPicked && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-600 border border-green-200/50">
+                            <CheckCircle2 className="w-3 h-3" />已选
                           </span>
                         )}
                         <span

@@ -21,3 +21,6 @@ export * from './ht-cycle.entity';
 // Cell grouping entities
 export * from './cell-group.entity';
 export * from './cell-group-member.entity';
+
+// Picked cells
+export * from './picked-cell.entity';

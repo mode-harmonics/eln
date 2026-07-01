@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
@@ -8,6 +8,7 @@ import { v4 as uuid } from 'uuid';
 import { Attachment } from '../entities/attachment.entity';
 import { CalendarLife } from '../entities/calendar-life.entity';
 import { RawStepData } from '../entities/raw-step-data.entity';
+import { PickedCell } from '../entities/picked-cell.entity';
 import { DcrTest } from '../entities/dcr-test.entity';
 import { EnergyEfficiency } from '../entities/energy-efficiency.entity';
 import { FastCharge } from '../entities/fast-charge.entity';
@@ -23,6 +24,7 @@ import { FastChargeStepParser } from './parsers/fast-charge-step.parser';
 import { ProcessDataStepParser } from './parsers/process-data-step.parser';
 import { computeFastChargeTime } from './parsers/fast-charge.parser';
 import { GroupsService } from '../groups/groups.service';
+import { CellGroupMember } from '../entities/cell-group-member.entity';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
@@ -70,12 +72,61 @@ export class DataService {
   /**
    * Loads the uploaded workbook with ExcelJS, runs every sheet through the
    * ParserRegistry, and bulk-inserts the parsed rows for all 7 tables in a
-   * single queryRunner transaction �?either everything commits or nothing
+   * single queryRunner transaction either everything commits or nothing
    * does, so a malformed sheet can't leave partial data behind.
    */
-  async uploadWorkbook(buffer: Buffer<ArrayBufferLike>, experimentId: string): Promise<UploadSummary> {
+  async uploadWorkbook(buffer: Buffer<ArrayBufferLike>, experimentId: string, mode?: 'overwrite' | 'merge'): Promise<UploadSummary> {
     const experiment = await this.getExperiment(experimentId);
     const recordType = (experiment?.metadata?.assayType || experiment?.metadata?.recordType) as string | undefined;
+
+    // Step 2a: Upload constraint — non-ProcessData requires picked cells
+    if (recordType && recordType !== 'ProcessData') {
+      const pickedCount = await this.dataSource.getRepository(PickedCell).count({
+        where: { experimentId },
+      });
+      if (pickedCount === 0) {
+        throw new BadRequestException(
+          '必须先挑选电池再上传此类型数据。请在制成的实验中点击「挑选电池」。',
+        );
+      }
+    }
+
+    // Step 2b: Duplicate detection — check if any business data exists for this experiment
+    const businessRepos = [
+      this.dataSource.getRepository(ProcessData),
+      this.dataSource.getRepository(CalendarLife),
+      this.dataSource.getRepository(DcrTest),
+      this.dataSource.getRepository(EnergyEfficiency),
+      this.dataSource.getRepository(FastCharge),
+      this.dataSource.getRepository(HtCycle),
+      this.dataSource.getRepository(StorageSwelling),
+    ];
+    let existingTotal = 0;
+    for (const repo of businessRepos) {
+      existingTotal += await repo.count({ where: { experimentId } as any });
+    }
+    if (existingTotal > 0 && !mode) {
+      throw new ConflictException(
+        JSON.stringify({
+          conflict: true,
+          existingCount: existingTotal,
+          message: `此实验已有 ${existingTotal} 行数据。覆盖还是合并？`,
+        }),
+      );
+    }
+    if (mode === 'overwrite' && existingTotal > 0) {
+      // Delete old business data (but keep raw steps)
+      const deleteFrom = (repo: any) => repo.delete({ experimentId });
+      await Promise.all([
+        deleteFrom(this.dataSource.getRepository(ProcessData)),
+        deleteFrom(this.dataSource.getRepository(CalendarLife)),
+        deleteFrom(this.dataSource.getRepository(DcrTest)),
+        deleteFrom(this.dataSource.getRepository(EnergyEfficiency)),
+        deleteFrom(this.dataSource.getRepository(FastCharge)),
+        deleteFrom(this.dataSource.getRepository(HtCycle)),
+        deleteFrom(this.dataSource.getRepository(StorageSwelling)),
+      ]);
+    }
 
     const workbook = new ExcelJS.Workbook();
     try {
@@ -148,6 +199,128 @@ export class DataService {
       where: { experimentId },
       order: { stepSeqNo: 'ASC' },
     });
+  }
+
+  /**
+   * Auto-pick cells for a ProcessData experiment.
+   * 1. Cells with valid fq1+fq2 are sorted by fqTotal descending
+   * 2. Insert into picked_cells table
+   * 3. Auto-assign groups by prefix matching
+   * 4. Update experiment.cellPicked = true
+   */
+  async autoPickCells(experimentId: string, projectId: string, topN?: number): Promise<PickedCell[]> {
+    const processRows = await this.dataSource.getRepository(ProcessData).find({
+      where: { experimentId },
+    });
+
+    // Filter cells with valid fq = fq1 + fq2
+    const withFq = processRows
+      .map((r) => ({
+        cellId: r.cellId,
+        fqTotal: (r.fq1 != null ? Number(r.fq1) : 0) + (r.fq2 != null ? Number(r.fq2) : 0),
+      }))
+      .filter((r) => r.fqTotal > 0 && r.cellId)
+      .sort((a, b) => b.fqTotal - a.fqTotal);
+
+    if (withFq.length === 0) {
+      throw new BadRequestException('No cells with valid formation capacity found.');
+    }
+
+    const picked = topN != null && topN > 0 ? withFq.slice(0, topN) : withFq;
+
+    // Replace existing picks
+    const repo = this.dataSource.getRepository(PickedCell);
+    await repo.delete({ experimentId });
+
+    const records = picked.map((p) =>
+      repo.create({
+        id: uuid(),
+        experimentId,
+        cellId: p.cellId,
+        pickedBy: 'auto',
+      }),
+    );
+    const saved = await repo.save(records);
+
+    // Auto-assign groups by prefix
+    const cellIds = saved.map((p) => p.cellId);
+    try {
+      const groupMap = await this.groupsService.getGroupMap(cellIds, projectId);
+      const membersRepo = this.dataSource.getRepository(CellGroupMember);
+      for (const [cellId, assignment] of Object.entries(groupMap)) {
+        if (assignment.groupId) {
+          await membersRepo.upsert(
+            { id: uuid(), groupId: assignment.groupId, cellIdentifier: cellId },
+            ['cellIdentifier'],
+          );
+        }
+      }
+    } catch (err) {
+      this.logger.warn('Auto group assignment failed (non-fatal):', err as Error);
+    }
+
+    // Update experiment
+    await this.dataSource.getRepository(Experiment).update(experimentId, { cellPicked: true });
+
+    return saved;
+  }
+
+  /** Get picked cells for an experiment */
+  async getPickedCells(experimentId: string): Promise<PickedCell[]> {
+    return this.dataSource.getRepository(PickedCell).find({
+      where: { experimentId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  /** Manual pick: replace picked cells for an experiment */
+  async manualPickCells(experimentId: string, cellIds: string[]): Promise<PickedCell[]> {
+    const repo = this.dataSource.getRepository(PickedCell);
+    await repo.delete({ experimentId });
+
+    const records = cellIds.map((cellId) =>
+      repo.create({ id: uuid(), experimentId, cellId, pickedBy: 'manual' }),
+    );
+    const saved = await repo.save(records);
+
+    await this.dataSource.getRepository(Experiment).update(experimentId, { cellPicked: true });
+
+    return saved;
+  }
+
+  /** Sync picked cells to 5 target tables (create empty rows) */
+  async syncCellsToTables(experimentId: string): Promise<{ table: string; count: number }[]> {
+    const picked = await this.getPickedCells(experimentId);
+    const cellIds = picked.map((p) => p.cellId);
+    const results: { table: string; count: number }[] = [];
+
+    const targets: { entity: new () => any; name: string }[] = [
+      { entity: CalendarLife, name: 'calendarLife' },
+      { entity: DcrTest, name: 'dcrTest' },
+      { entity: EnergyEfficiency, name: 'energyEfficiency' },
+      { entity: FastCharge, name: 'fastCharge' },
+      { entity: HtCycle, name: 'htCycle' },
+    ];
+
+    for (const { entity, name } of targets) {
+      const repo = this.dataSource.getRepository(entity);
+      let count = 0;
+      for (const cellId of cellIds) {
+        const existing = await repo.findOne({ where: { experimentId, cellName: cellId } as any });
+        if (existing) continue;
+        await repo.save(
+          repo.create({
+            id: uuid(),
+            experimentId,
+            cellName: cellId,
+          } as any),
+        );
+        count++;
+      }
+      results.push({ table: name, count });
+    }
+
+    return results;
   }
 
   /** Persist the uploaded file to disk and create an attachment record. */

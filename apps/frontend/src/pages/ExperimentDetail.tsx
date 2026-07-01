@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useLoaderData } from "react-router-dom";
 import { format } from "date-fns";
-import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown } from "lucide-react";
+import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layers, CheckCircle2, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   ProcessDataTable,
@@ -16,6 +16,10 @@ import { ExperimentChart } from "../components/ExperimentChart";
 import { Button } from "../components/Button";
 import { Dropdown } from "../components/Dropdown";
 import { Modal } from "../components/Modal";
+import { CellPicker } from "../components/CellPicker";
+import { ConflictModal } from "../components/ConflictModal";
+import { StepProgress } from "../components/StepProgress";
+import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { cn } from "../lib/utils";
 import type { Experiment } from "../types";
@@ -24,6 +28,7 @@ import { usePermissions } from "../hooks/usePermissions";
 interface ExperimentDetail extends Experiment {
   attachments?: unknown[];
   collaborators?: unknown[];
+  cellPicked?: boolean;
 }
 
 import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
@@ -130,6 +135,48 @@ export function ExperimentDetail() {
     return () => { cancelled = true; };
   }, [dataView, rawLoaded, experiment]);
 
+  // Cell picker drawer
+  const [cellPickerOpen, setCellPickerOpen] = useState(false);
+  const [pickedCells, setPickedCells] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!experimentId) return;
+    api.get<any[]>(`/api/v1/data/picked-cells/${experimentId}`)
+      .then((data) => setPickedCells((data || []).map((p: any) => p.cellId)))
+      .catch(() => { /* no picks yet */ });
+  }, [experimentId, cellPickerOpen]);
+
+  // Conflict modal for upload
+  const [conflictModalOpen, setConflictModalOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingConflictCount, setPendingConflictCount] = useState(0);
+  const [uploadMode, setUploadMode] = useState<"overwrite" | "merge" | undefined>(undefined);
+
+  const handleUpload = async (files: File[], mode?: "overwrite" | "merge") => {
+    if (!experiment || files.length === 0) return;
+    try {
+      for (const file of files) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("experimentId", experiment.id);
+        if (mode) form.append("mode", mode);
+        await api.upload("/api/v1/data/upload", form);
+      }
+      toast("上传成功", "success");
+      // Refresh page data
+      window.location.reload();
+    } catch (err: any) {
+      if (err?.status === 409) {
+        const count = err?.body?.existingCount ?? 0;
+        setPendingFiles(files);
+        setPendingConflictCount(count);
+        setConflictModalOpen(true);
+        return;
+      }
+      toast(err?.message ?? "上传失败", "error");
+    }
+  };
+
   const renderTable = () => {
     switch (assayType) {
       case "ProcessData": return <ProcessDataTable experimentId={experiment.id} />;
@@ -206,6 +253,56 @@ export function ExperimentDetail() {
           </Dropdown>
         </div>
       </div>
+
+      {/* Workflow Card — Cell Picking */}
+      {assayType === "ProcessData" && (
+        <div className="bg-gradient-to-r from-blue-50/60 to-indigo-50/40 border border-blue-100/70 rounded-xl p-5">
+          <div className="flex items-start justify-between">
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-semibold text-gray-800">{t("workflow")}</span>
+              </div>
+              <StepProgress
+                steps={[
+                  { key: "upload", label: t("step_upload_process_data") },
+                  { key: "pick", label: t("step_pick_cells") },
+                  { key: "other", label: t("step_upload_other_data") },
+                ]}
+                currentStep={pickedCells.length > 0 ? 2 : ((experiment.cellPicked ?? false) ? 1 : 0)}
+                completed={(() => {
+                  const c: number[] = [0];
+                  if (experiment.cellPicked || pickedCells.length > 0) c.push(1);
+                  if (pickedCells.length > 0) c.push(2);
+                  return c;
+                })()}
+              />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-gray-500 flex items-center gap-1">
+                {pickedCells.length > 0 ? (
+                  <><CheckCircle2 className="w-3.5 h-3.5 text-green-500" />{t("picked_cells_count", { count: pickedCells.length })}</>
+                ) : (
+                  <><AlertCircle className="w-3.5 h-3.5 text-amber-500" />{t("not_picked")}</>
+                )}
+              </span>
+              <Button variant="primary" size="sm" onClick={() => setCellPickerOpen(true)}>
+                {t("pick_cells")}
+              </Button>
+            </div>
+          </div>
+          {/* Picked cells chips */}
+          {pickedCells.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-blue-100/50">
+              {pickedCells.map((cid) => (
+                <span key={cid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/70 text-xs font-mono text-blue-700 border border-blue-200/60 shadow-sm">
+                  {cid}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {hasReadPermission ? (
         <div className="space-y-6">
@@ -317,6 +414,35 @@ export function ExperimentDetail() {
         }>
         <p className="text-sm text-gray-600">{t("delete_experiment_confirm")}</p>
       </Modal>
+
+      {/* Cell Picker Drawer */}
+      <CellPicker
+        open={cellPickerOpen}
+        onClose={() => setCellPickerOpen(false)}
+        experimentId={experiment.id}
+        projectId={experiment.projectId}
+        onComplete={(cells) => {
+          setPickedCells(cells);
+          setExperiment((prev) => prev ? { ...prev, cellPicked: true } : prev);
+        }}
+      />
+
+      {/* Conflict Modal — slide-up overlay for overwrite/merge choice */}
+      <ConflictModal
+        open={conflictModalOpen}
+        onClose={() => setConflictModalOpen(false)}
+        existingCount={pendingConflictCount}
+        onOverwrite={() => {
+          setConflictModalOpen(false);
+          setUploadMode("overwrite");
+          handleUpload(pendingFiles, "overwrite");
+        }}
+        onMerge={() => {
+          setConflictModalOpen(false);
+          setUploadMode("merge");
+          handleUpload(pendingFiles, "merge");
+        }}
+      />
     </div>
   );
 }
