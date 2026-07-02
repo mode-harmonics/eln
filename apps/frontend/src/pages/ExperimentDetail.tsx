@@ -28,7 +28,6 @@ import { usePermissions } from "../hooks/usePermissions";
 interface ExperimentDetail extends Experiment {
   attachments?: unknown[];
   collaborators?: unknown[];
-  cellPicked?: boolean;
 }
 
 import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
