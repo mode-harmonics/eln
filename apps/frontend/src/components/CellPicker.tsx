@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
-import { X, Loader2, Check, Layers, Zap, MousePointerClick, ChevronRight } from "lucide-react";
+import { Loader2, Check, Layers, Zap, MousePointerClick, ChevronRight } from "lucide-react";
 import { Button } from "./Button";
+import { Drawer } from "./Drawer";
 import { cn } from "../lib/utils";
 import { api } from "../lib/api";
 import { toast } from "./Toast";
@@ -85,31 +85,31 @@ export function CellPicker({ open, onClose, experimentId, projectId, onComplete 
 
   if (!open) return null;
 
-  return createPortal(
-    <div className="fixed inset-0 z-[200] flex justify-end">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Drawer */}
-      <div className="relative w-full max-w-lg bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title="挑选电池"
+      description="选择后续测试使用的电池"
+      icon={<Layers className="w-4 h-4 text-[#1d74f5]" />}
+      size="max-w-lg"
+      footer={
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-gray-500">
+            已选 <span className="font-semibold text-gray-900">{selected.size}</span> / {cells.length} 个电池
+          </p>
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#f0f4ff] flex items-center justify-center">
-              <Layers className="w-4 h-4 text-[#1d74f5]" />
-            </div>
-            <div>
-              <h2 className="text-[15px] font-semibold text-gray-900">挑选电池</h2>
-              <p className="text-xs text-gray-500 mt-0.5">选择后续测试使用的电池</p>
-            </div>
+            <Button variant="secondary" onClick={onClose} disabled={syncing}>取消</Button>
+            <Button onClick={handleConfirm} loading={syncing} disabled={syncing || selected.size === 0}>
+              {syncing ? "同步中..." : "确认挑选 & 同步"}
+              {!syncing && <ChevronRight className="w-4 h-4" />}
+            </Button>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-            <X className="w-5 h-5" />
-          </button>
         </div>
-
-        {/* Mode toggle */}
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+      }
+    >
+      {/* Mode toggle */}
+      <div className="-mx-6 -mt-4 px-6 py-4 border-b border-gray-100 bg-gray-50/50">
           <div className="flex items-center gap-3">
             <button
               onClick={() => { handleAutoPick(); }}
@@ -153,7 +153,7 @@ export function CellPicker({ open, onClose, experimentId, projectId, onComplete 
         </div>
 
         {/* Cell list */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="py-4">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
@@ -202,22 +202,6 @@ export function CellPicker({ open, onClose, experimentId, projectId, onComplete 
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-100 bg-white shrink-0 flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            已选 <span className="font-semibold text-gray-900">{selected.size}</span> / {cells.length} 个电池
-          </p>
-          <div className="flex items-center gap-3">
-            <Button variant="secondary" onClick={onClose} disabled={syncing}>取消</Button>
-            <Button onClick={handleConfirm} loading={syncing} disabled={syncing || selected.size === 0}>
-              {syncing ? "同步中..." : "确认挑选 & 同步"}
-              {!syncing && <ChevronRight className="w-4 h-4" />}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>,
-    document.body,
+    </Drawer>
   );
 }

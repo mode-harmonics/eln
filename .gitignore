@@ -21,6 +21,10 @@ apps/*/.env
 !apps/*/.env.example
 !.env.example
 
+# Explicit env files (env/ directory) — example.env is committed, rest are not
+apps/*/env/*.env
+!apps/*/env/example.env
+
 # Uploads
 uploads/
 

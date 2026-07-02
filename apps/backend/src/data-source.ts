@@ -1,9 +1,8 @@
 import 'reflect-metadata';
-import { config } from 'dotenv';
+import { loadEnv } from './load-env';
+loadEnv();
 import { DataSource, DataSourceOptions } from 'typeorm';
 import * as entities from './entities';
-
-config(); // load apps/backend/.env
 
 const entityList = Object.values(entities);
 

@@ -18,6 +18,7 @@ import { GroupsModule } from './groups/groups.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      ignoreEnvFile: true, // env loaded explicitly via load-env.ts
       load: [configuration],
       validationSchema,
       validationOptions: { allowUnknown: true, abortEarly: false },
