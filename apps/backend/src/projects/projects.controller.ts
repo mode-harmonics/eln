@@ -50,6 +50,13 @@ export class ProjectsController {
     return this.projectsService.findExperiments(id, pageNum, limitNum, search);
   }
 
+  @Get(':id/stats')
+  @RequirePermission('projects:read')
+  @ApiOperation({ summary: 'Get quick stats for a project (e.g. hasPickedCells).' })
+  async getStats(@Param('id') id: string) {
+    return this.projectsService.getStats(id);
+  }
+
   @Post(':id/experiments')
   @RequirePermission('projects:write')
   @ApiOperation({ summary: 'Create a new experiment (record) under this project.' })

@@ -13,6 +13,9 @@ import { DataModule } from './data/data.module';
 import { AiModule } from './ai/ai.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { GroupsModule } from './groups/groups.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -33,6 +36,9 @@ import { GroupsModule } from './groups/groups.module';
     AiModule,
     InventoryModule,
     GroupsModule,
+    NotificationsModule,
+    DashboardModule,
+    SearchModule,
   ],
   providers: [ConfigService],
 })

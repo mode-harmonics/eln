@@ -8,6 +8,8 @@ import { Modal } from "../components/Modal";
 import { TextInput } from "../components/FormFields";
 import { SearchInput } from "../components/SearchInput";
 import { Tooltip } from "../components/Tooltip";
+import { Card, CardHeader, CardContent, CardFooter } from "../components/Card";
+import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
@@ -161,6 +163,30 @@ export function Roles() {
     );
   };
 
+  const specialActionRow = (key: string, action: string, label: string) => {
+    const isFC = permissionList.includes(`${key}:*`);
+    const perm = `${key}:${action}`;
+    const hasPerm = isFC || permissionList.includes(perm);
+    const disabled = editingRole?.name === "Owner" || isFC;
+    const toggle = (checked: boolean) => {
+      if (checked) setPermissionList((prev) => [...prev, perm]);
+      else setPermissionList((prev) => prev.filter((p) => p !== perm));
+    };
+    return (
+      <tr key={`${key}-${action}`} className="hover:bg-gray-50/50 transition-colors bg-gray-50/30">
+        <td className="px-4 py-3 text-sm text-gray-600 pl-8 flex items-center gap-2">
+          <div className="w-1 h-1 bg-gray-300 rounded-full" />
+          {label}
+        </td>
+        <td className="px-4 py-3 text-center"></td>
+        <td className="px-4 py-3 text-center">
+          <Cb checked={hasPerm} disabled={disabled} onChange={toggle} />
+        </td>
+        <td className="px-4 py-3 text-center"></td>
+      </tr>
+    );
+  };
+
   // ── Data (7 business tables) — expandable group ──
   const DATA_CHILD_KEYS = [
     "data_process", "data_calendar", "data_swelling", "data_efficiency",
@@ -168,13 +194,13 @@ export function Roles() {
   ];
 
   const DATA_CHILD_RESOURCES = [
-    { key: "data_process",    label: t("process_data") },
-    { key: "data_calendar",   label: t("calendar_life") },
-    { key: "data_swelling",   label: t("storage_swelling") },
+    { key: "data_process", label: t("process_data") },
+    { key: "data_calendar", label: t("calendar_life") },
+    { key: "data_swelling", label: t("storage_swelling") },
     { key: "data_efficiency", label: t("energy_efficiency") },
-    { key: "data_dcr",        label: t("dcr_test") },
+    { key: "data_dcr", label: t("dcr_test") },
     { key: "data_fastcharge", label: t("fast_charge") },
-    { key: "data_htcycle",    label: t("ht_cycle") },
+    { key: "data_htcycle", label: t("ht_cycle") },
   ];
 
   const dataGroup = () => {
@@ -316,87 +342,75 @@ export function Roles() {
           </div>
         </div>
 
-        {viewMode === "list" ? (
-          <div className="border border-gray-200 rounded bg-white overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("role_name")}
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("permissions")}
-                    </th>
-                    {hasPermission("roles:write") && (
-                      <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                        {t("actions")}
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {roles.map((role) => (
-                    <tr key={role.id} className="hover:bg-gray-50/50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-3">
-                          <div className="p-1.5 bg-gray-50 rounded text-gray-600">
-                            <Shield className="w-4 h-4" />
-                          </div>
-                          <div className="text-[13px] font-medium text-gray-900">
-                            {role.name}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-[13px] text-gray-500 truncate max-w-md">
-                          {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No explicit permissions"}
-                        </div>
-                      </td>
-                      {hasPermission("roles:write") && (
-                        <td className="text-[13px] px-6 py-4 whitespace-nowrap text-right">
-                          <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
-                            <Edit3 className="w-4 h-4" />
-                          </Button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {roles.map((role) => (
-              <div
-                key={role.id}
-                className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gray-50 rounded text-gray-600">
-                      <Shield className="w-5 h-5" />
+        <TableWrapper>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("role_name")}</TableHead>
+                <TableHead>{t("permissions")}</TableHead>
+                {hasPermission("roles:write") && <TableHead className="text-right">{t("actions")}</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {roles.map((role) => (
+                <TableRow key={role.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="p-1.5 bg-gray-50 rounded text-gray-600">
+                        <Shield className="w-4 h-4" />
+                      </div>
+                      <div className="text-[13px] font-medium text-gray-900">
+                        {role.name}
+                      </div>
                     </div>
-                    <h3 className="font-semibold text-[17px] text-gray-900">
-                      {role.name}
-                    </h3>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-[13px] text-gray-500 truncate max-w-md">
+                      {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No explicit permissions"}
+                    </div>
+                  </TableCell>
+                  {hasPermission("roles:write") && (
+                    <TableCell className="text-right">
+                      <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                        <Edit3 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableWrapper>
+        ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {roles.map((role) => (
+            <Card key={role.id} className="flex flex-col">
+              <CardHeader className="pb-0 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gray-50 rounded text-gray-600">
+                    <Shield className="w-5 h-5" />
                   </div>
+                  <h3 className="font-semibold text-[17px] text-gray-900">
+                    {role.name}
+                  </h3>
                 </div>
-                <p className="text-[13px] text-gray-600 flex-1">
+              </CardHeader>
+              <CardContent>
+                <p className="text-[13px] text-gray-600">
                   {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No permissions configured"}
                 </p>
-                {hasPermission("roles:write") && (
-                  <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-center">
-                    <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
-                      <Edit3 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+              </CardContent>
+              {hasPermission("roles:write") && (
+                <CardFooter className="justify-center mt-auto">
+                  <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                    <Edit3 className="w-4 h-4" />
+                  </Button>
+                </CardFooter>
+              )}
+            </Card>
+          ))}
+        </div>
+        )
         <Pagination
           currentPage={currentPage}
           totalItems={totalItems}
@@ -462,33 +476,27 @@ export function Roles() {
 
           <p className="text-sm text-gray-600">{t("adjust_access")}</p>
 
-          <div className="border border-gray-200 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-100">
-              <thead>
-                <tr className="bg-gray-50/80">
-                  <th scope="col" className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {t("module_resource")}
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {t("read")}
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {t("write")}
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    {t("full_control")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
+          <TableWrapper>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("module_resource")}</TableHead>
+                  <TableHead className="text-center">{t("read")}</TableHead>
+                  <TableHead className="text-center">{t("write")}</TableHead>
+                  <TableHead className="text-center">{t("full_control")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {permRow("projects", t("projects"))}
                 {permRow("experiments", t("experiments"))}
+                {specialActionRow("experiments", "approve", "Approve (审批)")}
+                {specialActionRow("experiments", "archive", "Archive (归档)")}
                 {dataGroup()}
                 {permRow("users", t("user_management"))}
                 {permRow("roles", t("role_management"))}
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </TableWrapper>
         </form>
       </Modal>
     </div>

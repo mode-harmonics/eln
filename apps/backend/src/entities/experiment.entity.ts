@@ -41,6 +41,16 @@ export class Experiment {
   cellPicked!: boolean;
 
   @Index()
+  @Column({ name: 'reviewerId', type: 'uuid', nullable: true, comment: '审核人ID' })
+  reviewerId!: string | null;
+
+  @Column({ name: 'reviewComment', type: 'text', nullable: true, comment: '审核意见' })
+  reviewComment!: string | null;
+
+  @Column({ name: 'reviewedAt', type: 'timestamp', nullable: true, comment: '审核时间' })
+  reviewedAt!: Date | null;
+
+  @Index()
   @Column({ name: 'createdBy', type: 'uuid', comment: '创建者ID' })
   createdBy!: string;
 

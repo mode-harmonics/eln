@@ -7,6 +7,8 @@ export * from './experiment.entity';
 export * from './inventory.entity';
 export * from './attachment.entity';
 export * from './version-history.entity';
+export * from './experiment-comment.entity';
+export * from './notification.entity';
 
 // Battery-science business data entities
 export * from './process-data.entity';

@@ -20,8 +20,11 @@ import { usePermissions } from "../hooks/usePermissions";
 import { Button } from "./Button";
 import { Logo } from "./Logo";
 import { Breadcrumb } from "./Breadcrumb";
+import { NotificationBell } from "./NotificationBell";
+import { GlobalSearch } from "./GlobalSearch";
 
 const NAVIGATION = [
+  { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "projects:read" },
   { nameKey: "projects", href: "/projects", icon: Grid, requiredPermission: "projects:read" },
   { nameKey: "inventory", href: "/inventory", icon: Database, requiredPermission: "data:read" },
 ];
@@ -89,16 +92,18 @@ export function Layout() {
         <div className="flex flex-col shrink-0 px-6 pt-6 pb-4 border-b border-transparent relative z-10">
           <div className="flex items-center justify-between mb-1">
             <Logo />
-            <Dropdown
-              trigger={
-                <Button
-                  title={displayName}
-                  className="!bg-[#f27429] !text-white !w-7 !h-7 !rounded-full !p-0 !text-xs !font-bold hover:!opacity-90 focus:!ring-[#f27429] shrink-0"
-                >
-                  {initial}
-                </Button>
-              }
-            >
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <Dropdown
+                trigger={
+                  <Button
+                    title={displayName}
+                    className="!bg-[#f27429] !text-white !w-7 !h-7 !rounded-full !p-0 !text-xs !font-bold hover:!opacity-90 focus:!ring-[#f27429] shrink-0"
+                  >
+                    {initial}
+                  </Button>
+                }
+              >
               <div className="flex items-center gap-3 px-4 py-3 bg-gray-50">
                 <div className="bg-[#f27429] text-white w-8 h-8 flex items-center justify-center rounded font-semibold text-sm shrink-0">
                   {initial}
@@ -130,6 +135,7 @@ export function Layout() {
                 {t("sign_out", "Sign out")}
               </Button>
             </Dropdown>
+            </div>
           </div>
         </div>
         <div className="flex flex-1 flex-col overflow-y-auto py-2">
@@ -222,8 +228,9 @@ export function Layout() {
         <main className="flex-1 overflow-y-auto">
           {/* Breadcrumb: wider, full-width */}
           <div className="w-full px-6 md:px-10 pt-6 md:pt-10 pb-4">
-            <div className="max-w-screen-xl mx-auto">
+            <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4 flex-wrap">
               <Breadcrumb />
+              <GlobalSearch />
             </div>
           </div>
             {/* Content: original width */}

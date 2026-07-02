@@ -26,9 +26,20 @@ const bgColors: Record<ToastType, string> = {
 let toastId = 0;
 let addToastFn: ((t: ToastItem) => void) | null = null;
 
-export function toast(message: string, type: ToastType = "info") {
-  addToastFn?.({ id: ++toastId, type, message });
+interface ToastFunction {
+  (message: string, type?: ToastType): void;
+  success: (message: string) => void;
+  error: (message: string) => void;
+  info: (message: string) => void;
 }
+
+export const toast: ToastFunction = (message: string, type: ToastType = "info") => {
+  addToastFn?.({ id: ++toastId, type, message });
+};
+
+toast.success = (message: string) => toast(message, "success");
+toast.error = (message: string) => toast(message, "error");
+toast.info = (message: string) => toast(message, "info");
 
 export function ToastContainer() {
   const [items, setItems] = useState<ToastItem[]>([]);

@@ -454,4 +454,47 @@ export class DataService {
     await repo.remove(row);
     return { success: true };
   }
+
+  /** Export summary data to Excel */
+  async exportSummaryData(experimentId: string): Promise<ExcelJS.Workbook> {
+    const experiment = await this.getExperiment(experimentId);
+    if (!experiment) throw new NotFoundException(`Experiment not found.`);
+
+    const assayType = experiment.metadata?.assayType || experiment.metadata?.recordType;
+    const map: any = { ProcessData: 'process', CalendarLife: 'calendar', StorageSwelling: 'swelling', EnergyEfficiency: 'efficiency', DcrTest: 'dcr', FastCharge: 'fastcharge', HtCycle: 'htcycle' };
+    const typeParam = map[assayType];
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Summary');
+
+    if (typeParam) {
+      const data = await this.findByType(typeParam, experimentId);
+      if (data && data.length > 0) {
+        const columns = Object.keys(data[0]).filter(k => k !== 'id' && k !== 'experimentId' && k !== 'createdAt');
+        sheet.columns = columns.map(c => ({ header: c, key: c, width: 15 }));
+        data.forEach(row => sheet.addRow(row));
+      } else {
+        sheet.addRow(['No data available']);
+      }
+    } else {
+      sheet.addRow(['Unknown assay type or no data']);
+    }
+    return workbook;
+  }
+
+  /** Export raw data to Excel */
+  async exportRawData(experimentId: string): Promise<ExcelJS.Workbook> {
+    const data = await this.findRawSteps(experimentId);
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Raw Data');
+
+    if (data && data.length > 0) {
+      const columns = Object.keys(data[0]).filter(k => k !== 'id' && k !== 'experimentId');
+      sheet.columns = columns.map(c => ({ header: c, key: c, width: 15 }));
+      data.forEach(row => sheet.addRow(row));
+    } else {
+      sheet.addRow(['No raw data available']);
+    }
+    return workbook;
+  }
 }

@@ -12,6 +12,7 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -85,6 +86,26 @@ export class DataController {
         });
         return result;
       });
+  }
+
+  @Get('export/summary/:expId')
+  @ApiOperation({ summary: 'Export summary data for an experiment.' })
+  async exportSummary(@Param('expId') expId: string, @Res() res: any) {
+    const workbook = await this.dataService.exportSummaryData(expId);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=' + 'summary.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
+  }
+
+  @Get('export/raw/:expId')
+  @ApiOperation({ summary: 'Export raw data for an experiment.' })
+  async exportRaw(@Param('expId') expId: string, @Res() res: any) {
+    const workbook = await this.dataService.exportRawData(expId);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename=' + 'raw.xlsx');
+    await workbook.xlsx.write(res);
+    res.end();
   }
 
   @Get('raw/:expId')

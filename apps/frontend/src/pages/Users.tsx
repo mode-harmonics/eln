@@ -7,6 +7,8 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
 import { TextInput, Select, Checkbox } from "../components/FormFields";
+import { Card, CardContent } from "../components/Card";
+import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
@@ -181,91 +183,74 @@ export function Users() {
         </div>
 
         {viewMode === "list" ? (
-          <div className="border border-gray-200 rounded bg-white overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("name")}
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("email")}
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("role")}
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("status")}
-                    </th>
-                    {hasPermission("users:write") && (
-                      <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                        {t("actions")}
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user) => {
-                    const initials = user.fullName ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase() : "U";
-                    return (
-                      <tr key={user.id} className="hover:bg-gray-50/50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-3">
-                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold border border-blue-200">
-                              {initials}
-                            </div>
-                            <div className="text-[13px] font-medium text-gray-900">
-                              {user.fullName}
-                            </div>
+          <TableWrapper>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("email")}</TableHead>
+                  <TableHead>{t("role")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  {hasPermission("users:write") && <TableHead className="text-right">{t("actions")}</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => {
+                  const initials = user.fullName ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase() : "U";
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold border border-blue-200">
+                            {initials}
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-[13px] text-gray-500">
-                            {user.email}
+                          <div className="text-[13px] font-medium text-gray-900">
+                            {user.fullName}
                           </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
-                            {user.roleName || "No Role"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={cn(
-                            "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
-                            user.isActive ? "bg-[#f0f9f4] text-[#1e8b4e]" : "bg-red-50 text-red-600"
-                          )}>
-                            {user.isActive ? t("active") : t("inactive", "Inactive")}
-                          </span>
-                        </td>
-                        {hasPermission("users:write") && (
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div className="inline-flex items-center gap-3">
-                              <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
-                                <Edit3 className="w-4 h-4" />
-                              </Button>
-                              <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="!text-gray-400 hover:!text-red-600">
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-[13px] text-gray-500">
+                          {user.email}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
+                          {user.roleName || "No Role"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className={cn(
+                          "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
+                          user.isActive ? "bg-[#f0f9f4] text-[#1e8b4e]" : "bg-red-50 text-red-600"
+                        )}>
+                          {user.isActive ? t("active") : t("inactive", "Inactive")}
+                        </span>
+                      </TableCell>
+                      {hasPermission("users:write") && (
+                        <TableCell className="text-right text-sm font-medium">
+                          <div className="inline-flex items-center gap-3">
+                            <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                              <Edit3 className="w-4 h-4" />
+                            </Button>
+                            <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="!text-gray-400 hover:!text-red-600">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableWrapper>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {users.map((user) => {
               const initials = user.fullName ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase() : "U";
               return (
-                <div
-                  key={user.id}
-                  className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col items-center text-center relative group"
-                >
+                <Card key={user.id} className="flex flex-col items-center text-center relative group p-6 border-gray-200 hover:border-gray-300">
                   {hasPermission("users:write") && (
                     <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
@@ -286,7 +271,7 @@ export function Users() {
                     {user.email}
                   </p>
 
-                  <div className="flex items-center gap-2 mb-6">
+                  <div className="flex items-center gap-2 mt-auto">
                     <span className="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600">
                       {user.roleName || "No Role"}
                     </span>
@@ -297,7 +282,7 @@ export function Users() {
                       {user.isActive ? t("active") : t("inactive", "Inactive")}
                     </span>
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>

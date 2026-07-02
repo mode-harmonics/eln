@@ -104,6 +104,18 @@ export class ProjectsService {
     return { items, total };
   }
 
+  async getStats(projectId: string): Promise<{ hasPickedCells: boolean }> {
+    const project = await this.projectsRepo.findOne({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found.');
+
+    const experimentWithPickedCells = await this.experimentsRepo.findOne({
+      where: { projectId, cellPicked: true },
+    });
+
+    return { hasPickedCells: !!experimentWithPickedCells };
+  }
+
+
   async create(userId: string, dto: CreateProjectDto): Promise<Project> {
 
     const project = this.projectsRepo.create({

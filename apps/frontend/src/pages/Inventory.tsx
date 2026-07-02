@@ -8,6 +8,8 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
 import { TextInput, Select } from "../components/FormFields";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../components/Card";
+import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
@@ -159,84 +161,80 @@ export function Inventory() {
         </div>
 
         {viewMode === "list" ? (
-          <div className="border border-gray-200 rounded bg-white overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Item</th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Type</th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Lot / Purity</th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Quantity</th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Location</th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Last Used</th>
+          <TableWrapper>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Item</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Lot / Purity</TableHead>
+                  <TableHead>Quantity</TableHead>
+                  <TableHead>Location</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Used</TableHead>
+                  {hasPermission("data:write") && <TableHead className="text-right">Actions</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="text-[13px] font-medium text-gray-900">{item.name}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-[13px] text-gray-500">{item.type}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-[13px] text-gray-900">{item.lotNumber || "N/A"}</div>
+                      <div className="text-[11px] text-gray-500">{item.purity || "N/A"}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-[13px] text-gray-900">{item.quantity}</div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-[13px] text-gray-500">{item.storageLocation || "N/A"}</div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={cn(
+                        "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
+                        item.status === 'In Stock' ? 'bg-[#f0f9f4] text-[#1e8b4e]' :
+                        item.status === 'Low Stock' ? 'bg-[#fff8e6] text-[#b28200]' :
+                        'bg-[#fbeef0] text-[#cb202d]'
+                      )}>
+                        {item.status}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {item.lastUsedAt ? format(new Date(item.lastUsedAt), "MMM d, yyyy") : "Never"}
+                    </TableCell>
                     {hasPermission("data:write") && (
-                      <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
+                      <TableCell className="text-right space-x-3">
+                        <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
+                          Edit
+                        </Button>
+                        <Button variant="text" onClick={() => handleDeleteItem(item.id)} className="!text-red-600 hover:!text-red-800">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
                     )}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {items.map((item) => (
-                    <tr key={item.id} className="hover:bg-gray-50/50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-[13px] font-medium text-gray-900">{item.name}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-[13px] text-gray-500">{item.type}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-[13px] text-gray-900">{item.lotNumber || "N/A"}</div>
-                        <div className="text-[11px] text-gray-500">{item.purity || "N/A"}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-[13px] text-gray-900">{item.quantity}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-[13px] text-gray-500">{item.storageLocation || "N/A"}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={cn(
-                          "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
-                          item.status === 'In Stock' ? 'bg-[#f0f9f4] text-[#1e8b4e]' :
-                          item.status === 'Low Stock' ? 'bg-[#fff8e6] text-[#b28200]' :
-                          'bg-[#fbeef0] text-[#cb202d]'
-                        )}>
-                          {item.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-500">
-                        {item.lastUsedAt ? format(new Date(item.lastUsedAt), "MMM d, yyyy") : "Never"}
-                      </td>
-                      {hasPermission("data:write") && (
-                        <td className="px-6 py-4 whitespace-nowrap text-right space-x-3">
-                          <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
-                            Edit
-                          </Button>
-                          <Button variant="text" onClick={() => handleDeleteItem(item.id)} className="!text-red-600 hover:!text-red-800">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableWrapper>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
-              <div key={item.id} className="border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors flex flex-col relative group">
+              <Card key={item.id} className="flex flex-col relative group">
                 {hasPermission("data:write") && (
-                  <Button variant="text" onClick={() => handleDeleteItem(item.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600">
+                  <Button variant="text" onClick={() => handleDeleteItem(item.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600 z-10">
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 )}
-                <div className="flex items-start justify-between mb-4">
+                <CardHeader>
                   <div>
-                    <h3 className="font-semibold text-[17px] text-gray-900">{item.name}</h3>
-                    <p className="text-[13px] text-gray-500 mt-1">{item.type}</p>
+                    <CardTitle>{item.name}</CardTitle>
+                    <CardDescription>{item.type}</CardDescription>
                   </div>
                   <span className={cn(
                     "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium",
@@ -246,9 +244,9 @@ export function Inventory() {
                   )}>
                     {item.status}
                   </span>
-                </div>
+                </CardHeader>
 
-                <div className="grid grid-cols-2 gap-y-4 gap-x-2 text-[13px] text-gray-600 flex-1 mt-2 mb-6">
+                <CardContent className="grid grid-cols-2 gap-y-4 gap-x-2 mt-2 mb-6">
                   <div>
                     <div className="text-gray-400 text-xs mb-1">Lot / Purity</div>
                     <div className="font-medium text-gray-800">{item.lotNumber || "N/A"} <span className="text-gray-500 font-normal">({item.purity || "N/A"})</span></div>
@@ -265,16 +263,16 @@ export function Inventory() {
                     <div className="text-gray-400 text-xs mb-1">Last Used</div>
                     <div>{item.lastUsedAt ? format(new Date(item.lastUsedAt), "MMM d, yyyy") : "Never"}</div>
                   </div>
-                </div>
+                </CardContent>
 
                 {hasPermission("data:write") && (
-                  <div className="mt-auto w-full pt-4 border-t border-gray-100 flex justify-end">
+                  <CardFooter className="justify-end w-full">
                     <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                       Edit Item
                     </Button>
-                  </div>
+                  </CardFooter>
                 )}
-              </div>
+              </Card>
             ))}
           </div>
         )}

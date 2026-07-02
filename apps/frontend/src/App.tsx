@@ -16,7 +16,8 @@ import { Users } from "./pages/Users";
 import { Roles } from "./pages/Roles";
 import { Profile } from "./pages/Profile";
 import { api } from "./lib/api";
-import type { Project, Experiment } from "./types";
+import { Dashboard } from "./pages/Dashboard";
+import type { Project } from "./types";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuth = localStorage.getItem("auth") === "true";
@@ -39,7 +40,12 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Navigate to="/projects" replace /> },
+      { index: true, element: <Navigate to="/dashboard" replace /> },
+      {
+        path: "dashboard",
+        element: <Dashboard />,
+        handle: { breadcrumb: "dashboard" },
+      },
       {
         path: "projects",
         handle: { breadcrumb: "projects" },

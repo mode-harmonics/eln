@@ -7,10 +7,20 @@ interface DropdownProps {
   align?: "left" | "right";
   position?: "up" | "down";
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function Dropdown({ trigger, children, align = "right", position = "down", className }: DropdownProps) {
-  const [isOpen, setIsOpen] = useState(false);
+export function Dropdown({ trigger, children, align = "right", position = "down", className, open, onOpenChange }: DropdownProps) {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? open : internalIsOpen;
+
+  const setIsOpen = (newOpen: boolean) => {
+    if (!isControlled) setInternalIsOpen(newOpen);
+    onOpenChange?.(newOpen);
+  };
+
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

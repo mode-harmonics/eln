@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useLoaderData } from "react-router-dom";
 import { format } from "date-fns";
-import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layers, CheckCircle2, AlertCircle } from "lucide-react";
+import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layers, CheckCircle2, AlertCircle, Plus, Paperclip, MessageSquare, Send, History } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   ProcessDataTable,
@@ -16,9 +16,14 @@ import { ExperimentChart } from "../components/ExperimentChart";
 import { Button } from "../components/Button";
 import { Dropdown } from "../components/Dropdown";
 import { Modal } from "../components/Modal";
+import { Drawer } from "../components/Drawer";
 import { CellPicker } from "../components/CellPicker";
 import { ConflictModal } from "../components/ConflictModal";
 import { StepProgress } from "../components/StepProgress";
+import { MarkdownEditor } from "../components/MarkdownEditor";
+import { VersionDiffViewer } from "../components/VersionDiffViewer";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { cn } from "../lib/utils";
@@ -26,8 +31,8 @@ import type { Experiment } from "../types";
 import { usePermissions } from "../hooks/usePermissions";
 
 interface ExperimentDetail extends Experiment {
-  attachments?: unknown[];
-  collaborators?: unknown[];
+  attachments?: any[];
+  collaborators?: any[];
 }
 
 import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
@@ -61,6 +66,231 @@ export function ExperimentDetail() {
     setEditTitle(experiment.title);
     setEditContent(experiment.content || "");
     setEditModalOpen(true);
+  };
+
+  // Review workflow state
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [reviewerId, setReviewerId] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+  const [users, setUsers] = useState<any[]>([]);
+  const [workflowSubmitting, setWorkflowSubmitting] = useState(false);
+
+  // Collaborators workflow state
+  const [collaboratorDrawerOpen, setCollaboratorDrawerOpen] = useState(false);
+  const [collaborators, setCollaborators] = useState<any[]>([]);
+  const [newCollabUserId, setNewCollabUserId] = useState("");
+  const [newCollabRole, setNewCollabRole] = useState("Viewer");
+  const [collabSubmitting, setCollabSubmitting] = useState(false);
+
+  // Attachments state
+  const [attachmentsDrawerOpen, setAttachmentsDrawerOpen] = useState(false);
+  const [attachments, setAttachments] = useState<any[]>(loaderData?.attachments || []);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+
+  // Comments state
+  const [commentsDrawerOpen, setCommentsDrawerOpen] = useState(false);
+  const [versionsDrawerOpen, setVersionsDrawerOpen] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
+
+  const [versions, setVersions] = useState<any[]>([]);
+
+  useEffect(() => {
+    if ((submitModalOpen || collaboratorDrawerOpen) && users.length === 0) {
+      api.get<{ items: any[] }>("/api/v1/users?limit=100")
+        .then((res) => setUsers(res.items || []))
+        .catch(console.error);
+    }
+  }, [submitModalOpen, collaboratorDrawerOpen]);
+
+  useEffect(() => {
+    if (collaboratorDrawerOpen && experiment) {
+      api.get<any[]>(`/api/v1/experiments/${experiment.id}/collaborators`)
+        .then(setCollaborators)
+        .catch(console.error);
+    }
+  }, [collaboratorDrawerOpen, experiment]);
+
+  useEffect(() => {
+    if (attachmentsDrawerOpen && experiment) {
+      api.get<any[]>(`/api/v1/experiments/${experiment.id}/attachments`)
+        .then(setAttachments)
+        .catch(console.error);
+    }
+  }, [attachmentsDrawerOpen, experiment]);
+
+  useEffect(() => {
+    if (commentsDrawerOpen && experiment) {
+      api.get<any[]>(`/api/v1/experiments/${experiment.id}/comments`)
+        .then(setComments)
+        .catch(console.error);
+    }
+  }, [commentsDrawerOpen, experiment]);
+
+  useEffect(() => {
+    if (versionsDrawerOpen && experiment) {
+      api.get<any[]>(`/api/v1/experiments/${experiment.id}/versions`)
+        .then(setVersions)
+        .catch(console.error);
+    }
+  }, [versionsDrawerOpen, experiment]);
+
+  const handleExport = async (type: 'summary' | 'raw') => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/v1/data/export/${type}/${experiment!.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${experiment!.title}_${type}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(`Export failed`);
+    }
+  };
+
+  const handleUploadAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!experiment || !e.target.files?.length) return;
+    const file = e.target.files[0];
+    setUploadingAttachment(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const newAtt = await api.post(`/api/v1/experiments/${experiment.id}/attachments`, formData);
+      setAttachments(prev => [...prev, newAtt]);
+      toast.success("Attachment uploaded");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Upload failed");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const handleDeleteAttachment = async (attId: string) => {
+    if (!experiment) return;
+    try {
+      await api.delete(`/api/v1/experiments/${experiment.id}/attachments/${attId}`);
+      setAttachments(prev => prev.filter(a => a.id !== attId));
+      toast.success("Attachment deleted");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Delete failed");
+    }
+  };
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!experiment || !newComment.trim()) return;
+    setCommentSubmitting(true);
+    try {
+      const added = await api.post(`/api/v1/experiments/${experiment.id}/comments`, { content: newComment });
+      setComments(prev => [...prev, added]);
+      setNewComment("");
+    } catch (err) {
+      toast.error("Failed to post comment");
+    } finally {
+      setCommentSubmitting(false);
+    }
+  };
+
+  const handleAddCollaborator = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!experiment || !newCollabUserId) return;
+    setCollabSubmitting(true);
+    try {
+      await api.post(`/api/v1/experiments/${experiment.id}/collaborators`, { userId: newCollabUserId, role: newCollabRole });
+      const updated = await api.get<any[]>(`/api/v1/experiments/${experiment.id}/collaborators`);
+      setCollaborators(updated);
+      setNewCollabUserId("");
+      toast(t("collaborator_added", "Collaborator added"), "success");
+    } catch (err: any) {
+      toast(err?.message ?? "Failed to add collaborator", "error");
+    } finally {
+      setCollabSubmitting(false);
+    }
+  };
+
+  const handleRemoveCollaborator = async (userId: string) => {
+    if (!experiment) return;
+    try {
+      await api.delete(`/api/v1/experiments/${experiment.id}/collaborators/${userId}`);
+      setCollaborators(prev => prev.filter(c => c.userId !== userId));
+      toast(t("collaborator_removed", "Collaborator removed"), "success");
+    } catch (err: any) {
+      toast(err?.message ?? "Failed to remove collaborator", "error");
+    }
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!experiment) return;
+    setWorkflowSubmitting(true);
+    try {
+      const updated = await api.post<ExperimentDetail>(`/api/v1/experiments/${experiment.id}/submit`, {
+        reviewerId: reviewerId || undefined,
+      });
+      setExperiment(updated);
+      setSubmitModalOpen(false);
+      toast(t("submitted_for_review") || "Submitted for review", "success");
+    } catch (err: any) {
+      toast(err?.message ?? "Submit failed", "error");
+    } finally {
+      setWorkflowSubmitting(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!experiment) return;
+    setWorkflowSubmitting(true);
+    try {
+      const updated = await api.post<ExperimentDetail>(`/api/v1/experiments/${experiment.id}/approve`, {});
+      setExperiment(updated);
+      toast(t("approved") || "Approved", "success");
+    } catch (err: any) {
+      toast(err?.message ?? "Approve failed", "error");
+    } finally {
+      setWorkflowSubmitting(false);
+    }
+  };
+
+  const handleReject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!experiment || !rejectReason.trim()) return;
+    setWorkflowSubmitting(true);
+    try {
+      const updated = await api.post<ExperimentDetail>(`/api/v1/experiments/${experiment.id}/reject`, {
+        reason: rejectReason,
+      });
+      setExperiment(updated);
+      setRejectModalOpen(false);
+      toast(t("rejected") || "Rejected", "success");
+    } catch (err: any) {
+      toast(err?.message ?? "Reject failed", "error");
+    } finally {
+      setWorkflowSubmitting(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!experiment) return;
+    setWorkflowSubmitting(true);
+    try {
+      const updated = await api.post<ExperimentDetail>(`/api/v1/experiments/${experiment.id}/archive`, {});
+      setExperiment(updated);
+      toast(t("archived") || "Archived", "success");
+    } catch (err: any) {
+      toast(err?.message ?? "Archive failed", "error");
+    } finally {
+      setWorkflowSubmitting(false);
+    }
   };
 
   const handleSaveExperiment = async (e: React.FormEvent) => {
@@ -211,15 +441,47 @@ export function ExperimentDetail() {
             <span>{t("updated")} {format(new Date(experiment.updatedAt), "MMM d, yyyy")}</span>
             <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
             <span>v{experiment.versionNo}</span>
-            {experiment.content && (
-              <>
-                <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
-                <span>{experiment.content}</span>
-              </>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {canWrite && experiment.status === "Draft" && (
+            <Button variant="primary" size="sm" onClick={() => setSubmitModalOpen(true)}>
+              {t("submit_review", "Submit for Review")}
+            </Button>
+          )}
+          <Button variant="secondary" size="sm" onClick={() => setVersionsDrawerOpen(true)}>
+            <History className="w-4 h-4" />
+            {t("history", "History")}
+          </Button>
+
+          <Button variant="secondary" size="sm" onClick={() => setAttachmentsDrawerOpen(true)}>
+            <Paperclip className="w-4 h-4" />
+            {t("attachments", "Attachments")}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setCommentsDrawerOpen(true)}>
+            <MessageSquare className="w-4 h-4" />
+            {t("comments", "Comments")}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => setCollaboratorDrawerOpen(true)}>
+            <Layers className="w-4 h-4" />
+            {t("collaborators", "Collaborators")}
+          </Button>
+          {hasPermission("experiments:approve") && experiment.status === "In Review" && (
+            <>
+              <Button variant="danger" size="sm" onClick={() => { setRejectReason(""); setRejectModalOpen(true); }}>
+                {t("reject", "Reject")}
+              </Button>
+              <Button variant="primary" size="sm" onClick={handleApprove} loading={workflowSubmitting}>
+                <CheckCircle2 className="w-4 h-4" />
+                {t("approve", "Approve")}
+              </Button>
+            </>
+          )}
+          {hasPermission("experiments:archive") && experiment.status === "Approved" && (
+            <Button variant="secondary" size="sm" onClick={handleArchive} loading={workflowSubmitting}>
+              {t("archive", "Archive")}
+            </Button>
+          )}
           {canWrite && (
             <>
               <Button variant="secondary" size="sm" onClick={openEditModal}>
@@ -241,17 +503,27 @@ export function ExperimentDetail() {
               </Button>
             }
           >
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <button onClick={() => handleExport('summary')} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
               <Table2 className="w-4 h-4 text-gray-400" />
               导出汇总数据
             </button>
-            <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+            <button onClick={() => handleExport('raw')} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
               <FileDigit className="w-4 h-4 text-gray-400" />
               导出原始数据
             </button>
           </Dropdown>
         </div>
       </div>
+
+      {experiment.content && (
+        <div className="bg-white rounded-lg border border-gray-100 p-5 shadow-sm">
+          <div className="prose prose-sm prose-blue max-w-none text-gray-700">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {experiment.content}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
 
       {/* Workflow Card — Cell Picking */}
       {assayType === "ProcessData" && (
@@ -395,8 +667,7 @@ export function ExperimentDetail() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("notes")}</label>
-            <textarea rows={4} value={editContent} onChange={(e) => setEditContent(e.target.value)}
-              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm" disabled={saving} />
+            <MarkdownEditor value={editContent} onChange={setEditContent} disabled={saving} />
           </div>
         </form>
       </Modal>
@@ -442,6 +713,215 @@ export function ExperimentDetail() {
           handleUpload(pendingFiles, "merge");
         }}
       />
+
+      {/* Submit for Review Modal */}
+      <Modal open={submitModalOpen} onClose={() => setSubmitModalOpen(false)} title={t("submit_review", "Submit for Review")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSubmitModalOpen(false)} disabled={workflowSubmitting}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-submit-form" loading={workflowSubmitting} disabled={workflowSubmitting}>
+              {workflowSubmitting ? t("submitting", "Submitting...") : t("submit", "Submit")}
+            </Button>
+          </>
+        }>
+        <form id="modal-submit-form" onSubmit={handleSubmitReview} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("reviewer", "Reviewer")} (Optional)</label>
+            <select
+              value={reviewerId}
+              onChange={(e) => setReviewerId(e.target.value)}
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+              disabled={workflowSubmitting}
+            >
+              <option value="">-- {t("select_reviewer", "Select a reviewer")} --</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>{u.username || u.email}</option>
+              ))}
+            </select>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Reject Modal */}
+      <Modal open={rejectModalOpen} onClose={() => setRejectModalOpen(false)} title={t("reject_experiment", "Reject Experiment")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRejectModalOpen(false)} disabled={workflowSubmitting}>{t("cancel")}</Button>
+            <Button type="submit" form="modal-reject-form" variant="danger" loading={workflowSubmitting} disabled={workflowSubmitting || !rejectReason.trim()}>
+              {workflowSubmitting ? t("rejecting", "Rejecting...") : t("reject", "Reject")}
+            </Button>
+          </>
+        }>
+        <form id="modal-reject-form" onSubmit={handleReject} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("reason", "Reason")} <span className="text-red-500">*</span></label>
+            <textarea rows={4} required value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
+              placeholder={t("reject_reason_placeholder", "Please provide a reason for rejection")}
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 sm:text-sm" disabled={workflowSubmitting} />
+          </div>
+        </form>
+      </Modal>
+
+      {/* Collaborators Drawer */}
+      <Drawer
+        open={collaboratorDrawerOpen}
+        onClose={() => setCollaboratorDrawerOpen(false)}
+        title={t("collaborators", "Collaborators")}
+      >
+        <div className="space-y-6">
+          <form onSubmit={handleAddCollaborator} className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-100">
+            <h4 className="text-sm font-medium text-gray-900">{t("add_collaborator", "Add Collaborator")}</h4>
+            <div className="space-y-2">
+              <select
+                required
+                value={newCollabUserId}
+                onChange={(e) => setNewCollabUserId(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none sm:text-sm"
+                disabled={collabSubmitting}
+              >
+                <option value="">-- {t("select_user", "Select a user")} --</option>
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>{u.username || u.email}</option>
+                ))}
+              </select>
+              <select
+                required
+                value={newCollabRole}
+                onChange={(e) => setNewCollabRole(e.target.value)}
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none sm:text-sm"
+                disabled={collabSubmitting}
+              >
+                <option value="Editor">Editor</option>
+                <option value="Viewer">Viewer</option>
+              </select>
+            </div>
+            <Button type="submit" variant="primary" className="w-full" loading={collabSubmitting} disabled={collabSubmitting || !newCollabUserId}>
+              <Plus className="w-4 h-4" />
+              {t("add", "Add")}
+            </Button>
+          </form>
+
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">{t("current_collaborators", "Current Collaborators")}</h4>
+            {collaborators.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">{t("no_collaborators", "No collaborators yet")}</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {collaborators.map(c => {
+                  const user = users.find(u => u.id === c.userId);
+                  return (
+                    <li key={c.id} className="py-3 flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{user?.username || user?.email || c.userId}</p>
+                        <p className="text-xs text-gray-500">{c.role}</p>
+                      </div>
+                      <Button variant="text" size="sm" onClick={() => handleRemoveCollaborator(c.userId)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                        {t("remove", "Remove")}
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </Drawer>
+
+      {/* Attachments Drawer */}
+      <Drawer
+        open={attachmentsDrawerOpen}
+        onClose={() => setAttachmentsDrawerOpen(false)}
+        title={t("attachments", "Attachments")}
+      >
+        <div className="space-y-6">
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 flex flex-col items-center justify-center text-center">
+            <Paperclip className="w-6 h-6 text-gray-400 mb-2" />
+            <p className="text-sm font-medium text-gray-900 mb-1">Upload Attachment</p>
+            <p className="text-xs text-gray-500 mb-3">Any file type (PDF, Images, etc.)</p>
+            <label className={cn("cursor-pointer inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-[#1d74f5] hover:bg-blue-700 transition-colors", uploadingAttachment && "opacity-50 pointer-events-none")}>
+              {uploadingAttachment ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
+              {uploadingAttachment ? "Uploading..." : "Select File"}
+              <input type="file" className="hidden" onChange={handleUploadAttachment} disabled={uploadingAttachment} />
+            </label>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-medium text-gray-900 mb-3">{t("files", "Files")}</h4>
+            {attachments.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">No attachments</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {attachments.map(att => (
+                  <li key={att.id} className="py-3 flex items-center justify-between">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center shrink-0">
+                        <FileDigit className="w-4 h-4 text-[#1d74f5]" />
+                      </div>
+                      <div className="min-w-0">
+                        <a href={`/api/v1/experiments/${experiment?.id}/attachments/${att.id}/download`} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate block">
+                          {att.fileName}
+                        </a>
+                        <p className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</p>
+                      </div>
+                    </div>
+                    <Button variant="text" size="sm" onClick={() => handleDeleteAttachment(att.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </Drawer>
+
+      {/* Comments Drawer */}
+      <Drawer
+        open={commentsDrawerOpen}
+        onClose={() => setCommentsDrawerOpen(false)}
+        title={t("comments", "Comments")}
+      >
+        <div className="h-full flex flex-col -m-6">
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/50">
+            {comments.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-8">No comments yet. Start the conversation!</p>
+            ) : (
+              comments.map(c => {
+                const isMe = c.userId === JSON.parse(atob(localStorage.getItem('token')?.split('.')[1] || 'e30=')).sub;
+                return (
+                  <div key={c.id} className={cn("flex flex-col max-w-[85%]", isMe ? "ml-auto items-end" : "mr-auto items-start")}>
+                    <span className="text-[11px] text-gray-500 mb-1 px-1">
+                      {isMe ? "You" : "Collaborator"} • {format(new Date(c.createdAt), "MMM d, HH:mm")}
+                    </span>
+                    <div className={cn("px-4 py-2.5 rounded-2xl text-sm shadow-sm", isMe ? "bg-[#1d74f5] text-white rounded-br-none" : "bg-white border border-gray-100 text-gray-900 rounded-bl-none")}>
+                      {c.content}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+            <form onSubmit={handleAddComment} className="flex gap-2">
+              <input
+                type="text"
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                placeholder="Type a comment..."
+                className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
+                disabled={commentSubmitting}
+              />
+              <Button type="submit" variant="primary" className="!rounded-full !p-2 shrink-0" loading={commentSubmitting} disabled={commentSubmitting || !newComment.trim()}>
+                {!commentSubmitting && <Send className="w-4 h-4" />}
+              </Button>
+            </form>
+          </div>
+        </div>
+      </Drawer>
+
+      <Drawer open={versionsDrawerOpen} onClose={() => setVersionsDrawerOpen(false)} title={t("history", "Version History")}>
+        <VersionDiffViewer versions={versions} />
+      </Drawer>
     </div>
   );
 }

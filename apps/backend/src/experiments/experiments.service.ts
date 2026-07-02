@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,7 +8,9 @@ import { Attachment } from '../entities/attachment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { VersionHistory } from '../entities/version-history.entity';
+import { ExperimentComment } from '../entities/experiment-comment.entity';
 import { SubmitExperimentDto, UpdateExperimentDto } from './dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export interface ExperimentDetail extends Experiment {
   attachments: Attachment[];
@@ -22,6 +26,9 @@ export class ExperimentsService {
     private readonly collaboratorsRepo: Repository<ExperimentCollaborator>,
     @InjectRepository(VersionHistory)
     private readonly versionHistoryRepo: Repository<VersionHistory>,
+    @InjectRepository(ExperimentComment)
+    private readonly commentsRepo: Repository<ExperimentComment>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findDetail(id: string): Promise<ExperimentDetail> {
@@ -109,7 +116,14 @@ export class ExperimentsService {
       throw new NotFoundException('Experiment not found.');
     }
 
+    if (experiment.status !== 'Draft') {
+      throw new ConflictException(`Cannot submit experiment in status: ${experiment.status}`);
+    }
+
     experiment.status = 'In Review';
+    if (dto.reviewerId) {
+      experiment.reviewerId = dto.reviewerId;
+    }
     experiment.versionNo += 1;
 
     const saved = await this.experimentsRepo.save(experiment);
@@ -125,6 +139,241 @@ export class ExperimentsService {
       }),
     );
 
+    if (saved.reviewerId) {
+      await this.notificationsService.createNotification(
+        saved.reviewerId,
+        'REVIEW_SUBMITTED',
+        { experimentTitle: saved.title },
+        saved.id,
+      ).catch(e => console.error(e));
+    }
+
     return saved;
   }
-}
+
+  async approve(id: string, userId: string, comment?: string): Promise<Experiment> {
+    const experiment = await this.experimentsRepo.findOne({ where: { id } });
+    if (!experiment) {
+      throw new NotFoundException('Experiment not found.');
+    }
+
+    if (experiment.status !== 'In Review') {
+      throw new ConflictException(`Cannot approve experiment in status: ${experiment.status}`);
+    }
+
+    experiment.status = 'Approved';
+    experiment.reviewComment = comment ?? null;
+    experiment.reviewedAt = new Date();
+    experiment.versionNo += 1;
+
+    const saved = await this.experimentsRepo.save(experiment);
+
+    await this.versionHistoryRepo.save(
+      this.versionHistoryRepo.create({
+        id: uuid(),
+        experimentId: saved.id,
+        versionNumber: saved.versionNo,
+        changeSummary: 'Experiment approved',
+        snapshot: JSON.parse(JSON.stringify(saved)),
+        updatedBy: userId,
+      }),
+    );
+
+    await this.notificationsService.createNotification(
+      saved.createdBy,
+      'REVIEW_APPROVED',
+      { experimentTitle: saved.title },
+      saved.id,
+    ).catch(e => console.error(e));
+
+    return saved;
+  }
+
+  async reject(id: string, userId: string, reason: string): Promise<Experiment> {
+    const experiment = await this.experimentsRepo.findOne({ where: { id } });
+    if (!experiment) {
+      throw new NotFoundException('Experiment not found.');
+    }
+
+    if (experiment.status !== 'In Review') {
+      throw new ConflictException(`Cannot reject experiment in status: ${experiment.status}`);
+    }
+
+    experiment.status = 'Draft';
+    experiment.reviewComment = reason;
+    experiment.reviewedAt = new Date();
+    experiment.versionNo += 1;
+
+    const saved = await this.experimentsRepo.save(experiment);
+
+    await this.versionHistoryRepo.save(
+      this.versionHistoryRepo.create({
+        id: uuid(),
+        experimentId: saved.id,
+        versionNumber: saved.versionNo,
+        changeSummary: `Rejected: ${reason}`,
+        snapshot: JSON.parse(JSON.stringify(saved)),
+        updatedBy: userId,
+      }),
+    );
+
+    await this.notificationsService.createNotification(
+      saved.createdBy,
+      'REVIEW_REJECTED',
+      { experimentTitle: saved.title, reason },
+      saved.id,
+    ).catch(e => console.error(e));
+
+    return saved;
+  }
+
+  async archive(id: string, userId: string): Promise<Experiment> {
+    const experiment = await this.experimentsRepo.findOne({ where: { id } });
+    if (!experiment) {
+      throw new NotFoundException('Experiment not found.');
+    }
+
+    if (experiment.status !== 'Approved') {
+      throw new ConflictException(`Cannot archive experiment in status: ${experiment.status}`);
+    }
+
+    experiment.status = 'Archived';
+    experiment.versionNo += 1;
+
+    const saved = await this.experimentsRepo.save(experiment);
+
+    await this.versionHistoryRepo.save(
+      this.versionHistoryRepo.create({
+        id: uuid(),
+        experimentId: saved.id,
+        versionNumber: saved.versionNo,
+        changeSummary: 'Experiment archived',
+        snapshot: JSON.parse(JSON.stringify(saved)),
+        updatedBy: userId,
+      }),
+    );
+
+    return saved;
+  }
+
+  async getCollaborators(id: string): Promise<ExperimentCollaborator[]> {
+    return this.collaboratorsRepo.find({ where: { experimentId: id } });
+  }
+
+  async addCollaborator(id: string, userId: string, role: string): Promise<ExperimentCollaborator> {
+    const experiment = await this.experimentsRepo.findOne({ where: { id } });
+    if (!experiment) throw new NotFoundException('Experiment not found.');
+
+    let collab = await this.collaboratorsRepo.findOne({ where: { experimentId: id, userId } });
+    if (!collab) {
+      collab = this.collaboratorsRepo.create({
+        id: uuid(),
+        experimentId: id,
+        userId,
+        role,
+      });
+      await this.collaboratorsRepo.save(collab);
+    } else {
+      collab.role = role;
+      await this.collaboratorsRepo.save(collab);
+    }
+    return collab;
+  }
+
+  async removeCollaborator(id: string, userId: string): Promise<void> {
+    await this.collaboratorsRepo.delete({ experimentId: id, userId });
+  }
+
+  // --- Attachments ---
+
+  async uploadAttachment(experimentId: string, userId: string, file: Express.Multer.File): Promise<Attachment> {
+    const id = uuid();
+    const ext = path.extname(file.originalname) || '.bin';
+    const storedName = `${id}${ext}`;
+    const dir = path.resolve('uploads', experimentId);
+
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    const filePath = path.join(dir, storedName);
+    fs.writeFileSync(filePath, file.buffer);
+
+    return this.attachmentsRepo.save(this.attachmentsRepo.create({
+      id,
+      experimentId,
+      fileName: file.originalname,
+      filePath,
+      fileSize: file.buffer.length,
+      mimeType: file.mimetype,
+      uploadedBy: userId,
+    }));
+  }
+
+  async getAttachment(attachmentId: string): Promise<Attachment> {
+    const attachment = await this.attachmentsRepo.findOne({ where: { id: attachmentId } });
+    if (!attachment) throw new NotFoundException('Attachment not found');
+    return attachment;
+  }
+
+  async deleteAttachment(attachmentId: string): Promise<{ success: boolean }> {
+    const attachment = await this.attachmentsRepo.findOne({ where: { id: attachmentId } });
+    if (!attachment) throw new NotFoundException('Attachment not found');
+    
+    if (fs.existsSync(attachment.filePath)) {
+      fs.unlinkSync(attachment.filePath);
+    }
+    
+    await this.attachmentsRepo.remove(attachment);
+    return { success: true };
+  }
+
+  // --- Comments ---
+
+  async addComment(experimentId: string, userId: string, content: string): Promise<ExperimentComment> {
+    const comment = await this.commentsRepo.save(this.commentsRepo.create({
+      id: uuid(),
+      experimentId,
+      userId,
+      content,
+    }));
+
+    // Notify all other collaborators
+    const collabs = await this.collaboratorsRepo.find({ where: { experimentId } });
+    const experiment = await this.experimentsRepo.findOne({ where: { id: experimentId } });
+    const notifyUsers = new Set<string>();
+    
+    if (experiment) {
+      notifyUsers.add(experiment.createdBy);
+      if (experiment.reviewerId) notifyUsers.add(experiment.reviewerId);
+    }
+    collabs.forEach(c => notifyUsers.add(c.userId));
+    notifyUsers.delete(userId); // Don't notify the commenter
+
+    for (const targetUser of Array.from(notifyUsers)) {
+      await this.notificationsService.createNotification(
+        targetUser,
+        'NEW_COMMENT',
+        { commentPreview: content.substring(0, 50) },
+        experimentId,
+      ).catch(err => console.error('Failed to notify:', err));
+    }
+
+    return comment;
+  }
+
+  async getComments(experimentId: string): Promise<ExperimentComment[]> {
+    return this.commentsRepo.find({
+      where: { experimentId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  // --- Version History ---
+  async getVersions(experimentId: string) {
+    return this.versionHistoryRepo.find({
+      where: { experimentId },
+      order: { versionNumber: 'DESC' },
+    });
+  }
+}

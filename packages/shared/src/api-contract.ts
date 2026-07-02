@@ -34,6 +34,9 @@ export const API_ROUTES = {
     analyzeData: `${API_PREFIX}/ai/analyze-data`,
     generateInsights: `${API_PREFIX}/ai/generate-insights`,
   },
+  dashboard: {
+    summary: `${API_PREFIX}/dashboard/summary`,
+  },
 } as const;
 
 /** Standard success envelope used across all endpoints. */

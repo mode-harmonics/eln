@@ -9,6 +9,9 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
 import { TextInput, Textarea, Select } from "../components/FormFields";
+import { PageLoader } from "../components/PageLoader";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../components/Card";
+import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { cn } from "../lib/utils";
 import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
@@ -112,11 +115,7 @@ export function Projects() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (error) {
@@ -153,51 +152,36 @@ export function Projects() {
         {viewMode === "grid" ? (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((project) => (
-              <Link
-                key={project.id}
-                to={`/projects/${project.id}`}
-                className="group flex flex-col border border-gray-200 rounded p-6 bg-white hover:border-gray-300 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="font-semibold text-[17px] text-gray-900 group-hover:text-[#1d74f5]">
-                      {project.name}
-                    </h3>
-                    <p className="text-[13px] text-gray-500 mt-1">
-                      {t("created")}{" "}
-                      {format(new Date(project.createdAt), "MMM d, yyyy")}
-                    </p>
-                  </div>
-                  <span
-                    className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${project.status === "Active"
-                        ? "bg-[#f0f9f4] text-[#1e8b4e]"
-                        : "bg-gray-100 text-gray-600"
-                      }`}
-                  >
-                    {project.status === "Active" ? t("status_active") : t("status_inactive")}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 line-clamp-2 flex-1">
-                  {project.description}
-                </p>
-                <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-[13px] text-gray-500">
-                    {t("pi")}:{" "}
-                    <span className="font-medium text-gray-700">
-                      {project.creator?.fullName || project.createdBy}
-                    </span>
-                  </span>
-                  {hasPermission("projects:write") && (
-                    <div className="flex items-center gap-2">
-                      <Button variant="text" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteProject(project); }} className="!text-gray-400 hover:!text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="text" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
-                        <Edit3 className="w-4 h-4" />
-                      </Button>
+              <Link key={project.id} to={`/projects/${project.id}`}>
+                <Card className="group h-full flex flex-col">
+                  <CardHeader>
+                    <div>
+                      <CardTitle className="group-hover:text-[#1d74f5]">{project.name}</CardTitle>
+                      <CardDescription>{t("created")} {format(new Date(project.createdAt), "MMM d, yyyy")}</CardDescription>
                     </div>
-                  )}
-                </div>
+                    <span className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${project.status === "Active" ? "bg-[#f0f9f4] text-[#1e8b4e]" : "bg-gray-100 text-gray-600"}`}>
+                      {project.status === "Active" ? t("status_active") : t("status_inactive")}
+                    </span>
+                  </CardHeader>
+                  <CardContent className="line-clamp-2">
+                    {project.description}
+                  </CardContent>
+                  <CardFooter>
+                    <span className="text-[13px] text-gray-500">
+                      {t("pi")}: <span className="font-medium text-gray-700">{project.creator?.fullName || project.createdBy}</span>
+                    </span>
+                    {hasPermission("projects:write") && (
+                      <div className="flex items-center gap-2">
+                        <Button variant="text" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteProject(project); }} className="!text-gray-400 hover:!text-red-600">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="text" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                          <Edit3 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </CardFooter>
+                </Card>
               </Link>
             ))}
             {projects.length === 0 && (
@@ -207,79 +191,44 @@ export function Projects() {
             )}
           </div>
         ) : (
-          <div className="border border-gray-200 rounded bg-white overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("project_name")}
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("pi")}
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("status")}
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                      {t("created")}
-                    </th>
+          <TableWrapper>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("project_name")}</TableHead>
+                  <TableHead>{t("pi")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
+                  <TableHead>{t("created")}</TableHead>
+                  {hasPermission("projects:write") && <TableHead className="text-right">{t("actions")}</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {projects.map((project) => (
+                  <TableRow key={project.id} className="cursor-pointer" onClick={() => navigate(`/projects/${project.id}`)}>
+                    <TableCell>
+                      <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">{project.name}</div>
+                      <div className="text-[13px] text-gray-500 truncate max-w-sm mt-1">{project.description}</div>
+                    </TableCell>
+                    <TableCell>{project.creator?.fullName || project.createdBy}</TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${project.status === "Active" ? "bg-[#f0f9f4] text-[#1e8b4e]" : "bg-gray-100 text-gray-600"}`}>
+                        {project.status === "Active" ? t("status_active") : t("status_inactive")}
+                      </span>
+                    </TableCell>
+                    <TableCell>{format(new Date(project.createdAt), "MMM d, yyyy")}</TableCell>
                     {hasPermission("projects:write") && (
-                      <th scope="col" className="px-6 py-3 text-right text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-                        {t("actions")}
-                      </th>
+                      <TableCell className="text-right">
+                        <div className="inline-flex items-center gap-3">
+                          <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]"><Edit3 className="w-4 h-4" /></Button>
+                          <Button variant="text" onClick={(e) => { e.stopPropagation(); handleDeleteProject(project); }} className="!text-gray-400 hover:!text-red-600"><Trash2 className="w-4 h-4" /></Button>
+                        </div>
+                      </TableCell>
                     )}
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {projects.map((project) => (
-                    <tr
-                      key={project.id}
-                      className="hover:bg-gray-50/50 group cursor-pointer"
-                      onClick={() => navigate(`/projects/${project.id}`)}
-                    >
-                      <td className="px-6 py-4">
-                        <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">
-                          {project.name}
-                        </div>
-                        <div className="text-[13px] text-gray-500 truncate max-w-sm mt-1">
-                          {project.description}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-700">
-                        {project.creator?.fullName || project.createdBy}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${project.status === "Active"
-                              ? "bg-[#f0f9f4] text-[#1e8b4e]"
-                              : "bg-gray-100 text-gray-600"
-                            }`}
-                        >
-                          {project.status === "Active" ? t("status_active") : t("status_inactive")}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-[13px] text-gray-500">
-                        {format(new Date(project.createdAt), "MMM d, yyyy")}
-                      </td>
-                      {hasPermission("projects:write") && (
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="inline-flex items-center gap-3">
-                            <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
-                              <Edit3 className="w-4 h-4" />
-                            </Button>
-                            <Button variant="text" onClick={(e) => { e.stopPropagation(); handleDeleteProject(project); }} className="!text-gray-400 hover:!text-red-600">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableWrapper>
         )}
         <Pagination
           currentPage={currentPage}
