@@ -22,8 +22,8 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
   /** 基准循环号——默认为 1，可通过构造参数覆盖 */
   baselineCycleNo: number = 1;
 
-  detect(sheet: Worksheet, recordType?: string): boolean {
-    if (recordType && recordType !== 'HtCycle') return false;
+  detect(sheet: Worksheet, assayType?: string): boolean {
+    if (assayType && assayType !== 'HtCycle') return false;
 
     const name = (sheet.name || '').toLowerCase();
     if (name.includes('cycle') || name.includes('循环') || name.includes('htcycle')) return true;

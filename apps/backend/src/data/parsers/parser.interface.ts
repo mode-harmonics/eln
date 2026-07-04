@@ -10,9 +10,9 @@ export interface DataParser<TRow = Record<string, unknown>> {
   readonly tableName: string;
 
   /** Returns true if this worksheet's shape/headers match this parser.
-   *  Optional `recordType` helps disambiguate when multiple parsers
+   *  Optional `assayType` helps disambiguate when multiple parsers
    *  match the same sheet format (e.g. step sheets for CalendarLife vs DcrTest). */
-  detect(sheet: Worksheet, recordType?: string): boolean;
+  detect(sheet: Worksheet, assayType?: string): boolean;
 
   /** Parses the worksheet into row objects ready for repository.save(). */
   parse(sheet: Worksheet, experimentId: string): TRow[];

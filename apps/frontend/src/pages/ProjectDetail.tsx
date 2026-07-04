@@ -114,7 +114,7 @@ export function ProjectDetail() {
     return () => { cancelled = true; };
   }, [projectId, currentPage, pageSize, searchQuery, refetchTrigger]);
 
-  // Summary tab: fetch ALL experiments (no pagination), group by recordType, only request matching data
+  // Summary tab: fetch ALL experiments (no pagination), group by assayType, only request matching data
   useEffect(() => {
     if (!projectId || activeTab !== "summary") return;
     let cancelled = false;
@@ -140,19 +140,19 @@ export function ProjectDetail() {
           return;
         }
 
-        // Group experiment IDs by their metadata.recordType
+        // Group experiment IDs by their metadata.assayType
         const expIdsByType: Record<string, string[]> = {};
         for (const exp of allExps) {
-          const recordType = exp.metadata?.recordType as string | undefined;
-          if (recordType && RECORD_TYPE_TO_API_TYPE[recordType]) {
-            if (!expIdsByType[recordType]) expIdsByType[recordType] = [];
-            expIdsByType[recordType].push(exp.id);
+          const assayType = exp.metadata?.assayType as string | undefined;
+          if (assayType && RECORD_TYPE_TO_API_TYPE[assayType]) {
+            if (!expIdsByType[assayType]) expIdsByType[assayType] = [];
+            expIdsByType[assayType].push(exp.id);
           }
         }
 
         // Only request the matching data table for each experiment group
-        const settleRecordType = (
-          recordType: string,
+        const settleAssayType = (
+          assayType: string,
           apiType: string,
           setter: (data: any[]) => void,
           expIds: string[],
@@ -174,13 +174,13 @@ export function ProjectDetail() {
         };
 
         const tasks = [
-          settleRecordType("ProcessData", "process", setProcessData, expIdsByType["ProcessData"] || []),
-          settleRecordType("CalendarLife", "calendar", setCalendarLife, expIdsByType["CalendarLife"] || []),
-          settleRecordType("StorageSwelling", "swelling", setStorageSwelling, expIdsByType["StorageSwelling"] || []),
-          settleRecordType("EnergyEfficiency", "efficiency", setEnergyEfficiency, expIdsByType["EnergyEfficiency"] || []),
-          settleRecordType("DcrTest", "dcr", setDcrTest, expIdsByType["DcrTest"] || []),
-          settleRecordType("FastCharge", "fastcharge", setFastCharge, expIdsByType["FastCharge"] || []),
-          settleRecordType("HtCycle", "htcycle", setHtCycle, expIdsByType["HtCycle"] || []),
+          settleAssayType("ProcessData", "process", setProcessData, expIdsByType["ProcessData"] || []),
+          settleAssayType("CalendarLife", "calendar", setCalendarLife, expIdsByType["CalendarLife"] || []),
+          settleAssayType("StorageSwelling", "swelling", setStorageSwelling, expIdsByType["StorageSwelling"] || []),
+          settleAssayType("EnergyEfficiency", "efficiency", setEnergyEfficiency, expIdsByType["EnergyEfficiency"] || []),
+          settleAssayType("DcrTest", "dcr", setDcrTest, expIdsByType["DcrTest"] || []),
+          settleAssayType("FastCharge", "fastcharge", setFastCharge, expIdsByType["FastCharge"] || []),
+          settleAssayType("HtCycle", "htcycle", setHtCycle, expIdsByType["HtCycle"] || []),
         ];
 
         Promise.all(tasks.filter(Boolean)).finally(() => {
@@ -288,7 +288,7 @@ export function ProjectDetail() {
             <div className="border border-gray-200 rounded bg-white">
               <div className="divide-y divide-gray-100">
                 {experiments.map((exp) => {
-                  const recordType = (exp.metadata?.recordType || exp.metadata?.assayType) as string | undefined;
+                  const assayType = exp.metadata?.assayType as string | undefined;
                   return (
                   <Link
                     key={exp.id}
@@ -304,9 +304,9 @@ export function ProjectDetail() {
                           <h3 className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5] truncate">
                             {exp.title}
                           </h3>
-                          {recordType && RECORD_TYPE_TO_I18N_KEY[recordType] && (
+                          {assayType && RECORD_TYPE_TO_I18N_KEY[assayType] && (
                             <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 shrink-0">
-                              {t(RECORD_TYPE_TO_I18N_KEY[recordType])}
+                              {t(RECORD_TYPE_TO_I18N_KEY[assayType])}
                             </span>
                           )}
                           {(exp as any).cellPicked && (
@@ -366,7 +366,7 @@ export function ProjectDetail() {
               ) : (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                   {experiments.map((exp) => {
-                    const recordType = (exp.metadata?.recordType || exp.metadata?.assayType) as string | undefined;
+                    const assayType = exp.metadata?.assayType as string | undefined;
                     return (
                     <Link
                       key={exp.id}
@@ -382,9 +382,9 @@ export function ProjectDetail() {
                         </h3>
                       </div>
                       <div className="flex items-center gap-2 mb-4">
-                        {recordType && RECORD_TYPE_TO_I18N_KEY[recordType] && (
+                        {assayType && RECORD_TYPE_TO_I18N_KEY[assayType] && (
                           <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                            {t(RECORD_TYPE_TO_I18N_KEY[recordType])}
+                            {t(RECORD_TYPE_TO_I18N_KEY[assayType])}
                           </span>
                         )}
                         {(exp as any).cellPicked && (

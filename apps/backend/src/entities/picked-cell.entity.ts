@@ -3,7 +3,7 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm'
 /**
  * pickedCell — 电池挑选记录表
  * Records which cells were selected (picked) for an experiment.
- * Only experiments with recordType=ProcessData have picked cells,
+ * Only experiments with assayType=ProcessData have picked cells,
  * which are then synced to the other 5 target tables.
  */
 @Entity('pickedCell', { comment: '电池挑选记录表' })

@@ -101,14 +101,14 @@ export function CreateRecordWizard({
     try {
       const experiment = await api.post<{ id: string }>(
         `/api/v1/projects/${projectId}/experiments`,
-        { title: title, recordType: selectedType },
+        { title: title, assayType: selectedType },
       );
-      for (const file of selectedFiles) {
-        const form = new FormData();
-        form.append("file", file);
-        form.append("experimentId", experiment.id);
-        await api.upload(`/api/v1/data/upload`, form);
-      }
+      const form = new FormData();
+      selectedFiles.forEach((file) => {
+        form.append("files", file);
+      });
+      form.append("experimentId", experiment.id);
+      await api.upload(`/api/v1/data/upload`, form);
       toast("上传成功", "success");
       onSuccess();
       handleClose();

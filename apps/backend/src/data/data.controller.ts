@@ -9,12 +9,12 @@ import {
   Post,
   Put,
   Query,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
   Res,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard, hasPermission } from '../common/guards/permissions.guard';
@@ -43,23 +43,23 @@ export class DataController {
   @Post('upload')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Upload a multi-sheet Excel workbook; parses and inserts into the 7 battery-data tables.',
+    summary: 'Upload multiple multi-sheet Excel workbooks; parses and inserts into the 7 battery-data tables.',
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FilesInterceptor('files'))
   async upload(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFiles() files: Express.Multer.File[],
     @Body() dto: UploadDataDto,
     @CurrentUser() user: RequestUser,
   ) {
-    if (!file) {
-      throw new BadRequestException('No file uploaded. Expected multipart field "file".');
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded. Expected multipart field "files".');
     }
 
     const experiment = await this.dataService.getExperiment(dto.experimentId);
     if (!experiment) {
       throw new BadRequestException('Experiment not found.');
     }
-    const assayType = (experiment.metadata?.assayType || experiment.metadata?.recordType) as string;
+    const assayType = experiment.metadata?.assayType as string;
     const typeKey = RECORD_TYPE_TO_PERMISSION[assayType];
     const requiredPermission = typeKey ? `data_${typeKey}:write` : 'data:write';
 
@@ -71,18 +71,23 @@ export class DataController {
       );
     }
 
-    return this.dataService.uploadWorkbook(file.buffer, dto.experimentId, dto.mode)
+    const buffers = files.map(f => f.buffer);
+    return this.dataService.uploadWorkbooks(buffers, dto.experimentId, dto.mode)
       .then(async (result) => {
-        // Persist original file to disk asynchronously (non-blocking)
-        this.dataService.saveAttachment(
-          file.buffer,
-          file.originalname,
-          file.mimetype,
-          dto.experimentId,
-          user.id,
+        // Persist original files to disk asynchronously (non-blocking)
+        Promise.all(
+          files.map(file =>
+            this.dataService.saveAttachment(
+              file.buffer,
+              file.originalname,
+              file.mimetype,
+              dto.experimentId,
+              user.id,
+            )
+          )
         ).catch((err) => {
           // Log but don't fail the request — data is already committed
-          console.error('Failed to save attachment:', err);
+          console.error('Failed to save attachments:', err);
         });
         return result;
       });

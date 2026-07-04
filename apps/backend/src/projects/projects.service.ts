@@ -131,7 +131,7 @@ export class ProjectsService {
 
   /**
    * Creates a new experiment under the given project.
-   * recordType is persisted in metadata so the Excel upload parser
+   * assayType is persisted in metadata so the Excel upload parser
    * can work independently of any enforced column.
    */
   async createExperiment(projectId: string, userId: string, dto: CreateExperimentDto): Promise<Experiment> {
@@ -144,7 +144,7 @@ export class ProjectsService {
       title: dto.title,
       content: null,
       status: 'Draft',
-      metadata: dto.recordType ? { recordType: dto.recordType, assayType: dto.recordType } : null,
+      metadata: dto.assayType ? { assayType: dto.assayType } : null,
       aiAnalysisOutput: null,
       versionNo: 1,
       createdBy: userId,

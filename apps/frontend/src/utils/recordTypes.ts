@@ -3,7 +3,7 @@
  * Single source of truth for mapping between record type keys, API route segments, and i18n display names.
  */
 
-/** Maps experiment metadata.recordType to the API route path segment used by /api/v1/data/:type/:expId */
+/** Maps experiment metadata.assayType to the API route path segment used by /api/v1/data/:type/:expId */
 export const RECORD_TYPE_TO_API_TYPE: Record<string, string> = {
   ProcessData: "process",
   CalendarLife: "calendar",

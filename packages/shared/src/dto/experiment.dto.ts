@@ -2,7 +2,6 @@ import { ExperimentStatus } from '../enums';
 
 export interface ExperimentMetadataDto {
   assayType?: string;
-  recordType?: string;
   notebookRef?: string;
   deviceUsed?: string;
   reagentLotId?: string;

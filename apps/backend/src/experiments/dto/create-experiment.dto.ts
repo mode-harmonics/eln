@@ -9,10 +9,10 @@ export class CreateExperimentDto {
   title!: string;
 
   @ApiPropertyOptional({
-    description: '记录类型，存入 metadata.recordType',
+    description: '分析类型，存入 metadata.assayType',
     example: 'ProcessData',
   })
   @IsString()
   @IsOptional()
-  recordType?: string;
+  assayType?: string;
 }

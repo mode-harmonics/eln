@@ -75,12 +75,12 @@ export class DataService {
    * single queryRunner transaction either everything commits or nothing
    * does, so a malformed sheet can't leave partial data behind.
    */
-  async uploadWorkbook(buffer: Buffer<ArrayBufferLike>, experimentId: string, mode?: 'overwrite' | 'merge'): Promise<UploadSummary> {
+  async uploadWorkbooks(buffers: Buffer<ArrayBufferLike>[], experimentId: string, mode?: 'overwrite' | 'merge'): Promise<UploadSummary> {
     const experiment = await this.getExperiment(experimentId);
-    const recordType = (experiment?.metadata?.assayType || experiment?.metadata?.recordType) as string | undefined;
+    const assayType = experiment?.metadata?.assayType as string | undefined;
 
     // Step 2a: Upload constraint — non-ProcessData requires picked cells
-    if (recordType && recordType !== 'ProcessData') {
+    if (assayType && assayType !== 'ProcessData') {
       const pickedCount = await this.dataSource.getRepository(PickedCell).count({
         where: { experimentId },
       });
@@ -128,37 +128,39 @@ export class DataService {
       ]);
     }
 
-    const workbook = new ExcelJS.Workbook();
-    try {
-      // @ts-expect-error: ExcelJS typings expect pre-generic Buffer; runtime behavior is identical
-      await workbook.xlsx.load(buffer);
-    } catch (err) {
-      throw new BadRequestException('Could not parse the uploaded file as an Excel workbook.');
-    }
-
     const rowsByTable: Record<string, Record<string, unknown>[]> = {};
     const sheetsSkipped: string[] = [];
     let sheetsProcessed = 0;
     const rawSteps: Partial<RawStepData>[] = [];
 
-    for (const sheet of workbook.worksheets) {
-      const parser = this.parserRegistry.resolve(sheet, recordType);
-      if (!parser) {
-        sheetsSkipped.push(sheet.name);
-        continue;
+    for (const buffer of buffers) {
+      const workbook = new ExcelJS.Workbook();
+      try {
+        // @ts-expect-error: ExcelJS typings expect pre-generic Buffer; runtime behavior is identical
+        await workbook.xlsx.load(buffer);
+      } catch (err) {
+        throw new BadRequestException('Could not parse the uploaded file as an Excel workbook.');
       }
 
-      const rows = parser.parse(sheet, experimentId);
-      if (rows.length > 0) {
-        rowsByTable[parser.tableName] = (rowsByTable[parser.tableName] ?? []).concat(rows);
-      }
+      for (const sheet of workbook.worksheets) {
+        const parser = this.parserRegistry.resolve(sheet, assayType);
+        if (!parser) {
+          sheetsSkipped.push(sheet.name);
+          continue;
+        }
 
-      // Collect raw step data from any step parser
-      if (parser instanceof CalendarLifeStepParser || parser instanceof DcrTestStepParser || parser instanceof EnergyEfficiencyStepParser || parser instanceof FastChargeStepParser || parser instanceof ProcessDataStepParser) {
-        rawSteps.push(...parser.getRawSteps());
-      }
+        const rows = parser.parse(sheet, experimentId);
+        if (rows.length > 0) {
+          rowsByTable[parser.tableName] = (rowsByTable[parser.tableName] ?? []).concat(rows);
+        }
 
-      sheetsProcessed += 1;
+        // Collect raw step data from any step parser
+        if (parser instanceof CalendarLifeStepParser || parser instanceof DcrTestStepParser || parser instanceof EnergyEfficiencyStepParser || parser instanceof FastChargeStepParser || parser instanceof ProcessDataStepParser) {
+          rawSteps.push(...parser.getRawSteps());
+        }
+
+        sheetsProcessed += 1;
+      }
     }
 
     // Queue raw steps for save
@@ -460,15 +462,16 @@ export class DataService {
     const experiment = await this.getExperiment(experimentId);
     if (!experiment) throw new NotFoundException(`Experiment not found.`);
 
-    const assayType = experiment.metadata?.assayType || experiment.metadata?.recordType;
+    const metadata = experiment.metadata as Record<string, any> | null;
+    const assayType = metadata?.assayType;
     const map: any = { ProcessData: 'process', CalendarLife: 'calendar', StorageSwelling: 'swelling', EnergyEfficiency: 'efficiency', DcrTest: 'dcr', FastCharge: 'fastcharge', HtCycle: 'htcycle' };
-    const typeParam = map[assayType];
+    const typeParam = typeof assayType === 'string' ? map[assayType] : undefined;
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Summary');
 
     if (typeParam) {
-      const data = await this.findByType(typeParam, experimentId);
+      const data = await this.findByType(typeParam, experimentId) as Record<string, any>[];
       if (data && data.length > 0) {
         const columns = Object.keys(data[0]).filter(k => k !== 'id' && k !== 'experimentId' && k !== 'createdAt');
         sheet.columns = columns.map(c => ({ header: c, key: c, width: 15 }));

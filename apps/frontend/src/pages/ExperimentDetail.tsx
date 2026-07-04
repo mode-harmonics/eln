@@ -339,7 +339,7 @@ export function ExperimentDetail() {
     return <div className="p-10 text-sm text-red-500">{error ?? t("experiment_not_found")}</div>;
   }
 
-  const assayType = experiment.metadata?.assayType || experiment.metadata?.recordType;
+  const assayType = experiment.metadata?.assayType;
   const permissionType = assayType ? ASSAY_TYPE_TO_PERMISSION[assayType] : null;
   const hasReadPermission =
     !permissionType ||
@@ -384,13 +384,13 @@ export function ExperimentDetail() {
   const handleUpload = async (files: File[], mode?: "overwrite" | "merge") => {
     if (!experiment || files.length === 0) return;
     try {
-      for (const file of files) {
-        const form = new FormData();
-        form.append("file", file);
-        form.append("experimentId", experiment.id);
-        if (mode) form.append("mode", mode);
-        await api.upload("/api/v1/data/upload", form);
-      }
+      const form = new FormData();
+      files.forEach((file) => {
+        form.append("files", file);
+      });
+      form.append("experimentId", experiment.id);
+      if (mode) form.append("mode", mode);
+      await api.upload("/api/v1/data/upload", form);
       toast("上传成功", "success");
       // Refresh page data
       window.location.reload();

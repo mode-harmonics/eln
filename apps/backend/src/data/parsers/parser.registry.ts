@@ -40,8 +40,8 @@ export class ParserRegistry {
   ];
 
   /** Returns the first parser whose detect() matches this sheet, or null. */
-  resolve(sheet: Worksheet, recordType?: string): DataParser<any> | null {
-    return this.parsers.find((parser) => parser.detect(sheet, recordType)) ?? null;
+  resolve(sheet: Worksheet, assayType?: string): DataParser<any> | null {
+    return this.parsers.find((parser) => parser.detect(sheet, assayType)) ?? null;
   }
 
   getAll(): DataParser<any>[] {

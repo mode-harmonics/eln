@@ -43,7 +43,7 @@ export class SearchService {
         id: p.id,
         type: 'project' as const,
         title: p.name,
-        description: p.description,
+        description: p.description ?? undefined,
         url: `/projects/${p.id}`,
       })),
       ...experiments.map(e => ({
