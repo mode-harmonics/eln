@@ -1,14 +1,22 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { Attachment } from '../entities/attachment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { VersionHistory } from '../entities/version-history.entity';
 import { ExperimentComment } from '../entities/experiment-comment.entity';
+import { ProcessData } from '../entities/process-data.entity';
+import { CalendarLife } from '../entities/calendar-life.entity';
+import { StorageSwelling } from '../entities/storage-swelling.entity';
+import { EnergyEfficiency } from '../entities/energy-efficiency.entity';
+import { DcrTest } from '../entities/dcr-test.entity';
+import { FastCharge } from '../entities/fast-charge.entity';
+import { HtCycle } from '../entities/ht-cycle.entity';
+import { RawStepData } from '../entities/raw-step-data.entity';
 import { SubmitExperimentDto, UpdateExperimentDto } from './dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -29,6 +37,7 @@ export class ExperimentsService {
     @InjectRepository(ExperimentComment)
     private readonly commentsRepo: Repository<ExperimentComment>,
     private readonly notificationsService: NotificationsService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async findDetail(id: string): Promise<ExperimentDetail> {
@@ -324,6 +333,18 @@ export class ExperimentsService {
       fs.unlinkSync(attachment.filePath);
     }
     
+    // Cascade delete any parsed rows associated with this attachment
+    await Promise.all([
+      this.dataSource.getRepository(ProcessData).delete({ attachmentId }),
+      this.dataSource.getRepository(CalendarLife).delete({ attachmentId }),
+      this.dataSource.getRepository(StorageSwelling).delete({ attachmentId }),
+      this.dataSource.getRepository(EnergyEfficiency).delete({ attachmentId }),
+      this.dataSource.getRepository(DcrTest).delete({ attachmentId }),
+      this.dataSource.getRepository(FastCharge).delete({ attachmentId }),
+      this.dataSource.getRepository(HtCycle).delete({ attachmentId }),
+      this.dataSource.getRepository(RawStepData).delete({ attachmentId }),
+    ]);
+
     await this.attachmentsRepo.remove(attachment);
     return { success: true };
   }

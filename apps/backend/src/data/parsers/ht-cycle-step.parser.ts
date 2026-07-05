@@ -39,7 +39,7 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
     return hasCycle && hasCap && !isStep;
   }
 
-  parse(sheet: Worksheet, experimentId: string): HtCycle[] {
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): HtCycle[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(
       sheet,
       ['循环号', 'cycle', '放电容量', 'capacity'],
@@ -55,15 +55,18 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
     // First pass: collect all raw values
     const rawPairs: { cellName: string; cycle: number; cap: number | null }[] = [];
 
+    const cellIdFromFilename = filename ? filename.replace(/\.[^/.]+$/, "") : null;
+    const defaultCellName = cellIdFromFilename || sheet.name;
+
     sheet.eachRow((row, rowNum) => {
       if (rowNum <= rowNumber) return;
 
-      const cellName = cellCol >= 0
-        ? (toStringOrNull(row.getCell(cellCol).value) ?? sheet.name)
-        : sheet.name;
+      const cellName = cellCol >= 1
+        ? (toStringOrNull(row.getCell(cellCol).value) ?? defaultCellName)
+        : defaultCellName;
 
-      const cycle = toNumberOrNull(row.getCell(cycleCol).value);
-      const cap   = toNumberOrNull(row.getCell(capCol).value);
+      const cycle = cycleCol >= 1 ? toNumberOrNull(row.getCell(cycleCol).value) : null;
+      const cap   = capCol >= 1 ? toNumberOrNull(row.getCell(capCol).value) : null;
 
       if (cycle == null) return;
 
@@ -88,6 +91,7 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
       rows.push({
         id: uuid(),
         experimentId,
+        attachmentId: attachmentId || null,
         cellName: rp.cellName,
         cycle: rp.cycle,
         dischargeCapacity: rp.cap != null ? rp.cap.toFixed(6) : null,

@@ -37,8 +37,8 @@ export class CalendarLifeStepParser implements DataParser<CalendarLife> {
     return isStepSheet(sheet);
   }
 
-  parse(sheet: Worksheet, experimentId: string): CalendarLife[] {
-    const { steps, byCell } = readStepSheet(sheet, experimentId);
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): CalendarLife[] {
+    const { steps, byCell } = readStepSheet(sheet, experimentId, filename, attachmentId);
     this.rawSteps = steps;
 
     const result: CalendarLife[] = [];
@@ -80,7 +80,11 @@ export class CalendarLifeStepParser implements DataParser<CalendarLife> {
         const dqVal   = c.capacityQ;
 
         const row: Partial<CalendarLife> = {
-          id: uuid(), experimentId, cellName, dayCount,
+          id: uuid(),
+          experimentId,
+          attachmentId: attachmentId || null,
+          cellName,
+          dayCount,
           q:    i === 0 ? Q0d : null,
           dq:   dqVal,
           ddcr: ddrcVal != null ? ddrcVal.toFixed(6) : null,

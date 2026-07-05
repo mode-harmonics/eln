@@ -20,6 +20,10 @@ export class StorageSwelling {
   experimentId!: string;
 
   @Index()
+  @Column({ name: 'attachmentId', type: 'uuid', nullable: true, comment: '关联附件ID' })
+  attachmentId!: string | null;
+
+  @Index()
   @Column({ type: 'varchar', length: 64, comment: '电芯名称' })
   cellName!: string;
 

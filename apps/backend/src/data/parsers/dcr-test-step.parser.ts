@@ -36,8 +36,8 @@ export class DcrTestStepParser implements DataParser<DcrTest> {
     return isStepSheet(sheet);
   }
 
-  parse(sheet: Worksheet, experimentId: string): DcrTest[] {
-    const { steps, byCell } = readStepSheet(sheet, experimentId);
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): DcrTest[] {
+    const { steps, byCell } = readStepSheet(sheet, experimentId, filename, attachmentId);
     this.rawSteps = steps;
 
     const result: DcrTest[] = [];
@@ -90,6 +90,7 @@ export class DcrTestStepParser implements DataParser<DcrTest> {
       result.push({
         id: uuid(),
         experimentId,
+        attachmentId: attachmentId || null,
         cellName,
         q0,
         du0, du1, di,

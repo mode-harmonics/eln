@@ -33,11 +33,11 @@ export class ProcessDataParser implements DataParser<Partial<ProcessData>> {
     return hasCellId && (hasFormationFields || hasGradingFields);
   }
 
-  parse(sheet: Worksheet, experimentId: string): Partial<ProcessData>[] {
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<ProcessData>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['m0', 'm1', 'fu0', 'gu0']);
     const headers = normalizeHeaders(rawHeaders);
     const colIndex = (name: string) => headers.indexOf(name);
-    const cellIdCol = colIndex('cellid') >= 0 ? colIndex('cellid') : (colIndex('batteryid') >= 0 ? colIndex('batteryid') : colIndex('cellname'));
+    const cellIdCol = colIndex('cellid') >= 1 ? colIndex('cellid') : (colIndex('batteryid') >= 1 ? colIndex('batteryid') : colIndex('cellname'));
 
     const rows: Partial<ProcessData>[] = [];
 
@@ -45,18 +45,19 @@ export class ProcessDataParser implements DataParser<Partial<ProcessData>> {
       if (rowNumberCurrent <= rowNumber) return; // header and comments
 
 
-      const cellId = toStringOrNull(row.getCell(cellIdCol).value);
+      const cellId = cellIdCol >= 1 ? toStringOrNull(row.getCell(cellIdCol).value) : null;
       if (!cellId) return; // skip blank trailing rows
 
       const record: Partial<ProcessData> = {
         id: uuid(),
         experimentId,
+        attachmentId: attachmentId || null,
         cellId,
       };
 
       for (const field of NUMERIC_FIELDS) {
         const col = colIndex(field);
-        if (col >= 0) {
+        if (col >= 1) {
           const value = toNumberOrNull(row.getCell(col).value);
           (record as Record<string, unknown>)[field] = value !== null ? String(value) : null;
         }

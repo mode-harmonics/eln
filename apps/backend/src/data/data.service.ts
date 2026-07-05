@@ -75,7 +75,12 @@ export class DataService {
    * single queryRunner transaction either everything commits or nothing
    * does, so a malformed sheet can't leave partial data behind.
    */
-  async uploadWorkbooks(buffers: Buffer<ArrayBufferLike>[], experimentId: string, mode?: 'overwrite' | 'merge'): Promise<UploadSummary> {
+  async uploadWorkbooks(
+    files: { buffer: Buffer; originalname: string; mimetype: string }[],
+    experimentId: string,
+    uploadedBy: string,
+    mode?: 'overwrite' | 'merge',
+  ): Promise<UploadSummary> {
     const experiment = await this.getExperiment(experimentId);
     const assayType = experiment?.metadata?.assayType as string | undefined;
 
@@ -115,7 +120,20 @@ export class DataService {
       );
     }
     if (mode === 'overwrite' && existingTotal > 0) {
-      // Delete old business data (but keep raw steps)
+      // Clean up physical file attachments on disk
+      const attachments = await this.dataSource.getRepository(Attachment).find({
+        where: { experimentId },
+      });
+      for (const att of attachments) {
+        if (fs.existsSync(att.filePath)) {
+          try {
+            fs.unlinkSync(att.filePath);
+          } catch (e) {}
+        }
+      }
+      await this.dataSource.getRepository(Attachment).delete({ experimentId });
+
+      // Delete old business data & raw steps
       const deleteFrom = (repo: any) => repo.delete({ experimentId });
       await Promise.all([
         deleteFrom(this.dataSource.getRepository(ProcessData)),
@@ -125,6 +143,7 @@ export class DataService {
         deleteFrom(this.dataSource.getRepository(FastCharge)),
         deleteFrom(this.dataSource.getRepository(HtCycle)),
         deleteFrom(this.dataSource.getRepository(StorageSwelling)),
+        deleteFrom(this.dataSource.getRepository(RawStepData)),
       ]);
     }
 
@@ -132,8 +151,31 @@ export class DataService {
     const sheetsSkipped: string[] = [];
     let sheetsProcessed = 0;
     const rawSteps: Partial<RawStepData>[] = [];
+    const attachmentsToSave: Attachment[] = [];
 
-    for (const buffer of buffers) {
+    for (const { buffer, originalname, mimetype } of files) {
+      const attachmentId = uuid();
+      const ext = path.extname(originalname) || '.xlsx';
+      const storedName = `${attachmentId}${ext}`;
+      const dir = path.resolve('uploads', experimentId);
+
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      const filePath = path.join(dir, storedName);
+      fs.writeFileSync(filePath, buffer);
+
+      const attachment = new Attachment();
+      attachment.id = attachmentId;
+      attachment.experimentId = experimentId;
+      attachment.fileName = originalname;
+      attachment.filePath = filePath;
+      attachment.fileSize = buffer.length;
+      attachment.mimeType = mimetype;
+      attachment.uploadedBy = uploadedBy;
+      attachmentsToSave.push(attachment);
+
       const workbook = new ExcelJS.Workbook();
       try {
         // @ts-expect-error: ExcelJS typings expect pre-generic Buffer; runtime behavior is identical
@@ -149,7 +191,7 @@ export class DataService {
           continue;
         }
 
-        const rows = parser.parse(sheet, experimentId);
+        const rows = parser.parse(sheet, experimentId, originalname, attachmentId);
         if (rows.length > 0) {
           rowsByTable[parser.tableName] = (rowsByTable[parser.tableName] ?? []).concat(rows);
         }
@@ -175,6 +217,11 @@ export class DataService {
     await queryRunner.startTransaction();
 
     try {
+      // Save all attachments inside transaction
+      for (const att of attachmentsToSave) {
+        await queryRunner.manager.save(att);
+      }
+
       for (const [tableName, rows] of Object.entries(rowsByTable)) {
         const EntityClass = TABLE_NAME_TO_ENTITY[tableName];
         if (!EntityClass || rows.length === 0) continue;
@@ -186,6 +233,14 @@ export class DataService {
       await queryRunner.commitTransaction();
     } catch (err) {
       await queryRunner.rollbackTransaction();
+      // Clean up written files on disk on rollback
+      for (const att of attachmentsToSave) {
+        if (fs.existsSync(att.filePath)) {
+          try {
+            fs.unlinkSync(att.filePath);
+          } catch (e) {}
+        }
+      }
       this.logger.error('Excel upload transaction failed, rolled back.', err as Error);
       throw err;
     } finally {

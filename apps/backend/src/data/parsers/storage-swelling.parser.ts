@@ -31,7 +31,7 @@ export class StorageSwellingParser implements DataParser<Partial<StorageSwelling
     return hasDayVolumeCols && hasQd1st;
   }
 
-  parse(sheet: Worksheet, experimentId: string): Partial<StorageSwelling>[] {
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<StorageSwelling>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['v0d', 'v_0d', 'v7d', 'v_7d', 'qd1st', 'qd_1st']);
     const headers = normalizeHeaders(rawHeaders);
 
@@ -65,6 +65,7 @@ export class StorageSwellingParser implements DataParser<Partial<StorageSwelling
         cellRows.push({
           id: uuid(),
           experimentId,
+          attachmentId: attachmentId || null,
           cellName,
           qd1st: qd1stValue !== null ? String(qd1stValue) : null,
           dayCount,

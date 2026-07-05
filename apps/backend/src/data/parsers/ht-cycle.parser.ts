@@ -33,7 +33,7 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
     return normalized.includes('cycle');
   }
 
-  parse(sheet: Worksheet, experimentId: string): Partial<HtCycle>[] {
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<HtCycle>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['cycle', '循环圈数']);
     const headers = normalizeHeaders(rawHeaders);
     
@@ -49,7 +49,7 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
       ironDissolution: number | null;
     }> = [];
 
-    if (cellIdCol >= 0) {
+    if (cellIdCol >= 1) {
       // VERTICAL LAYOUT: each row represents a cell's cycle record
       const capCol = headers.indexOf('capacity');
       const retCol = headers.indexOf('retention');
@@ -57,13 +57,13 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
       sheet.eachRow((row, rowNum) => {
         if (rowNum <= rowNumber) return;
 
-        const cellName = toStringOrNull(row.getCell(cellIdCol).value);
-        const cycleVal = toNumberOrNull(row.getCell(cycleCol).value);
+        const cellName = cellIdCol >= 1 ? toStringOrNull(row.getCell(cellIdCol).value) : null;
+        const cycleVal = cycleCol >= 1 ? toNumberOrNull(row.getCell(cycleCol).value) : null;
         if (!cellName || cycleVal === null) return;
 
-        const capVal = capCol >= 0 ? toNumberOrNull(row.getCell(capCol).value) : null;
-        const retVal = retCol >= 0 ? toNumberOrNull(row.getCell(retCol).value) : null;
-        const ironVal = ironCol >= 0 ? parseIronValue(row.getCell(ironCol).value) : null;
+        const capVal = capCol >= 1 ? toNumberOrNull(row.getCell(capCol).value) : null;
+        const retVal = retCol >= 1 ? toNumberOrNull(row.getCell(retCol).value) : null;
+        const ironVal = ironCol >= 1 ? parseIronValue(row.getCell(ironCol).value) : null;
 
         rawRecords.push({
           cellName,
@@ -87,10 +87,10 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
       sheet.eachRow((row, rowNumberCurrent) => {
         if (rowNumberCurrent <= rowNumber) return;
 
-        const cycleValue = toNumberOrNull(row.getCell(cycleCol).value);
+        const cycleValue = cycleCol >= 1 ? toNumberOrNull(row.getCell(cycleCol).value) : null;
         if (cycleValue === null) return;
 
-        const ironVal = ironCol >= 0 ? parseIronValue(row.getCell(ironCol).value) : null;
+        const ironVal = ironCol >= 1 ? parseIronValue(row.getCell(ironCol).value) : null;
 
         const cellNames = Array.from(new Set(
           capColumns.map(({ key }) => key.replace(/_ret$/i, ''))
@@ -100,8 +100,8 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
           const capColIndex = capColumns.find(({ key }) => key.toLowerCase() === cellName.toLowerCase())?.colIndex;
           const retColIndex = capColumns.find(({ key }) => key.toLowerCase() === `${cellName.toLowerCase()}_ret`)?.colIndex;
 
-          const capVal = capColIndex !== undefined ? toNumberOrNull(row.getCell(capColIndex).value) : null;
-          const retVal = retColIndex !== undefined ? toNumberOrNull(row.getCell(retColIndex).value) : null;
+          const capVal = capColIndex !== undefined && capColIndex >= 1 ? toNumberOrNull(row.getCell(capColIndex).value) : null;
+          const retVal = retColIndex !== undefined && retColIndex >= 1 ? toNumberOrNull(row.getCell(retColIndex).value) : null;
 
           if (capVal !== null || retVal !== null) {
             rawRecords.push({
@@ -138,6 +138,7 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
         finalRecords.push({
           id: uuid(),
           experimentId,
+          attachmentId: attachmentId || null,
           cycle: rec.cycle,
           cellName: rec.cellName,
           ironDissolution: rec.ironDissolution != null ? String(rec.ironDissolution) : null,

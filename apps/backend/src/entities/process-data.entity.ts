@@ -26,6 +26,10 @@ export class ProcessData {
   @Column({ type: 'uuid', comment: '实验ID' })
   experimentId!: string;
 
+  @Index()
+  @Column({ name: 'attachmentId', type: 'uuid', nullable: true, comment: '关联附件ID' })
+  attachmentId!: string | null;
+
   /** Cell unique code (aka batteryId in source workbooks). */
   @Index()
   @Column({ type: 'varchar', length: 64, comment: '电芯编码' })

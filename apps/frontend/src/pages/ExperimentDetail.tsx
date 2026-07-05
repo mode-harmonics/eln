@@ -427,7 +427,7 @@ export function ExperimentDetail() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-4 border-b border-gray-100">
         <div className="min-w-0">
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-2xl font-bold text-gray-900 truncate">{experiment.title}</h1>
@@ -436,6 +436,16 @@ export function ExperimentDetail() {
                 {t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
               </span>
             )}
+            <span className={cn(
+              "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium shrink-0 border",
+              experiment.status === "Draft" && "bg-gray-50 text-gray-700 border-gray-200",
+              experiment.status === "In Review" && "bg-amber-50 text-amber-700 border-amber-200",
+              experiment.status === "Approved" && "bg-green-50 text-green-700 border-green-200",
+              experiment.status === "Rejected" && "bg-rose-50 text-rose-700 border-rose-200",
+              experiment.status === "Archived" && "bg-slate-50 text-slate-700 border-slate-200"
+            )}>
+              {t(`status_${experiment.status.toLowerCase().replace(" ", "_")}`, experiment.status)}
+            </span>
           </div>
           <div className="flex items-center gap-3 text-sm text-gray-500">
             <span>{t("updated")} {format(new Date(experiment.updatedAt), "MMM d, yyyy")}</span>
@@ -443,7 +453,18 @@ export function ExperimentDetail() {
             <span>v{experiment.versionNo}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {assayType === "ProcessData" && canWrite && (
+            <Button
+              variant={pickedCells.length > 0 ? "secondary" : "primary"}
+              size="sm"
+              onClick={() => setCellPickerOpen(true)}
+            >
+              <Layers className="w-4 h-4" />
+              {pickedCells.length > 0 ? t("re_pick_cells", "重新挑选电芯") : t("pick_cells", "挑选电芯")}
+            </Button>
+          )}
+
           {canWrite && experiment.status === "Draft" && (
             <Button variant="primary" size="sm" onClick={() => setSubmitModalOpen(true)}>
               {t("submit_review", "Submit for Review")}
@@ -525,53 +546,20 @@ export function ExperimentDetail() {
         </div>
       )}
 
-      {/* Workflow Card — Cell Picking */}
-      {assayType === "ProcessData" && (
-        <div className="bg-gradient-to-r from-blue-50/60 to-indigo-50/40 border border-blue-100/70 rounded-xl p-5">
-          <div className="flex items-start justify-between">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Layers className="w-4 h-4 text-blue-600" />
-                <span className="text-sm font-semibold text-gray-800">{t("workflow")}</span>
-              </div>
-              <StepProgress
-                steps={[
-                  { key: "upload", label: t("step_upload_process_data") },
-                  { key: "pick", label: t("step_pick_cells") },
-                  { key: "other", label: t("step_upload_other_data") },
-                ]}
-                currentStep={pickedCells.length > 0 ? 2 : ((experiment.cellPicked ?? false) ? 1 : 0)}
-                completed={(() => {
-                  const c: number[] = [0];
-                  if (experiment.cellPicked || pickedCells.length > 0) c.push(1);
-                  if (pickedCells.length > 0) c.push(2);
-                  return c;
-                })()}
-              />
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-gray-500 flex items-center gap-1">
-                {pickedCells.length > 0 ? (
-                  <><CheckCircle2 className="w-3.5 h-3.5 text-green-500" />{t("picked_cells_count", { count: pickedCells.length })}</>
-                ) : (
-                  <><AlertCircle className="w-3.5 h-3.5 text-amber-500" />{t("not_picked")}</>
-                )}
-              </span>
-              <Button variant="primary" size="sm" onClick={() => setCellPickerOpen(true)}>
-                {t("pick_cells")}
-              </Button>
-            </div>
+      {/* Picked Cells Display */}
+      {assayType === "ProcessData" && pickedCells.length > 0 && (
+        <div className="bg-blue-50/40 border border-blue-100 rounded-xl p-4">
+          <div className="text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
+            <CheckCircle2 className="w-4 h-4 text-green-500" />
+            {t("picked_cells", "已挑选的电芯")} ({pickedCells.length})
           </div>
-          {/* Picked cells chips */}
-          {pickedCells.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-blue-100/50">
-              {pickedCells.map((cid) => (
-                <span key={cid} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white/70 text-xs font-mono text-blue-700 border border-blue-200/60 shadow-sm">
-                  {cid}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="flex flex-wrap gap-1.5">
+            {pickedCells.map((cid) => (
+              <span key={cid} className="inline-flex items-center px-2 py-0.5 rounded bg-white text-xs font-mono text-blue-700 border border-blue-200/60 shadow-sm">
+                {cid}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
@@ -617,9 +605,22 @@ export function ExperimentDetail() {
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-[13px]">
                   <thead className="bg-gray-50 sticky top-0">
-                    <tr>{["工步号","工步序号","循环号","电芯","工步类型","容量","起始电压","结束电压","起始电流","结束电流","工步时间"].map((h) => (
-                      <th key={h} className="px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 uppercase whitespace-nowrap">{h}</th>
-                    ))}</tr>
+                    <tr>
+                      {["工步号", "工步序号", "循环号", "电芯", "工步类型", "容量", "起始电压", "结束电压", "起始电流", "结束电流", "工步时间"].map((h) => {
+                        const isNumeric = ["容量", "起始电压", "结束电压", "起始电流", "结束电流"].includes(h);
+                        return (
+                          <th
+                            key={h}
+                            className={cn(
+                              "px-3 py-2.5 text-[11px] font-semibold text-gray-500 uppercase whitespace-nowrap",
+                              isNumeric ? "text-right" : "text-left"
+                            )}
+                          >
+                            {h}
+                          </th>
+                        );
+                      })}
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {rawSteps.map((s: any) => (

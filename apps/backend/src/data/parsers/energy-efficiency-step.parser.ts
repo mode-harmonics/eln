@@ -27,8 +27,8 @@ export class EnergyEfficiencyStepParser implements DataParser<EnergyEfficiency> 
     return isStepSheet(sheet);
   }
 
-  parse(sheet: Worksheet, experimentId: string): EnergyEfficiency[] {
-    const { steps, byCell } = readStepSheet(sheet, experimentId);
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): EnergyEfficiency[] {
+    const { steps, byCell } = readStepSheet(sheet, experimentId, filename, attachmentId);
     this.rawSteps = steps;
 
     const result: EnergyEfficiency[] = [];
@@ -60,6 +60,7 @@ export class EnergyEfficiencyStepParser implements DataParser<EnergyEfficiency> 
       result.push({
         id: uuid(),
         experimentId,
+        attachmentId: attachmentId || null,
         cellName,
         de,
         ce,

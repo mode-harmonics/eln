@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { Experiment } from '../entities/experiment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
 import { Project } from '../entities/project.entity';
+import { Attachment } from '../entities/attachment.entity';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 import { CreateExperimentDto } from '../experiments/dto';
 
@@ -15,6 +16,7 @@ export class ProjectsService {
     @InjectRepository(Experiment) private readonly experimentsRepo: Repository<Experiment>,
     @InjectRepository(ExperimentCollaborator)
     private readonly collaboratorsRepo: Repository<ExperimentCollaborator>,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async findVisibleToUser(
@@ -77,10 +79,19 @@ export class ProjectsService {
     if (!project) throw new NotFoundException('Project not found.');
 
     if (page === undefined && limit === undefined) {
-      return this.experimentsRepo.find({
+      const experiments = await this.experimentsRepo.find({
         where: { projectId },
         order: { updatedAt: 'DESC' },
       });
+      return Promise.all(
+        experiments.map(async (exp) => {
+          const attachments = await this.dataSource.getRepository(Attachment).find({
+            where: { experimentId: exp.id },
+            order: { createdAt: 'ASC' },
+          });
+          return { ...exp, attachments };
+        }),
+      );
     }
 
     const pageNum = page ? parseInt(page as any, 10) : 1;

@@ -15,7 +15,7 @@ export interface DataParser<TRow = Record<string, unknown>> {
   detect(sheet: Worksheet, assayType?: string): boolean;
 
   /** Parses the worksheet into row objects ready for repository.save(). */
-  parse(sheet: Worksheet, experimentId: string): TRow[];
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): TRow[];
 }
 
 /** Shared helper: reads a worksheet's header row as trimmed lowercase strings. */
@@ -51,6 +51,19 @@ export function toBooleanOrFalse(value: unknown): boolean {
 /** Coerces an Excel cell value to a trimmed string, or null if blank. */
 export function toStringOrNull(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null;
+  if (value instanceof Date) {
+    const year = value.getUTCFullYear();
+    if (year === 1899 || year === 1900) {
+      const hours = String(value.getUTCHours()).padStart(2, '0');
+      const minutes = String(value.getUTCMinutes()).padStart(2, '0');
+      const seconds = String(value.getUTCSeconds()).padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    }
+    const y = year;
+    const m = String(value.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(value.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
   return String(value).trim();
 }
 

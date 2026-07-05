@@ -23,7 +23,7 @@ export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficien
     return normalized.includes('de') && normalized.includes('ce');
   }
 
-  parse(sheet: Worksheet, experimentId: string): Partial<EnergyEfficiency>[] {
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<EnergyEfficiency>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['de', 'ce', 'ee']);
     const headers = normalizeHeaders(rawHeaders);
     const cellNameCol = headers.findIndex((h) => ['cellname', 'cellid', 'batteryid'].includes(h));
@@ -35,11 +35,11 @@ export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficien
     sheet.eachRow((row, rowNumberCurrent) => {
       if (rowNumberCurrent <= rowNumber) return;
 
-      const cellName = cellNameCol >= 0 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
+      const cellName = cellNameCol >= 1 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
       if (!cellName) return;
 
-      const de = deCol >= 0 ? toNumberOrNull(row.getCell(deCol).value) : null;
-      const ce = ceCol >= 0 ? toNumberOrNull(row.getCell(ceCol).value) : null;
+      const de = deCol >= 1 ? toNumberOrNull(row.getCell(deCol).value) : null;
+      const ce = ceCol >= 1 ? toNumberOrNull(row.getCell(ceCol).value) : null;
 
       // ─── Compute derived fields ─────────────────────────────────────────────
       const ee    = (de != null && ce != null && ce !== 0) ? de / ce                  : null;
@@ -47,6 +47,7 @@ export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficien
       rows.push({
         id: uuid(),
         experimentId,
+        attachmentId: attachmentId || null,
         cellName,
         de:    de    != null ? String(de)            : null,
         ce:    ce    != null ? String(ce)            : null,

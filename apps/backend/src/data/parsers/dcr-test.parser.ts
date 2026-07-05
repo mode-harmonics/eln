@@ -27,7 +27,7 @@ export class DcrTestParser implements DataParser<Partial<DcrTest>> {
     return normalized.includes('du0') && normalized.includes('du1') && normalized.includes('di');
   }
 
-  parse(sheet: Worksheet, experimentId: string): Partial<DcrTest>[] {
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<DcrTest>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['du0', 'du1', 'di', 'cu0', 'cu1', 'ci']);
     const headers = normalizeHeaders(rawHeaders);
     const colIndex = (name: string) => headers.indexOf(name);
@@ -38,15 +38,20 @@ export class DcrTestParser implements DataParser<Partial<DcrTest>> {
     sheet.eachRow((row, rowNumberCurrent) => {
       if (rowNumberCurrent <= rowNumber) return;
 
-      const cellName = cellNameCol >= 0 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
+      const cellName = cellNameCol >= 1 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
       if (!cellName) return;
 
-      const record: Partial<DcrTest> = { id: uuid(), experimentId, cellName };
+      const record: Partial<DcrTest> = {
+        id: uuid(),
+        experimentId,
+        attachmentId: attachmentId || null,
+        cellName,
+      };
 
 
       for (const field of NUMERIC_FIELDS) {
         const col = colIndex(field);
-        if (col >= 0) {
+        if (col >= 1) {
           const value = toNumberOrNull(row.getCell(col).value);
           (record as Record<string, unknown>)[field] = value !== null ? String(value) : null;
         }

@@ -14,13 +14,13 @@ import { isStepSheet, readStepSheet } from './step-parser.shared';
  *   fq2 = stepNo=4 恒流充电容量
  *
  * ── 定容（grading）──
- *   gqc1 = stepNo=2 恒流充电容量       // 第一步充�?
- *   gqd1 = stepNo=4 恒流放电容量       // 第一步放�?
- *   gqc2 = stepNo=6 恒流充电容量       // 第二步充�?
- *   gu1  = stepNo=6 结束电压           // 分容后电�?
+ *   gqc1 = stepNo=2 恒流充电容量       // 第一步充电
+ *   gqd1 = stepNo=4 恒流放电容量       // 第一步放电
+ *   gqc2 = stepNo=6 恒流充电容量       // 第二步充电
+ *   gu1  = stepNo=6 结束电压           // 分容后电压
  *
  *   gr1  = |V_end(step8) - V_end(step7)| / |I_end(step8)|
- *          (第二步放电结束电�?- 上一步静置结束电�? / |第二步放电结束电流|
+ *          (第二步放电结束电压- 上一步静置结束电压) / |第二步放电结束电流|
  */
 export class ProcessDataStepParser implements DataParser<ProcessData> {
   readonly tableName = 'processData';
@@ -33,8 +33,8 @@ export class ProcessDataStepParser implements DataParser<ProcessData> {
     return isStepSheet(sheet);
   }
 
-  parse(sheet: Worksheet, experimentId: string): ProcessData[] {
-    const { steps, byCell } = readStepSheet(sheet, experimentId);
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): ProcessData[] {
+    const { steps, byCell } = readStepSheet(sheet, experimentId, filename, attachmentId);
     this.rawSteps = steps;
 
     const result: ProcessData[] = [];
@@ -99,7 +99,7 @@ export class ProcessDataStepParser implements DataParser<ProcessData> {
       // Computed fields
       const fq1n = fq1 != null ? Number(fq1) : null;
       const fq2n = fq2 != null ? Number(fq2) : null;
-      const fq   = (fq1n != null && fq2n != null) ? (fq1n + fq2n).toFixed(6) : null;
+      const fq = (fq1n != null && fq2n != null) ? (fq1n + fq2n).toFixed(6) : null;
 
       let gr1: string | null = null;
       if (restVolt != null && pulseVolt != null && pulseCurr != null) {
@@ -111,6 +111,7 @@ export class ProcessDataStepParser implements DataParser<ProcessData> {
       result.push({
         id: uuid(),
         experimentId,
+        attachmentId: attachmentId || null,
         cellId: cellName,
         fq1, fq2, fq,
         gqc1, gqd1, gqc2, gu1, gr1,

@@ -35,8 +35,8 @@ export class FastChargeStepParser implements DataParser<FastCharge> {
     return isStepSheet(sheet);
   }
 
-  parse(sheet: Worksheet, experimentId: string): FastCharge[] {
-    const { steps, byCell } = readStepSheet(sheet, experimentId);
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): FastCharge[] {
+    const { steps, byCell } = readStepSheet(sheet, experimentId, filename, attachmentId);
     this.rawSteps = steps;
 
     const result: FastCharge[] = [];
@@ -97,6 +97,7 @@ export class FastChargeStepParser implements DataParser<FastCharge> {
       result.push({
         id: uuid(),
         experimentId,
+        attachmentId: attachmentId || null,
         cellName,
         c0: c0 != null ? c0.toFixed(6) : null,
         steps: chargeSteps,

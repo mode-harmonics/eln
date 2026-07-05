@@ -71,26 +71,12 @@ export class DataController {
       );
     }
 
-    const buffers = files.map(f => f.buffer);
-    return this.dataService.uploadWorkbooks(buffers, dto.experimentId, dto.mode)
-      .then(async (result) => {
-        // Persist original files to disk asynchronously (non-blocking)
-        Promise.all(
-          files.map(file =>
-            this.dataService.saveAttachment(
-              file.buffer,
-              file.originalname,
-              file.mimetype,
-              dto.experimentId,
-              user.id,
-            )
-          )
-        ).catch((err) => {
-          // Log but don't fail the request — data is already committed
-          console.error('Failed to save attachments:', err);
-        });
-        return result;
-      });
+    const workbooks = files.map(f => ({
+      buffer: f.buffer,
+      originalname: f.originalname,
+      mimetype: f.mimetype,
+    }));
+    return this.dataService.uploadWorkbooks(workbooks, dto.experimentId, user.id, dto.mode);
   }
 
   @Get('export/summary/:expId')

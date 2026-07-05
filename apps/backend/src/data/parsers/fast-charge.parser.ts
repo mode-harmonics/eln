@@ -76,7 +76,7 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
       (normalized.includes('cellid') && normalized.some((h) => ['stepno', 'step_no', '工步号'].includes(h)));
   }
 
-  parse(sheet: Worksheet, experimentId: string): Partial<FastCharge>[] {
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<FastCharge>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['工步号', 'stepno', 'step_no']);
     const headers = normalizeHeaders(rawHeaders);
 
@@ -110,18 +110,18 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
       sheet.eachRow((row, rowNum) => {
         if (rowNum <= rowNumber) return;
 
-        const cellName = toStringOrNull(row.getCell(cellIdCol).value);
-        const stepNoVal = toNumberOrNull(row.getCell(stepNoCol).value);
+        const cellName = cellIdCol >= 1 ? toStringOrNull(row.getCell(cellIdCol).value) : null;
+        const stepNoVal = stepNoCol >= 1 ? toNumberOrNull(row.getCell(stepNoCol).value) : null;
         if (!cellName || stepNoVal === null) return;
 
-        const rateVal = rateCol >= 0 ? toStringOrNull(row.getCell(rateCol).value) : null;
-        const cutOffVoltageVal = cutOffVoltageCol >= 0 ? toNumberOrNull(row.getCell(cutOffVoltageCol).value) : null;
-        const currentVal = currentCol >= 0 ? toNumberOrNull(row.getCell(currentCol).value) : null;
-        const stepCapacityVal = stepCapacityCol >= 0 ? toNumberOrNull(row.getCell(stepCapacityCol).value) : null;
-        const providedTimeVal = providedTimeCol >= 0 ? toNumberOrNull(row.getCell(providedTimeCol).value) : null;
+        const rateVal = rateCol >= 1 ? toStringOrNull(row.getCell(rateCol).value) : null;
+        const cutOffVoltageVal = cutOffVoltageCol >= 1 ? toNumberOrNull(row.getCell(cutOffVoltageCol).value) : null;
+        const currentVal = currentCol >= 1 ? toNumberOrNull(row.getCell(currentCol).value) : null;
+        const stepCapacityVal = stepCapacityCol >= 1 ? toNumberOrNull(row.getCell(stepCapacityCol).value) : null;
+        const providedTimeVal = providedTimeCol >= 1 ? toNumberOrNull(row.getCell(providedTimeCol).value) : null;
         
         let stepTimeVal: number | null = null;
-        if (stepTimeCol >= 0) {
+        if (stepTimeCol >= 1) {
           stepTimeVal = toNumberOrNull(row.getCell(stepTimeCol).value);
         }
 
@@ -173,6 +173,7 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
         rows.push({
           id: uuid(),
           experimentId,
+          attachmentId: attachmentId || null,
           cellName,
           c0: String(c0),
           providedFastChargeTime: record.providedTime !== null ? String(record.providedTime) : null,
@@ -208,7 +209,7 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
       sheet.eachRow((row, rowNumberCurrent) => {
         if (rowNumberCurrent <= rowNumber) return;
 
-        const cellName = cellNameCol >= 0 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
+        const cellName = cellNameCol >= 1 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
         if (!cellName) return;
 
         const stepsByNo = new Map<number, Partial<FastChargeStep>>();
@@ -219,7 +220,7 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
           stepsByNo.set(stepNo, step);
         }
 
-        const c0Raw = c0Col >= 0 ? toNumberOrNull(row.getCell(c0Col).value) : null;
+        const c0Raw = c0Col >= 1 ? toNumberOrNull(row.getCell(c0Col).value) : null;
         const c0 = c0Raw ?? 0;
 
         let cumulativeSoc = 0;
@@ -241,7 +242,7 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
             } satisfies FastChargeStep;
           });
 
-        const providedTime = providedTimeCol >= 0 ? toNumberOrNull(row.getCell(providedTimeCol).value) : null;
+        const providedTime = providedTimeCol >= 1 ? toNumberOrNull(row.getCell(providedTimeCol).value) : null;
         const computedTime = computeFastChargeTime(c0, steps);
 
         const finalTime = providedTime ?? computedTime;
@@ -249,6 +250,7 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
         rows.push({
           id: uuid(),
           experimentId,
+          attachmentId: attachmentId || null,
           cellName,
           c0:                    c0Raw !== null ? String(c0Raw) : null,
           providedFastChargeTime: providedTime !== null ? String(providedTime) : null,

@@ -22,6 +22,10 @@ export class HtCycle {
   @Column({ type: 'uuid', comment: '实验ID' })
   experimentId!: string;
 
+  @Index()
+  @Column({ name: 'attachmentId', type: 'uuid', nullable: true, comment: '关联附件ID' })
+  attachmentId!: string | null;
+
   /** Cycle number (100, 200, ...). Primary retrieval key alongside experimentId. */
   @Index()
   @Column({ type: 'int', comment: '循环次数' })

@@ -24,7 +24,7 @@ export interface StepCols {
  * Returns steps grouped by cellName. Used by both CalendarLifeStepParser
  * and DcrTestStepParser.
  */
-export function readStepSheet(sheet: Worksheet, experimentId: string): {
+export function readStepSheet(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): {
   steps: RawStepData[];
   byCell: Map<string, RawStepData[]>;
   cols: StepCols;
@@ -36,19 +36,19 @@ export function readStepSheet(sheet: Worksheet, experimentId: string): {
   const headers = normalizeHeaders(rawHeaders);
 
   const cols: StepCols = {
-    cycleNo:  headers.findIndex((h) => /循环号|cycle/.test(h)),
-    stepNo:   headers.findIndex((h) => /^工步�?|^step no|^step$/.test(h)),
-    stepSeqNo:headers.findIndex((h) => /工步序号|step seq|^seq/.test(h)),
+    cycleNo: headers.findIndex((h) => /循环号|cycle/.test(h)),
+    stepNo: headers.findIndex((h) => /^工步号?|^step no|^step$/.test(h)),
+    stepSeqNo: headers.findIndex((h) => /工步序号|step seq|^seq/.test(h)),
     stepType: headers.findIndex((h) => /工步类型|step type/i.test(h)),
     stepTime: headers.findIndex((h) => /工步时间|step time|duration/i.test(h)),
     capacity: Math.max(
       headers.findIndex((h) => /容量|capacity/i.test(h)),
       headers.findIndex((h) => /能量|energy/i.test(h)),
     ),
-    startVolt:headers.findIndex((h) => /起始电压|start volt/i.test(h)),
-    endVolt:  headers.findIndex((h) => /结束电压|end volt/i.test(h)),
-    startCurr:headers.findIndex((h) => /起始电流|start curr/i.test(h)),
-    endCurr:  headers.findIndex((h) => /结束电流|end curr/i.test(h)),
+    startVolt: headers.findIndex((h) => /起始电压|start volt/i.test(h)),
+    endVolt: headers.findIndex((h) => /结束电压|end volt/i.test(h)),
+    startCurr: headers.findIndex((h) => /起始电流|start curr/i.test(h)),
+    endCurr: headers.findIndex((h) => /结束电流|end curr/i.test(h)),
     cellName: headers.findIndex((h) => CELL_NAME_KEYS.includes(h.trim().toLowerCase())),
   };
 
@@ -58,27 +58,31 @@ export function readStepSheet(sheet: Worksheet, experimentId: string): {
   sheet.eachRow((row, rowNumberCurrent) => {
     if (rowNumberCurrent <= rowNumber) return;
 
-    const cellName = cols.cellName >= 0
-      ? (toStringOrNull(row.getCell(cols.cellName).value) ?? sheet.name)
-      : sheet.name;
+    const cellIdFromFilename = filename ? filename.replace(/\.[^/.]+$/, "") : null;
+    const defaultCellName = cellIdFromFilename || sheet.name;
 
-    const stepType = toStringOrNull(row.getCell(cols.stepType).value);
+    const cellName = cols.cellName >= 1
+      ? (toStringOrNull(row.getCell(cols.cellName).value) ?? defaultCellName)
+      : defaultCellName;
+
+    const stepType = cols.stepType >= 1 ? toStringOrNull(row.getCell(cols.stepType).value) : null;
     if (!stepType) return;
 
     const step = {
       id: uuid(),
       experimentId,
+      attachmentId: attachmentId || null,
       cellName,
-      cycleNo:    toNumberOrNull(row.getCell(cols.cycleNo).value) ?? 0,
-      stepNo:     toNumberOrNull(row.getCell(cols.stepNo).value) ?? 0,
-      stepSeqNo:  toNumberOrNull(row.getCell(cols.stepSeqNo).value) ?? 0,
+      cycleNo: cols.cycleNo >= 1 ? (toNumberOrNull(row.getCell(cols.cycleNo).value) ?? 0) : 0,
+      stepNo: cols.stepNo >= 1 ? (toNumberOrNull(row.getCell(cols.stepNo).value) ?? 0) : 0,
+      stepSeqNo: cols.stepSeqNo >= 1 ? (toNumberOrNull(row.getCell(cols.stepSeqNo).value) ?? 0) : 0,
       stepType,
-      stepTime:   toStringOrNull(cols.stepTime >= 0 ? row.getCell(cols.stepTime).value : null),
-      capacity:   cols.capacity >= 0 ? toNumberOrNull(row.getCell(cols.capacity).value)?.toString() ?? null : null,
-      startVoltage: cols.startVolt >= 0 ? toNumberOrNull(row.getCell(cols.startVolt).value)?.toString() ?? null : null,
-      endVoltage:   cols.endVolt >= 0 ? toNumberOrNull(row.getCell(cols.endVolt).value)?.toString() ?? null : null,
-      startCurrent: cols.startCurr >= 0 ? toNumberOrNull(row.getCell(cols.startCurr).value)?.toString() ?? null : null,
-      endCurrent:   cols.endCurr >= 0 ? toNumberOrNull(row.getCell(cols.endCurr).value)?.toString() ?? null : null,
+      stepTime: toStringOrNull(cols.stepTime >= 1 ? row.getCell(cols.stepTime).value : null),
+      capacity: cols.capacity >= 1 ? toNumberOrNull(row.getCell(cols.capacity).value)?.toString() ?? null : null,
+      startVoltage: cols.startVolt >= 1 ? toNumberOrNull(row.getCell(cols.startVolt).value)?.toString() ?? null : null,
+      endVoltage: cols.endVolt >= 1 ? toNumberOrNull(row.getCell(cols.endVolt).value)?.toString() ?? null : null,
+      startCurrent: cols.startCurr >= 1 ? toNumberOrNull(row.getCell(cols.startCurr).value)?.toString() ?? null : null,
+      endCurrent: cols.endCurr >= 1 ? toNumberOrNull(row.getCell(cols.endCurr).value)?.toString() ?? null : null,
       createdAt: new Date(),
     } as RawStepData;
     steps.push(step);

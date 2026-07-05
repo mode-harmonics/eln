@@ -45,7 +45,7 @@ export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
     return normalized.some((h) => DAY_HEADER_RE.test(h.trim()));
   }
 
-  parse(sheet: Worksheet, experimentId: string): Partial<CalendarLife>[] {
+  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<CalendarLife>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['q0d', 'q_0d', 'q7d', 'q_7d', 'ddcr0d', 'ddcr_0d']);
     const headers = normalizeHeaders(rawHeaders);
     const parsedHeaders: ParsedHeader[] = [];
@@ -70,14 +70,14 @@ export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
     sheet.eachRow((row, rowNumberCurrent) => {
       if (rowNumberCurrent <= rowNumber) return;
 
-      const cellName = cellNameCol >= 0 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
+      const cellName = cellNameCol >= 1 ? toStringOrNull(row.getCell(cellNameCol).value) : null;
       if (!cellName) return;
 
       // Group this cell's values by dayCount: { 0: { q, dq, ddcr, cdcr, u, r }, 7: {...}, ... }
       const byDay = new Map<number, Record<string, number | null>>();
 
       for (const ph of parsedHeaders) {
-        const value = toNumberOrNull(row.getCell(ph.colIndex).value);
+        const value = ph.colIndex >= 1 ? toNumberOrNull(row.getCell(ph.colIndex).value) : null;
         const existing = byDay.get(ph.dayCount) ?? {};
         existing[ph.metric] = value;
         byDay.set(ph.dayCount, existing);
@@ -94,6 +94,7 @@ export class CalendarLifeParser implements DataParser<Partial<CalendarLife>> {
         cellRows.push({
           id: uuid(),
           experimentId,
+          attachmentId: attachmentId || null,
           cellName,
           dayCount,
           q:    metrics.q    != null ? String(metrics.q)    : null,
