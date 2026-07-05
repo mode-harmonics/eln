@@ -22,9 +22,11 @@ import { DcrTestStepParser } from './parsers/dcr-test-step.parser';
 import { EnergyEfficiencyStepParser } from './parsers/energy-efficiency-step.parser';
 import { FastChargeStepParser } from './parsers/fast-charge-step.parser';
 import { ProcessDataStepParser } from './parsers/process-data-step.parser';
+import { HtCycleStepParser } from './parsers/ht-cycle-step.parser';
 import { computeFastChargeTime } from './parsers/fast-charge.parser';
 import { GroupsService } from '../groups/groups.service';
 import { CellGroupMember } from '../entities/cell-group-member.entity';
+import { ProjectsService } from '../projects/projects.service';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
@@ -47,6 +49,7 @@ const TYPE_PARAM_TO_ENTITY: Record<string, new () => unknown> = {
   dcr: DcrTest,
   fastcharge: FastCharge,
   htcycle: HtCycle,
+  raw: RawStepData,
 };
 
 export interface UploadSummary {
@@ -63,6 +66,7 @@ export class DataService {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly parserRegistry: ParserRegistry,
     private readonly groupsService: GroupsService,
+    private readonly projectsService: ProjectsService,
   ) { }
 
   async getExperiment(id: string): Promise<Experiment | null> {
@@ -84,19 +88,7 @@ export class DataService {
     const experiment = await this.getExperiment(experimentId);
     const assayType = experiment?.metadata?.assayType as string | undefined;
 
-    // Step 2a: Upload constraint — non-ProcessData requires picked cells
-    if (assayType && assayType !== 'ProcessData') {
-      const pickedCount = await this.dataSource.getRepository(PickedCell).count({
-        where: { experimentId },
-      });
-      if (pickedCount === 0) {
-        throw new BadRequestException(
-          '必须先挑选电池再上传此类型数据。请在制成的实验中点击「挑选电池」。',
-        );
-      }
-    }
-
-    // Step 2b: Duplicate detection — check if any business data exists for this experiment
+    // Step 2a: Duplicate detection — check if any business data exists for this experiment
     const businessRepos = [
       this.dataSource.getRepository(ProcessData),
       this.dataSource.getRepository(CalendarLife),
@@ -197,7 +189,7 @@ export class DataService {
         }
 
         // Collect raw step data from any step parser
-        if (parser instanceof CalendarLifeStepParser || parser instanceof DcrTestStepParser || parser instanceof EnergyEfficiencyStepParser || parser instanceof FastChargeStepParser || parser instanceof ProcessDataStepParser) {
+        if (parser instanceof CalendarLifeStepParser || parser instanceof DcrTestStepParser || parser instanceof EnergyEfficiencyStepParser || parser instanceof FastChargeStepParser || parser instanceof ProcessDataStepParser || parser instanceof HtCycleStepParser) {
           rawSteps.push(...parser.getRawSteps());
         }
 
@@ -208,6 +200,73 @@ export class DataService {
     // Queue raw steps for save
     if (rawSteps.length > 0) {
       rowsByTable['RawStepData'] = (rowsByTable['RawStepData'] ?? []).concat(rawSteps);
+    }
+
+    // ─── Merge processData rows with same cellId ───────────────────────────
+    // Formation and grading files produce separate rows per cellId.
+    // We merge them so one cellId → one record with combined fields.
+    // Also load existing DB rows when mode='merge' (separate upload calls).
+    const processRows = rowsByTable['processData'];
+    if (processRows && processRows.length > 0) {
+      // Load existing DB rows for cross-upload merge (先传化成→再传定容 scenario)
+      const existingProcessRows = mode === 'merge'
+        ? await this.dataSource.getRepository(ProcessData).find({ where: { experimentId } })
+        : [];
+      const allRows = [...existingProcessRows, ...processRows];
+
+      const merged = new Map<string, Record<string, unknown>>();
+      for (const row of allRows) {
+        const cellId = row['cellId'] as string;
+        if (!cellId) continue;
+        const existing = merged.get(cellId);
+        if (!existing) {
+          merged.set(cellId, { ...row });
+        } else {
+          // Merge non-null values from the new row into the existing one
+          for (const [key, val] of Object.entries(row)) {
+            if (val != null && val !== '' && (existing[key] == null || existing[key] === '')) {
+              existing[key] = val;
+            }
+          }
+        }
+      }
+      rowsByTable['processData'] = Array.from(merged.values());
+
+      // If we loaded existing DB rows, mark them for deletion in the transaction
+      // to avoid duplicate rows after saving the merged result.
+      if (existingProcessRows.length > 0) {
+        (rowsByTable as any)['__deleteProcessData'] = true;
+      }
+
+      // Re-compute derived fields after merge (some now have both formation & grading data)
+      const n = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
+      for (const row of rowsByTable['processData']) {
+        const m0 = n(row.m0), m1 = n(row.m1), m2 = n(row.m2), m4 = n(row.m4);
+        const v0 = n(row.v0), v1 = n(row.v1);
+        const fq1 = n(row.fq1), fq2 = n(row.fq2);
+        const fu1 = n(row.fu1), fu2 = n(row.fu2);
+        const gqc1 = n(row.gqc1), gqd1 = n(row.gqd1);
+
+        const mIn    = m1 != null && m0 != null ? m1 - m0 : null;
+        const mLoss  = m1 != null && m2 != null ? m1 - m2 : null;
+        const mHold  = m4 != null && m0 != null ? m4 - m0 : null;
+        const fq     = fq1 != null && fq2 != null ? fq1 + fq2 : null;
+        const qdFirst = gqd1;
+        const fvg    = v1 != null && v0 != null && qdFirst != null && qdFirst !== 0 ? (v1 - v0) / qdFirst : null;
+        const ku     = fu1 != null && fu2 != null ? fu1 - fu2 : null;
+        const qcFirst = fq != null && gqc1 != null ? fq + gqc1 : null;
+        const ceFirst = qdFirst != null && qcFirst != null && qcFirst !== 0 ? (qdFirst / qcFirst) * 100 : null;
+
+        row.mIn    = mIn    != null ? mIn.toFixed(6)    : null;
+        row.mLoss  = mLoss  != null ? mLoss.toFixed(6)  : null;
+        row.mHold  = mHold  != null ? mHold.toFixed(6)  : null;
+        row.fq     = fq     != null ? fq.toFixed(6)     : null;
+        row.qdFirst = qdFirst != null ? String(qdFirst) : null;
+        row.fvg    = fvg    != null ? fvg.toFixed(6)    : null;
+        row.ku     = ku     != null ? ku.toFixed(6)     : null;
+        row.qcFirst = qcFirst != null ? qcFirst.toFixed(6) : null;
+        row.ceFirst = ceFirst != null ? ceFirst.toFixed(6) : null;
+      }
     }
 
     const rowsInsertedByTable: Record<string, number> = {};
@@ -222,7 +281,14 @@ export class DataService {
         await queryRunner.manager.save(att);
       }
 
+      // Delete existing processData rows before saving merged result (merge mode)
+      if ((rowsByTable as any)['__deleteProcessData']) {
+        await queryRunner.manager.delete(ProcessData, { experimentId });
+      }
+
       for (const [tableName, rows] of Object.entries(rowsByTable)) {
+        // Skip internal markers
+        if (tableName.startsWith('__')) continue;
         const EntityClass = TABLE_NAME_TO_ENTITY[tableName];
         if (!EntityClass || rows.length === 0) continue;
 
@@ -250,24 +316,36 @@ export class DataService {
     return { sheetsProcessed, sheetsSkipped, rowsInsertedByTable };
   }
 
-  /** Return raw step rows for a given experiment. */
-  async findRawSteps(experimentId: string): Promise<RawStepData[]> {
+  /** Return raw step rows for a given experiment, optionally filtered by dataSource ('formation' | 'grading'). */
+  async findRawSteps(experimentId: string, source?: string): Promise<any[]> {
+    const where: any = { experimentId };
+    if (source && (source === 'formation' || source === 'grading')) {
+      where.dataSource = source;
+    }
     return this.dataSource.getRepository(RawStepData).find({
-      where: { experimentId },
+      where,
       order: { stepSeqNo: 'ASC' },
     });
   }
 
   /**
-   * Auto-pick cells for a ProcessData experiment.
-   * 1. Cells with valid fq1+fq2 are sorted by fqTotal descending
-   * 2. Insert into picked_cells table
-   * 3. Auto-assign groups by prefix matching
-   * 4. Update experiment.cellPicked = true
+   * Auto-pick cells for a project using its ProcessData experiment.
+   * 1. Resolve the project's ProcessData experiment
+   * 2. Filter cells with valid fq1+fq2, sort descending
+   * 3. Replace existing project-level picks
+   * 4. Auto-assign groups by prefix matching
    */
-  async autoPickCells(experimentId: string, projectId: string, topN?: number): Promise<PickedCell[]> {
+  async autoPickCells(projectId: string, topN?: number): Promise<PickedCell[]> {
+    // Resolve the project's ProcessData experiment
+    const exps = await this.dataSource.getRepository(Experiment).find({ where: { projectId } });
+    const processExp = exps.find((e) => (e.metadata as any)?.assayType === 'ProcessData') ?? null;
+
+    if (!processExp) {
+      throw new BadRequestException('No ProcessData experiment found for this project. Please import process data first.');
+    }
+
     const processRows = await this.dataSource.getRepository(ProcessData).find({
-      where: { experimentId },
+      where: { experimentId: processExp.id },
     });
 
     // Filter cells with valid fq = fq1 + fq2
@@ -283,24 +361,22 @@ export class DataService {
       throw new BadRequestException('No cells with valid formation capacity found.');
     }
 
-    const picked = topN != null && topN > 0 ? withFq.slice(0, topN) : withFq;
+    const pickedList = topN != null && topN > 0 ? withFq.slice(0, topN) : withFq;
 
-    // Replace existing picks
+    // Replace existing project-level picks
     const repo = this.dataSource.getRepository(PickedCell);
-    await repo.delete({ experimentId });
+    await repo.delete({ projectId } as any);
 
-    const records = picked.map((p) =>
-      repo.create({
-        id: uuid(),
-        experimentId,
-        cellId: p.cellId,
-        pickedBy: 'auto',
-      }),
-    );
-    const saved = await repo.save(records);
+    const rows = pickedList.map((p) => ({
+      id: uuid(),
+      projectId,
+      cellId: p.cellId!,
+      pickedBy: 'auto',
+    }));
+    const saved = (await repo.save(rows as any)) as PickedCell[];
 
     // Auto-assign groups by prefix
-    const cellIds = saved.map((p) => p.cellId);
+    const cellIds = saved.map((p) => p.cellId).filter((c): c is string => !!c);
     try {
       const groupMap = await this.groupsService.getGroupMap(cellIds, projectId);
       const membersRepo = this.dataSource.getRepository(CellGroupMember);
@@ -316,68 +392,123 @@ export class DataService {
       this.logger.warn('Auto group assignment failed (non-fatal):', err as Error);
     }
 
-    // Update experiment
-    await this.dataSource.getRepository(Experiment).update(experimentId, { cellPicked: true });
-
     return saved;
   }
 
-  /** Get picked cells for an experiment */
-  async getPickedCells(experimentId: string): Promise<PickedCell[]> {
+  /** Get picked cells for a project */
+  async getPickedCells(projectId: string): Promise<PickedCell[]> {
     return this.dataSource.getRepository(PickedCell).find({
-      where: { experimentId },
+      where: { projectId } as any,
       order: { createdAt: 'ASC' },
     });
   }
 
-  /** Manual pick: replace picked cells for an experiment */
-  async manualPickCells(experimentId: string, cellIds: string[]): Promise<PickedCell[]> {
+  /** Manual pick: replace picked cells for a project */
+  async manualPickCells(projectId: string, cellIds: string[]): Promise<PickedCell[]> {
     const repo = this.dataSource.getRepository(PickedCell);
-    await repo.delete({ experimentId });
+    await repo.delete({ projectId } as any);
 
-    const records = cellIds.map((cellId) =>
-      repo.create({ id: uuid(), experimentId, cellId, pickedBy: 'manual' }),
-    );
-    const saved = await repo.save(records);
-
-    await this.dataSource.getRepository(Experiment).update(experimentId, { cellPicked: true });
-
-    return saved;
+    const rows = cellIds.map((cellId) => ({
+      id: uuid(),
+      projectId,
+      cellId,
+      pickedBy: 'manual',
+    }));
+    return (await repo.save(rows as any)) as PickedCell[];
   }
 
-  /** Sync picked cells to 5 target tables (create empty rows) */
-  async syncCellsToTables(experimentId: string): Promise<{ table: string; count: number }[]> {
-    const picked = await this.getPickedCells(experimentId);
+  /**
+   * Sync picked cells to all 6 non-ProcessData tables.
+   * - Auto-creates each target experiment if it doesn't exist yet.
+   * - DESTRUCTIVE: deletes all existing rows in each target table for
+   *   that experiment, then re-inserts one placeholder per picked cell.
+   * Caller must pass userId so experiment auto-creation records the creator.
+   */
+  async syncCellsToTables(
+    projectId: string,
+    userId: string,
+  ): Promise<{ table: string; experimentId: string; count: number }[]> {
+    const picked = await this.getPickedCells(projectId);
     const cellIds = picked.map((p) => p.cellId);
-    const results: { table: string; count: number }[] = [];
 
-    const targets: { entity: new () => any; name: string }[] = [
-      { entity: CalendarLife, name: 'calendarLife' },
-      { entity: DcrTest, name: 'dcrTest' },
-      { entity: EnergyEfficiency, name: 'energyEfficiency' },
-      { entity: FastCharge, name: 'fastCharge' },
-      { entity: HtCycle, name: 'htCycle' },
+    const targets: { entity: new () => any; name: string; assayType: string; label: string }[] = [
+      { entity: CalendarLife, name: 'calendarLife', assayType: 'CalendarLife', label: '日历寿命' },
+      { entity: StorageSwelling, name: 'storageSwelling', assayType: 'StorageSwelling', label: '存储胀气' },
+      { entity: DcrTest, name: 'dcrTest', assayType: 'DcrTest', label: 'DCR测试' },
+      { entity: EnergyEfficiency, name: 'energyEfficiency', assayType: 'EnergyEfficiency', label: '能量效率' },
+      { entity: FastCharge, name: 'fastCharge', assayType: 'FastCharge', label: '快充时间' },
+      { entity: HtCycle, name: 'htCycle', assayType: 'HtCycle', label: '高温循环' },
     ];
 
-    for (const { entity, name } of targets) {
+    // Fetch all experiments for this project once
+    const allExps = await this.dataSource.getRepository(Experiment).find({ where: { projectId } });
+
+    const results: { table: string; experimentId: string; count: number }[] = [];
+
+    for (const { entity, name, assayType, label } of targets) {
+      // Find or auto-create the experiment for this assay type
+      let exp = allExps.find((e) => (e.metadata as any)?.assayType === assayType) ?? null;
+      if (!exp) {
+        const today = new Date().toISOString().split('T')[0];
+        exp = await this.projectsService.createExperiment(projectId, userId, {
+          title: `${label} - ${today}`,
+          assayType,
+        });
+      }
+
       const repo = this.dataSource.getRepository(entity);
+
+      // Destructive: delete all existing rows for this experiment
+      await repo.delete({ experimentId: exp.id } as any);
+
+      // Insert one placeholder row per picked cell
       let count = 0;
       for (const cellId of cellIds) {
-        const existing = await repo.findOne({ where: { experimentId, cellName: cellId } as any });
-        if (existing) continue;
+        const extra: Record<string, unknown> =
+          name === 'calendarLife' ? { dayCount: 0 } :
+          name === 'storageSwelling' ? { dayCount: 0 } :
+          name === 'htCycle' ? { cycle: 1 } : {};
         await repo.save(
           repo.create({
             id: uuid(),
-            experimentId,
+            experimentId: exp.id,
             cellName: cellId,
+            ...extra,
           } as any),
         );
         count++;
       }
-      results.push({ table: name, count });
+      results.push({ table: name, experimentId: exp.id, count });
     }
 
     return results;
+  }
+
+  /**
+   * POST /data/:type/:expId — create a new row in a business table.
+   * Used for manual entry (e.g. StorageSwelling which has no Excel parser).
+   */
+  async createRow(type: string, experimentId: string, body: Record<string, unknown>): Promise<unknown> {
+    const EntityClass = TYPE_PARAM_TO_ENTITY[type];
+    if (!EntityClass) {
+      throw new BadRequestException(
+        `Unknown data type "${type}". Expected one of: ${Object.keys(TYPE_PARAM_TO_ENTITY).join(', ')}.`,
+      );
+    }
+
+    const repo = this.dataSource.getRepository(EntityClass);
+    const allowedFields = repo.metadata.columns
+      .map((col) => col.propertyName)
+      .filter((col) => !['id', 'experimentId', 'attachmentId', 'createdAt'].includes(col));
+
+    const rowData: Record<string, unknown> = { id: uuid(), experimentId };
+    for (const [key, value] of Object.entries(body)) {
+      if (allowedFields.includes(key)) {
+        rowData[key] = value;
+      }
+    }
+
+    return repo.save(repo.create(rowData as any));
   }
 
   /** Persist the uploaded file to disk and create an attachment record. */

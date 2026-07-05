@@ -37,6 +37,17 @@ export class ProcessDataStepParser implements DataParser<ProcessData> {
     const { steps, byCell } = readStepSheet(sheet, experimentId, filename, attachmentId);
     this.rawSteps = steps;
 
+    // Determine dataSource: grading sheet has stepNo >= 6, formation sheet stops at stepNo <= 4
+    const hasStep6OrAbove = Array.from(byCell.values()).some((cellSteps) =>
+      cellSteps.some((s) => s.stepNo >= 6),
+    );
+    const dataSource: 'grading' | 'formation' = hasStep6OrAbove ? 'grading' : 'formation';
+
+    // Tag each raw step with its data source
+    for (const step of steps) {
+      step.dataSource = dataSource;
+    }
+
     const result: ProcessData[] = [];
 
     for (const [cellName, cellSteps] of byCell) {
@@ -55,8 +66,7 @@ export class ProcessDataStepParser implements DataParser<ProcessData> {
       let pulseVolt: string | null = null;  // stepNo=8 结束电压
       let pulseCurr: string | null = null;  // stepNo=8 结束电流
 
-      // Determine layout: grading sheet has stepNo=6, formation sheet stops at stepNo=4
-      const isGradingSheet = cellSteps.some((s) => s.stepNo >= 6);
+      const isGradingSheet = hasStep6OrAbove;
 
       let hasData = false;
 

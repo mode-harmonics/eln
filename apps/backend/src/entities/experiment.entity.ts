@@ -37,9 +37,6 @@ export class Experiment {
   @Column({ name: 'versionNo', type: 'int', default: 1, comment: '版本号' })
   versionNo!: number;
 
-  @Column({ name: 'cellPicked', type: 'boolean', default: false, comment: '是否已完成电池挑选' })
-  cellPicked!: boolean;
-
   @Index()
   @Column({ name: 'reviewerId', type: 'uuid', nullable: true, comment: '审核人ID' })
   reviewerId!: string | null;

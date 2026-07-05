@@ -23,8 +23,10 @@ export interface StepCols {
  * Read all rows from a step-format sheet into RawStepData entities.
  * Returns steps grouped by cellName. Used by both CalendarLifeStepParser
  * and DcrTestStepParser.
+ *
+ * @param dataSource - Optional source tag ('formation' | 'grading') for ProcessData experiments.
  */
-export function readStepSheet(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): {
+export function readStepSheet(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string, dataSource?: string): {
   steps: RawStepData[];
   byCell: Map<string, RawStepData[]>;
   cols: StepCols;
@@ -83,6 +85,7 @@ export function readStepSheet(sheet: Worksheet, experimentId: string, filename?:
       endVoltage: cols.endVolt >= 1 ? toNumberOrNull(row.getCell(cols.endVolt).value)?.toString() ?? null : null,
       startCurrent: cols.startCurr >= 1 ? toNumberOrNull(row.getCell(cols.startCurr).value)?.toString() ?? null : null,
       endCurrent: cols.endCurr >= 1 ? toNumberOrNull(row.getCell(cols.endCurr).value)?.toString() ?? null : null,
+      dataSource: dataSource || null,
       createdAt: new Date(),
     } as RawStepData;
     steps.push(step);

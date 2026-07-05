@@ -63,6 +63,15 @@ export class RawStepData {
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '结束电流(A)' })
   endCurrent!: string | null;
 
+  /**
+   * Data source identifier for ProcessData experiments.
+   * 'formation' = 化成数据, 'grading' = 定容数据.
+   * Null for other experiment types (CalendarLife, DcrTest, etc.).
+   */
+  @Index()
+  @Column({ type: 'varchar', length: 16, nullable: true, comment: '数据来源: formation(化成) / grading(定容)' })
+  dataSource!: string | null;
+
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
 }

@@ -14,6 +14,7 @@ import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { User, Role } from "../types";
+import { Popconfirm } from "../components/Popconfirm";
 
 export function Users() {
   const { t } = useTranslation();
@@ -123,7 +124,6 @@ export function Users() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm(t("delete_project_confirm", { name: userId }))) return; // reuse generic confirm key
     try {
       await api.delete(`/api/v1/users/${userId}`);
       setRefetchTrigger((prev) => prev + 1);
@@ -233,9 +233,14 @@ export function Users() {
                             <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
                               <Edit3 className="w-4 h-4" />
                             </Button>
-                            <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="!text-gray-400 hover:!text-red-600">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <Popconfirm
+                              title={t("delete_project_confirm", { name: user.username || user.email })}
+                              onConfirm={() => handleDeleteUser(user.id)}
+                            >
+                              <Button variant="text" className="!text-gray-400 hover:!text-red-600">
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </Popconfirm>
                           </div>
                         </TableCell>
                       )}
@@ -256,9 +261,15 @@ export function Users() {
                       <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
                         <Edit3 className="w-4 h-4" />
                       </Button>
-                      <Button variant="text" onClick={() => handleDeleteUser(user.id)} className="!text-gray-400 hover:!text-red-600">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      <Popconfirm
+                        title={t("delete_project_confirm", { name: user.username || user.email })}
+                        onConfirm={() => handleDeleteUser(user.id)}
+                        placement="left"
+                      >
+                        <Button variant="text" className="!text-gray-400 hover:!text-red-600">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </Popconfirm>
                     </div>
                   )}
                   <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold border border-blue-200">

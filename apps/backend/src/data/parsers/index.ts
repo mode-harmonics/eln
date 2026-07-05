@@ -2,7 +2,6 @@ export * from './parser.interface';
 export * from './parser.registry';
 export * from './process-data.parser';
 export * from './calendar-life.parser';
-export * from './storage-swelling.parser';
 export * from './energy-efficiency.parser';
 export * from './dcr-test.parser';
 export * from './fast-charge.parser';

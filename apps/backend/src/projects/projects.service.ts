@@ -6,6 +6,7 @@ import { Experiment } from '../entities/experiment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
 import { Project } from '../entities/project.entity';
 import { Attachment } from '../entities/attachment.entity';
+import { PickedCell } from '../entities/picked-cell.entity';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 import { CreateExperimentDto } from '../experiments/dto';
 
@@ -119,11 +120,11 @@ export class ProjectsService {
     const project = await this.projectsRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found.');
 
-    const experimentWithPickedCells = await this.experimentsRepo.findOne({
-      where: { projectId, cellPicked: true },
-    });
+    const count = await this.dataSource
+      .getRepository(PickedCell)
+      .count({ where: { projectId } } as any);
 
-    return { hasPickedCells: !!experimentWithPickedCells };
+    return { hasPickedCells: count > 0 };
   }
 
 

@@ -3,6 +3,7 @@ import { MulterModule } from '@nestjs/platform-express';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import * as entities from '../entities';
 import { GroupsModule } from '../groups/groups.module';
+import { ProjectsModule } from '../projects/projects.module';
 import { DataController } from './data.controller';
 import { DataService } from './data.service';
 import { ParserRegistry } from './parsers/parser.registry';
@@ -15,6 +16,7 @@ import { ParserRegistry } from './parsers/parser.registry';
       limits: { fileSize: 25 * 1024 * 1024 }, // 25MB cap
     }),
     GroupsModule,
+    ProjectsModule,
   ],
   controllers: [DataController],
   providers: [DataService, ParserRegistry],

@@ -1,6 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { HtCycle } from '../../entities/ht-cycle.entity';
+import { RawStepData } from '../../entities/raw-step-data.entity';
 import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 const CELL_NAME_KEYS = ['cellname', 'cellid', 'batteryid', 'cell', '电芯名称', '电芯'];
@@ -9,15 +10,20 @@ const CELL_NAME_KEYS = ['cellname', 'cellid', 'batteryid', 'cell', '电芯名称
  * HtCycleStepParser — 读取机器导出的「循环层」cycle sheet，
  * 每行一个循环号 + 放电容量，汇总为 HtCycle 业务行。
  *
+ * 同时将每行原始数据存到 rawStepData（stepNo=1, stepType='循环'），
+ * 供前端「原始」tab 查看。
+ *
  * 提取规则:
  *   dischargeCapacity = 放电容量(Ah)
  *   capacityRetention  = (dischargeCapacity / baselineCapacity) × 100%
  *
- * 基准圈: 由于"规定第一圈"受工步调整影响不确定，默认为 cycle=1。
- *         可通过 baselineCycleNo 参数覆盖。
+ * 基准圈: 默认为 cycle=1，可通过 baselineCycleNo 参数覆盖。
  */
 export class HtCycleStepParser implements DataParser<HtCycle> {
   readonly tableName = 'htCycle';
+  rawSteps: RawStepData[] | null = null;
+
+  getRawSteps(): RawStepData[] { return this.rawSteps ?? []; }
 
   /** 基准循环号——默认为 1，可通过构造参数覆盖 */
   baselineCycleNo: number = 1;
@@ -33,7 +39,6 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
 
     const hasCycle = normalized.some((h) => /循环号|cycle/i.test(h));
     const hasCap = normalized.some((h) => /放电容量|capacity|cap/i.test(h));
-    // Must NOT match the step sheet format (has 工步类型)
     const isStep = normalized.some((h) => /工步类型|step type/i.test(h));
 
     return hasCycle && hasCap && !isStep;
@@ -51,6 +56,7 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
     const cellCol   = headers.findIndex((h) => CELL_NAME_KEYS.includes(h.trim().toLowerCase()));
 
     const rows: HtCycle[] = [];
+    const rawList: RawStepData[] = [];
 
     // First pass: collect all raw values
     const rawPairs: { cellName: string; cycle: number; cap: number | null }[] = [];
@@ -71,7 +77,29 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
       if (cycle == null) return;
 
       rawPairs.push({ cellName, cycle, cap });
+
+      // ─── Save raw step ─────────────────────────────────────────────────
+      rawList.push({
+        id: uuid(),
+        experimentId,
+        attachmentId: attachmentId || null,
+        cellName,
+        cycleNo: cycle,
+        stepNo: 1,
+        stepSeqNo: cycle,
+        stepType: '循环',
+        capacity: cap != null ? String(cap) : null,
+        stepTime: null,
+        startVoltage: null,
+        endVoltage: null,
+        startCurrent: null,
+        endCurrent: null,
+        dataSource: null,
+        createdAt: new Date(),
+      } as RawStepData);
     });
+
+    this.rawSteps = rawList;
 
     // Find baseline capacity per cell
     const baselineByCell = new Map<string, number>();

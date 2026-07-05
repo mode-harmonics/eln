@@ -17,6 +17,7 @@ import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { Project, PaginatedProjects } from "../types";
+import { Popconfirm } from "../components/Popconfirm";
 
 export function Projects() {
   const { t } = useTranslation();
@@ -105,7 +106,6 @@ export function Projects() {
   };
 
   const handleDeleteProject = async (project: Project) => {
-    if (!window.confirm(t("delete_project_confirm", { name: project.name }))) return;
     try {
       await api.delete(`/api/v1/projects/${project.id}`);
       setRefetchTrigger((prev) => prev + 1);
@@ -172,9 +172,15 @@ export function Projects() {
                     </span>
                     {hasPermission("projects:write") && (
                       <div className="flex items-center gap-2">
-                        <Button variant="text" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteProject(project); }} className="!text-gray-400 hover:!text-red-600">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <Popconfirm
+                          title={t("delete_project_confirm", { name: project.name })}
+                          onConfirm={() => handleDeleteProject(project)}
+                          placement="top"
+                        >
+                          <Button variant="text" onClick={(e) => { e.stopPropagation(); }} className="!text-gray-400 hover:!text-red-600">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </Popconfirm>
                         <Button variant="text" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
                           <Edit3 className="w-4 h-4" />
                         </Button>
@@ -220,7 +226,15 @@ export function Projects() {
                       <TableCell className="text-right">
                         <div className="inline-flex items-center gap-3">
                           <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]"><Edit3 className="w-4 h-4" /></Button>
-                          <Button variant="text" onClick={(e) => { e.stopPropagation(); handleDeleteProject(project); }} className="!text-gray-400 hover:!text-red-600"><Trash2 className="w-4 h-4" /></Button>
+                          <Popconfirm
+                            title={t("delete_project_confirm", { name: project.name })}
+                            onConfirm={() => handleDeleteProject(project)}
+                            placement="top"
+                          >
+                            <Button variant="text" onClick={(e) => { e.stopPropagation(); }} className="!text-gray-400 hover:!text-red-600">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </Popconfirm>
                         </div>
                       </TableCell>
                     )}

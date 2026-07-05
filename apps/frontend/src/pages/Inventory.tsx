@@ -15,6 +15,7 @@ import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { InventoryItem } from "../types";
+import { Popconfirm } from "../components/Popconfirm";
 
 export function Inventory() {
   const { t } = useTranslation();
@@ -115,7 +116,6 @@ export function Inventory() {
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (!window.confirm("确定要删除该物品吗？")) return;
     try {
       await api.delete(`/api/v1/inventory/${id}`);
       fetchInventory();
@@ -212,9 +212,14 @@ export function Inventory() {
                         <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                           Edit
                         </Button>
-                        <Button variant="text" onClick={() => handleDeleteItem(item.id)} className="!text-red-600 hover:!text-red-800">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <Popconfirm
+                          title="确定要删除该物品吗？"
+                          onConfirm={() => handleDeleteItem(item.id)}
+                        >
+                          <Button variant="text" className="!text-red-650 hover:!text-red-800">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </Popconfirm>
                       </TableCell>
                     )}
                   </TableRow>
@@ -227,9 +232,15 @@ export function Inventory() {
             {items.map((item) => (
               <Card key={item.id} className="flex flex-col relative group">
                 {hasPermission("data:write") && (
-                  <Button variant="text" onClick={() => handleDeleteItem(item.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600 z-10">
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <Popconfirm
+                    title="确定要删除该物品吗？"
+                    onConfirm={() => handleDeleteItem(item.id)}
+                    placement="left"
+                  >
+                    <Button variant="text" className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600 z-10">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </Popconfirm>
                 )}
                 <CardHeader>
                   <div>

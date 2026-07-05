@@ -13,7 +13,6 @@ import { HtCycleStepParser } from './ht-cycle-step.parser';
 import { DataParser } from './parser.interface';
 import { ProcessDataParser } from './process-data.parser';
 import { ProcessDataStepParser } from './process-data-step.parser';
-import { StorageSwellingParser } from './storage-swelling.parser';
 
 /**
  * Holds one instance of each of the 7 battery-science parsers and picks
@@ -31,7 +30,6 @@ export class ParserRegistry {
     new HtCycleStepParser(),
     new ProcessDataStepParser(),
     new CalendarLifeParser(),
-    new StorageSwellingParser(),
     new FastChargeParser(),
     new DcrTestParser(),
     new EnergyEfficiencyParser(),

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, useLoaderData } from "react-router-dom";
 import { format } from "date-fns";
-import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layers, CheckCircle2, AlertCircle, Plus, Paperclip, MessageSquare, Send, History } from "lucide-react";
+import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layers, AlertCircle, Plus, Paperclip, MessageSquare, Send, History, MoreHorizontal, UploadCloud, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   ProcessDataTable,
@@ -17,9 +17,6 @@ import { Button } from "../components/Button";
 import { Dropdown } from "../components/Dropdown";
 import { Modal } from "../components/Modal";
 import { Drawer } from "../components/Drawer";
-import { CellPicker } from "../components/CellPicker";
-import { ConflictModal } from "../components/ConflictModal";
-import { StepProgress } from "../components/StepProgress";
 import { MarkdownEditor } from "../components/MarkdownEditor";
 import { VersionDiffViewer } from "../components/VersionDiffViewer";
 import ReactMarkdown from "react-markdown";
@@ -29,10 +26,10 @@ import { api, ApiError } from "../lib/api";
 import { cn } from "../lib/utils";
 import type { Experiment } from "../types";
 import { usePermissions } from "../hooks/usePermissions";
+import { Popconfirm } from "../components/Popconfirm";
 
 interface ExperimentDetail extends Experiment {
   attachments?: any[];
-  collaborators?: any[];
 }
 
 import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
@@ -58,7 +55,7 @@ export function ExperimentDetail() {
   const [saving, setSaving] = useState(false);
 
   // Delete confirm state
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const openEditModal = () => {
@@ -68,50 +65,26 @@ export function ExperimentDetail() {
     setEditModalOpen(true);
   };
 
-  // Review workflow state
-  const [submitModalOpen, setSubmitModalOpen] = useState(false);
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const [reviewerId, setReviewerId] = useState("");
-  const [rejectReason, setRejectReason] = useState("");
-  const [users, setUsers] = useState<any[]>([]);
-  const [workflowSubmitting, setWorkflowSubmitting] = useState(false);
-
-  // Collaborators workflow state
-  const [collaboratorDrawerOpen, setCollaboratorDrawerOpen] = useState(false);
-  const [collaborators, setCollaborators] = useState<any[]>([]);
-  const [newCollabUserId, setNewCollabUserId] = useState("");
-  const [newCollabRole, setNewCollabRole] = useState("Viewer");
-  const [collabSubmitting, setCollabSubmitting] = useState(false);
-
   // Attachments state
   const [attachmentsDrawerOpen, setAttachmentsDrawerOpen] = useState(false);
   const [attachments, setAttachments] = useState<any[]>(loaderData?.attachments || []);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   // Comments state
   const [commentsDrawerOpen, setCommentsDrawerOpen] = useState(false);
   const [versionsDrawerOpen, setVersionsDrawerOpen] = useState(false);
+  const [activeDrawer, setActiveDrawer] = useState<"attachments" | "comments" | "versions" | null>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState("");
   const [commentSubmitting, setCommentSubmitting] = useState(false);
 
   const [versions, setVersions] = useState<any[]>([]);
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
+  // Re-fetch experiment data after upload
   useEffect(() => {
-    if ((submitModalOpen || collaboratorDrawerOpen) && users.length === 0) {
-      api.get<{ items: any[] }>("/api/v1/users?limit=100")
-        .then((res) => setUsers(res.items || []))
-        .catch(console.error);
-    }
-  }, [submitModalOpen, collaboratorDrawerOpen]);
-
-  useEffect(() => {
-    if (collaboratorDrawerOpen && experiment) {
-      api.get<any[]>(`/api/v1/experiments/${experiment.id}/collaborators`)
-        .then(setCollaborators)
-        .catch(console.error);
-    }
-  }, [collaboratorDrawerOpen, experiment]);
+    if (refreshCounter === 0 || !experiment?.id) return;
+    api.get<ExperimentDetail>(`/api/v1/experiments/${experiment.id}`).then(setExperiment).catch(() => {});
+  }, [refreshCounter]);
 
   useEffect(() => {
     if (attachmentsDrawerOpen && experiment) {
@@ -158,23 +131,6 @@ export function ExperimentDetail() {
     }
   };
 
-  const handleUploadAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!experiment || !e.target.files?.length) return;
-    const file = e.target.files[0];
-    setUploadingAttachment(true);
-    const formData = new FormData();
-    formData.append("file", file);
-    try {
-      const newAtt = await api.post(`/api/v1/experiments/${experiment.id}/attachments`, formData);
-      setAttachments(prev => [...prev, newAtt]);
-      toast.success("Attachment uploaded");
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "Upload failed");
-    } finally {
-      setUploadingAttachment(false);
-    }
-  };
-
   const handleDeleteAttachment = async (attId: string) => {
     if (!experiment) return;
     try {
@@ -198,98 +154,6 @@ export function ExperimentDetail() {
       toast.error("Failed to post comment");
     } finally {
       setCommentSubmitting(false);
-    }
-  };
-
-  const handleAddCollaborator = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!experiment || !newCollabUserId) return;
-    setCollabSubmitting(true);
-    try {
-      await api.post(`/api/v1/experiments/${experiment.id}/collaborators`, { userId: newCollabUserId, role: newCollabRole });
-      const updated = await api.get<any[]>(`/api/v1/experiments/${experiment.id}/collaborators`);
-      setCollaborators(updated);
-      setNewCollabUserId("");
-      toast(t("collaborator_added", "Collaborator added"), "success");
-    } catch (err: any) {
-      toast(err?.message ?? "Failed to add collaborator", "error");
-    } finally {
-      setCollabSubmitting(false);
-    }
-  };
-
-  const handleRemoveCollaborator = async (userId: string) => {
-    if (!experiment) return;
-    try {
-      await api.delete(`/api/v1/experiments/${experiment.id}/collaborators/${userId}`);
-      setCollaborators(prev => prev.filter(c => c.userId !== userId));
-      toast(t("collaborator_removed", "Collaborator removed"), "success");
-    } catch (err: any) {
-      toast(err?.message ?? "Failed to remove collaborator", "error");
-    }
-  };
-
-  const handleSubmitReview = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!experiment) return;
-    setWorkflowSubmitting(true);
-    try {
-      const updated = await api.post<ExperimentDetail>(`/api/v1/experiments/${experiment.id}/submit`, {
-        reviewerId: reviewerId || undefined,
-      });
-      setExperiment(updated);
-      setSubmitModalOpen(false);
-      toast(t("submitted_for_review") || "Submitted for review", "success");
-    } catch (err: any) {
-      toast(err?.message ?? "Submit failed", "error");
-    } finally {
-      setWorkflowSubmitting(false);
-    }
-  };
-
-  const handleApprove = async () => {
-    if (!experiment) return;
-    setWorkflowSubmitting(true);
-    try {
-      const updated = await api.post<ExperimentDetail>(`/api/v1/experiments/${experiment.id}/approve`, {});
-      setExperiment(updated);
-      toast(t("approved") || "Approved", "success");
-    } catch (err: any) {
-      toast(err?.message ?? "Approve failed", "error");
-    } finally {
-      setWorkflowSubmitting(false);
-    }
-  };
-
-  const handleReject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!experiment || !rejectReason.trim()) return;
-    setWorkflowSubmitting(true);
-    try {
-      const updated = await api.post<ExperimentDetail>(`/api/v1/experiments/${experiment.id}/reject`, {
-        reason: rejectReason,
-      });
-      setExperiment(updated);
-      setRejectModalOpen(false);
-      toast(t("rejected") || "Rejected", "success");
-    } catch (err: any) {
-      toast(err?.message ?? "Reject failed", "error");
-    } finally {
-      setWorkflowSubmitting(false);
-    }
-  };
-
-  const handleArchive = async () => {
-    if (!experiment) return;
-    setWorkflowSubmitting(true);
-    try {
-      const updated = await api.post<ExperimentDetail>(`/api/v1/experiments/${experiment.id}/archive`, {});
-      setExperiment(updated);
-      toast(t("archived") || "Archived", "success");
-    } catch (err: any) {
-      toast(err?.message ?? "Archive failed", "error");
-    } finally {
-      setWorkflowSubmitting(false);
     }
   };
 
@@ -317,7 +181,7 @@ export function ExperimentDetail() {
     setDeleting(true);
     try {
       await api.delete(`/api/v1/experiments/${experiment.id}`);
-      setDeleteModalOpen(false);
+      setDeleteConfirmOpen(false);
       // Navigate back to the project experiments list
       navigate(experiment.projectId ? `/projects/${experiment.projectId}?tab=experiments` : "/projects");
     } catch (err: any) {
@@ -349,60 +213,60 @@ export function ExperimentDetail() {
 
   // Data view mode: summary / raw
   const [dataView, setDataView] = useState<"summary" | "raw">("summary");
+
+  // For ProcessData experiments, raw data has two sources: formation (化成) and grading (定容)
+  const isProcessData = assayType === "ProcessData";
+  const [rawSource, setRawSource] = useState<"formation" | "grading">("formation");
   const [rawSteps, setRawSteps] = useState<any[]>([]);
   const [rawLoading, setRawLoading] = useState(false);
-  const [rawLoaded, setRawLoaded] = useState(false);
+  const [rawLoaded, setRawLoaded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    if (dataView !== "raw" || rawLoaded || !experiment) return;
+    if (dataView !== "raw" || !experiment) return;
+    const sourceParam = isProcessData ? rawSource : undefined;
+    const cacheKey = sourceParam ?? "all";
+    if (rawLoaded[cacheKey]) return;
+
     let cancelled = false;
     setRawLoading(true);
-    api.get<any[]>(`/api/v1/data/raw/${experiment.id}`)
-      .then((data) => { if (!cancelled) { setRawSteps(data ?? []); setRawLoaded(true); } })
+    const url = isProcessData
+      ? `/api/v1/data/raw/${experiment.id}?source=${rawSource}`
+      : `/api/v1/data/raw/${experiment.id}`;
+    api.get<any[]>(url)
+      .then((data) => {
+        if (!cancelled) {
+          setRawSteps(data ?? []);
+          setRawLoaded((prev) => ({ ...prev, [cacheKey]: true }));
+        }
+      })
       .catch(() => { if (!cancelled) setRawSteps([]); })
       .finally(() => { if (!cancelled) setRawLoading(false); });
     return () => { cancelled = true; };
-  }, [dataView, rawLoaded, experiment]);
+  }, [dataView, rawSource, rawLoaded, experiment, isProcessData]);
 
-  // Cell picker drawer
-  const [cellPickerOpen, setCellPickerOpen] = useState(false);
-  const [pickedCells, setPickedCells] = useState<string[]>([]);
+  // Upload Excel data entry
+  const [uploadDataOpen, setUploadDataOpen] = useState(false);
+  const [uploadDataFiles, setUploadDataFiles] = useState<File[]>([]);
+  const [uploadDataSubmitting, setUploadDataSubmitting] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!experimentId) return;
-    api.get<any[]>(`/api/v1/data/picked-cells/${experimentId}`)
-      .then((data) => setPickedCells((data || []).map((p: any) => p.cellId)))
-      .catch(() => { /* no picks yet */ });
-  }, [experimentId, cellPickerOpen]);
-
-  // Conflict modal for upload
-  const [conflictModalOpen, setConflictModalOpen] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [pendingConflictCount, setPendingConflictCount] = useState(0);
-  const [uploadMode, setUploadMode] = useState<"overwrite" | "merge" | undefined>(undefined);
-
-  const handleUpload = async (files: File[], mode?: "overwrite" | "merge") => {
-    if (!experiment || files.length === 0) return;
+  const handleDataUpload = async () => {
+    if (!experiment || uploadDataFiles.length === 0) return;
+    setUploadDataSubmitting(true);
     try {
       const form = new FormData();
-      files.forEach((file) => {
-        form.append("files", file);
-      });
+      uploadDataFiles.forEach((file) => form.append("files", file));
       form.append("experimentId", experiment.id);
-      if (mode) form.append("mode", mode);
+      form.append("mode", "merge");
       await api.upload("/api/v1/data/upload", form);
-      toast("上传成功", "success");
-      // Refresh page data
-      window.location.reload();
+      toast(t("upload_success", "上传成功"), "success");
+      setUploadDataOpen(false);
+      setUploadDataFiles([]);
+      setRefreshCounter((n) => n + 1);
     } catch (err: any) {
-      if (err?.status === 409) {
-        const count = err?.body?.existingCount ?? 0;
-        setPendingFiles(files);
-        setPendingConflictCount(count);
-        setConflictModalOpen(true);
-        return;
-      }
-      toast(err?.message ?? "上传失败", "error");
+      toast(err?.message ?? t("upload_failed", "上传失败"), "error");
+    } finally {
+      setUploadDataSubmitting(false);
     }
   };
 
@@ -454,67 +318,57 @@ export function ExperimentDetail() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {assayType === "ProcessData" && canWrite && (
-            <Button
-              variant={pickedCells.length > 0 ? "secondary" : "primary"}
-              size="sm"
-              onClick={() => setCellPickerOpen(true)}
+          {/* Upload data button — visible for non-StorageSwelling types with write permission */}
+          {assayType !== "StorageSwelling" && canWrite && (
+            <Button variant="primary" size="sm" onClick={() => setUploadDataOpen(true)}>
+              <UploadCloud className="w-4 h-4" />
+              {t("import_data", "导入数据")}
+            </Button>
+          )}
+
+          <Popconfirm
+            title={t("delete_experiment_confirm")}
+            open={deleteConfirmOpen}
+            onOpenChange={setDeleteConfirmOpen}
+            onConfirm={handleDeleteExperiment}
+            placement="bottom"
+          >
+            <Dropdown
+              trigger={
+                <Button variant="secondary" size="sm">
+                  <MoreHorizontal className="w-4 h-4" />
+                  {t("more", "更多")}
+                </Button>
+              }
             >
-              <Layers className="w-4 h-4" />
-              {pickedCells.length > 0 ? t("re_pick_cells", "重新挑选电芯") : t("pick_cells", "挑选电芯")}
-            </Button>
-          )}
+              <button onClick={() => setActiveDrawer("versions")} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                <History className="w-4 h-4 text-gray-400" />
+                {t("history", "History")}
+              </button>
+              <button onClick={() => setActiveDrawer("attachments")} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                <Paperclip className="w-4 h-4 text-gray-400" />
+                {t("attachments", "Attachments")}
+              </button>
+              <button onClick={() => setActiveDrawer("comments")} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                <MessageSquare className="w-4 h-4 text-gray-400" />
+                {t("comments", "Comments")}
+              </button>
+              {canWrite && (
+                <>
+                  <div className="border-t border-gray-100 my-1" />
+                  <button onClick={openEditModal} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+                    <Edit3 className="w-4 h-4 text-gray-400" />
+                    {t("edit")}
+                  </button>
+                  <button onClick={() => setDeleteConfirmOpen(true)} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left">
+                    <Trash2 className="w-4 h-4" />
+                    {t("delete")}
+                  </button>
+                </>
+              )}
+            </Dropdown>
+          </Popconfirm>
 
-          {canWrite && experiment.status === "Draft" && (
-            <Button variant="primary" size="sm" onClick={() => setSubmitModalOpen(true)}>
-              {t("submit_review", "Submit for Review")}
-            </Button>
-          )}
-          <Button variant="secondary" size="sm" onClick={() => setVersionsDrawerOpen(true)}>
-            <History className="w-4 h-4" />
-            {t("history", "History")}
-          </Button>
-
-          <Button variant="secondary" size="sm" onClick={() => setAttachmentsDrawerOpen(true)}>
-            <Paperclip className="w-4 h-4" />
-            {t("attachments", "Attachments")}
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setCommentsDrawerOpen(true)}>
-            <MessageSquare className="w-4 h-4" />
-            {t("comments", "Comments")}
-          </Button>
-          <Button variant="secondary" size="sm" onClick={() => setCollaboratorDrawerOpen(true)}>
-            <Layers className="w-4 h-4" />
-            {t("collaborators", "Collaborators")}
-          </Button>
-          {hasPermission("experiments:approve") && experiment.status === "In Review" && (
-            <>
-              <Button variant="danger" size="sm" onClick={() => { setRejectReason(""); setRejectModalOpen(true); }}>
-                {t("reject", "Reject")}
-              </Button>
-              <Button variant="primary" size="sm" onClick={handleApprove} loading={workflowSubmitting}>
-                <CheckCircle2 className="w-4 h-4" />
-                {t("approve", "Approve")}
-              </Button>
-            </>
-          )}
-          {hasPermission("experiments:archive") && experiment.status === "Approved" && (
-            <Button variant="secondary" size="sm" onClick={handleArchive} loading={workflowSubmitting}>
-              {t("archive", "Archive")}
-            </Button>
-          )}
-          {canWrite && (
-            <>
-              <Button variant="secondary" size="sm" onClick={openEditModal}>
-                <Edit3 className="w-4 h-4" />
-                {t("edit")}
-              </Button>
-              <Button variant="danger" size="sm" onClick={() => setDeleteModalOpen(true)}>
-                <Trash2 className="w-4 h-4" />
-                {t("delete")}
-              </Button>
-            </>
-          )}
           <Dropdown
             trigger={
               <Button variant="secondary" size="sm">
@@ -526,11 +380,11 @@ export function ExperimentDetail() {
           >
             <button onClick={() => handleExport('summary')} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
               <Table2 className="w-4 h-4 text-gray-400" />
-              导出汇总数据
+              {t("export_summary", "导出汇总数据")}
             </button>
             <button onClick={() => handleExport('raw')} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
               <FileDigit className="w-4 h-4 text-gray-400" />
-              导出原始数据
+              {t("export_raw", "导出原始数据")}
             </button>
           </Dropdown>
         </div>
@@ -546,23 +400,6 @@ export function ExperimentDetail() {
         </div>
       )}
 
-      {/* Picked Cells Display */}
-      {assayType === "ProcessData" && pickedCells.length > 0 && (
-        <div className="bg-blue-50/40 border border-blue-100 rounded-xl p-4">
-          <div className="text-xs font-semibold text-blue-800 mb-2 flex items-center gap-1.5">
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
-            {t("picked_cells", "已挑选的电芯")} ({pickedCells.length})
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {pickedCells.map((cid) => (
-              <span key={cid} className="inline-flex items-center px-2 py-0.5 rounded bg-white text-xs font-mono text-blue-700 border border-blue-200/60 shadow-sm">
-                {cid}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
       {hasReadPermission ? (
         <div className="space-y-6">
           <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} projectId={experiment.projectId} />
@@ -573,53 +410,81 @@ export function ExperimentDetail() {
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-gray-900">{t("data_table")}</h2>
                 <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 border border-gray-200/60">
-                  <button onClick={() => { setDataView("summary"); setRawLoaded(false); }}
+                  <button onClick={() => { setDataView("summary"); setRawLoaded({}); }}
                     className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
                       dataView === "summary" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-                    <Table2 className="w-3.5 h-3.5" />汇总
+                    <Table2 className="w-3.5 h-3.5" />{t("tab_summary", "汇总")}
                   </button>
                   <button onClick={() => setDataView("raw")}
                     className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
                       dataView === "raw" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-                    <FileDigit className="w-3.5 h-3.5" />原始
+                    <FileDigit className="w-3.5 h-3.5" />{t("tab_raw", "原始")}
                   </button>
                 </div>
+                {isProcessData && dataView === "raw" && (
+                  <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 border border-gray-200/60 ml-2">
+                    <button onClick={() => { setRawSource("formation"); setRawLoaded({}); }}
+                      className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                        rawSource === "formation" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
+                      {t("raw_formation", "化成数据")}
+                    </button>
+                    <button onClick={() => { setRawSource("grading"); setRawLoaded({}); }}
+                      className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                        rawSource === "grading" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
+                      {t("raw_grading", "定容数据")}
+                    </button>
+                  </div>
+                )}
               </div>
               {dataView === "raw" && rawSteps.length > 0 && (
-                <span className="text-xs text-gray-400">{rawSteps.length} 行</span>
+                <span className="text-xs text-gray-400">{rawSteps.length} 行{isProcessData ? (rawSource === "formation" ? " (化成)" : " (定容)") : ""}</span>
               )}
             </div>
 
             {dataView === "summary" ? (
-              renderTable()
+              <div key={refreshCounter}>{renderTable()}</div>
             ) : rawLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
               </div>
-            ) : rawSteps.length === 0 ? (
+            ) : rawSteps.length === 0 && !rawLoading ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                 <FileDigit className="w-8 h-8 mb-2 opacity-40" />
-                <p className="text-sm">暂无原始工步数据</p>
+                <p className="text-sm">
+                  {isProcessData
+                    ? (rawSource === "formation" ? t("no_raw_data_formation", "暂无化成原始工步数据") : t("no_raw_data_grading", "暂无定容原始工步数据"))
+                    : t("no_raw_data", "暂无原始工步数据")}
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-[13px]">
-                  <thead className="bg-gray-50 sticky top-0">
+                  <thead className="sticky top-0 z-20">
                     <tr>
-                      {["工步号", "工步序号", "循环号", "电芯", "工步类型", "容量", "起始电压", "结束电压", "起始电流", "结束电流", "工步时间"].map((h) => {
-                        const isNumeric = ["容量", "起始电压", "结束电压", "起始电流", "结束电流"].includes(h);
-                        return (
-                          <th
-                            key={h}
-                            className={cn(
-                              "px-3 py-2.5 text-[11px] font-semibold text-gray-500 uppercase whitespace-nowrap",
-                              isNumeric ? "text-right" : "text-left"
-                            )}
-                          >
-                            {h}
-                          </th>
-                        );
-                      })}
+                      {[
+                        { label: t("col_step_no", "工步号"), field: "stepNo" },
+                        { label: "工步序号", field: "stepSeqNo" },
+                        { label: t("col_raw_cycle", "循环号"), field: "cycleNo" },
+                        { label: t("col_raw_cell", "电芯"), field: "cellName", sticky: true },
+                        { label: t("col_raw_step_type", "工步类型"), field: "stepType" },
+                        { label: t("col_raw_capacity", "容量"), field: "capacity", numeric: true },
+                        { label: "起始电压", field: "startVoltage", numeric: true },
+                        { label: "结束电压", field: "endVoltage", numeric: true },
+                        { label: "起始电流", field: "startCurrent", numeric: true },
+                        { label: "结束电流", field: "endCurrent", numeric: true },
+                        { label: t("col_step_time", "工步时间"), field: "stepTime", numeric: true },
+                      ].map((h) => (
+                        <th
+                          key={h.field}
+                          className={cn(
+                            "px-3 py-2.5 text-[11px] font-semibold uppercase whitespace-nowrap bg-gray-50",
+                            h.numeric ? "text-right text-gray-500" : "text-left text-gray-500",
+                            h.sticky && "sticky left-0 z-10 after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-gray-200",
+                          )}
+                        >
+                          {h.label}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -628,14 +493,16 @@ export function ExperimentDetail() {
                         <td className="px-3 py-2 font-mono text-xs">{s.stepNo}</td>
                         <td className="px-3 py-2 font-mono text-xs text-gray-400">{s.stepSeqNo}</td>
                         <td className="px-3 py-2 text-xs">{s.cycleNo}</td>
-                        <td className="px-3 py-2 text-xs text-gray-500">{s.cellName}</td>
+                        <td className="sticky left-0 bg-white px-3 py-2 text-xs font-medium text-gray-700 after:absolute after:right-0 after:top-0 after:h-full after:w-px after:bg-gray-100">
+                          {s.cellName}
+                        </td>
                         <td className="px-3 py-2 text-xs">{s.stepType}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs">{s.capacity ?? "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.startVoltage ?? "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.endVoltage ?? "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.startCurrent ?? "—"}</td>
                         <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.endCurrent ?? "—"}</td>
-                        <td className="px-3 py-2 font-mono text-xs text-gray-400">{s.stepTime ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">{s.stepTime ?? "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -673,183 +540,74 @@ export function ExperimentDetail() {
         </form>
       </Modal>
 
-      {/* Delete Modal */}
-      <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title={t("delete_confirm_title")}
+
+      {/* Upload Data Modal */}
+      <Modal open={uploadDataOpen} onClose={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} title={t("import_data", "导入数据")}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setDeleteModalOpen(false)} disabled={deleting}>{t("cancel")}</Button>
-            <Button variant="danger" onClick={handleDeleteExperiment} loading={deleting} disabled={deleting}>
-              {deleting ? t("deleting") : t("delete")}
+            <Button variant="secondary" onClick={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} disabled={uploadDataSubmitting}>{t("upload_cancel", "取消")}</Button>
+            <Button variant="primary" onClick={handleDataUpload} loading={uploadDataSubmitting} disabled={uploadDataSubmitting || uploadDataFiles.length === 0}>
+              {uploadDataSubmitting ? t("uploading", "上传中...") : t("import_data", "导入数据")}
             </Button>
           </>
         }>
-        <p className="text-sm text-gray-600">{t("delete_experiment_confirm")}</p>
-      </Modal>
-
-      {/* Cell Picker Drawer */}
-      <CellPicker
-        open={cellPickerOpen}
-        onClose={() => setCellPickerOpen(false)}
-        experimentId={experiment.id}
-        projectId={experiment.projectId}
-        onComplete={(cells) => {
-          setPickedCells(cells);
-          setExperiment((prev) => prev ? { ...prev, cellPicked: true } : prev);
-        }}
-      />
-
-      {/* Conflict Modal — slide-up overlay for overwrite/merge choice */}
-      <ConflictModal
-        open={conflictModalOpen}
-        onClose={() => setConflictModalOpen(false)}
-        existingCount={pendingConflictCount}
-        onOverwrite={() => {
-          setConflictModalOpen(false);
-          setUploadMode("overwrite");
-          handleUpload(pendingFiles, "overwrite");
-        }}
-        onMerge={() => {
-          setConflictModalOpen(false);
-          setUploadMode("merge");
-          handleUpload(pendingFiles, "merge");
-        }}
-      />
-
-      {/* Submit for Review Modal */}
-      <Modal open={submitModalOpen} onClose={() => setSubmitModalOpen(false)} title={t("submit_review", "Submit for Review")}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setSubmitModalOpen(false)} disabled={workflowSubmitting}>{t("cancel")}</Button>
-            <Button type="submit" form="modal-submit-form" loading={workflowSubmitting} disabled={workflowSubmitting}>
-              {workflowSubmitting ? t("submitting", "Submitting...") : t("submit", "Submit")}
-            </Button>
-          </>
-        }>
-        <form id="modal-submit-form" onSubmit={handleSubmitReview} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t("reviewer", "Reviewer")} (Optional)</label>
-            <select
-              value={reviewerId}
-              onChange={(e) => setReviewerId(e.target.value)}
-              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
-              disabled={workflowSubmitting}
-            >
-              <option value="">-- {t("select_reviewer", "Select a reviewer")} --</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.username || u.email}</option>
+        <div className="space-y-4">
+          <div
+            className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#1d74f5] hover:bg-blue-50/20 transition-all"
+            onClick={() => uploadInputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); e.currentTarget.className = e.currentTarget.className.replace('border-gray-200', 'border-[#1d74f5]').replace('hover:bg-blue-50/20', 'bg-blue-50/40'); }}
+            onDragLeave={(e) => { e.currentTarget.className = e.currentTarget.className.replace('border-[#1d74f5]', 'border-gray-200').replace('bg-blue-50/40', 'hover:bg-blue-50/20'); }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (e.dataTransfer.files) {
+                const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
+                if (files.length > 0) setUploadDataFiles((prev) => [...prev, ...files]);
+              }
+            }}
+          >
+            <UploadCloud className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-gray-600 mb-1">{t("upload_drag_hint", "拖拽或点击选择 Excel 文件")}</p>
+            <p className="text-xs text-gray-400">{t("upload_supported_formats", "支持 .xlsx / .xls 格式，可同时选择多个文件")}</p>
+            <input type="file" accept=".xlsx,.xls" multiple className="hidden" ref={uploadInputRef}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    const files = Array.from(e.target.files);
+                    setUploadDataFiles((prev) => [...prev, ...files]);
+                  }
+                  if (uploadInputRef.current) uploadInputRef.current.value = "";
+                }} />
+          </div>
+          {uploadDataFiles.length > 0 && (
+            <div className="space-y-1.5 border border-gray-100 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
+              {uploadDataFiles.map((f, i) => (
+                <div key={`${f.name}-${f.size}-${i}`} className="flex items-center justify-between px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
+                    <FileDigit className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span className="text-xs text-gray-700 truncate">{f.name}</span>
+                    <span className="text-[10px] text-gray-400 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setUploadDataFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="text-[11px] text-red-500 hover:text-red-700 font-medium shrink-0"
+                  >{t("remove", "移除")}</button>
+                </div>
               ))}
-            </select>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Reject Modal */}
-      <Modal open={rejectModalOpen} onClose={() => setRejectModalOpen(false)} title={t("reject_experiment", "Reject Experiment")}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setRejectModalOpen(false)} disabled={workflowSubmitting}>{t("cancel")}</Button>
-            <Button type="submit" form="modal-reject-form" variant="danger" loading={workflowSubmitting} disabled={workflowSubmitting || !rejectReason.trim()}>
-              {workflowSubmitting ? t("rejecting", "Rejecting...") : t("reject", "Reject")}
-            </Button>
-          </>
-        }>
-        <form id="modal-reject-form" onSubmit={handleReject} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t("reason", "Reason")} <span className="text-red-500">*</span></label>
-            <textarea rows={4} required value={rejectReason} onChange={(e) => setRejectReason(e.target.value)}
-              placeholder={t("reject_reason_placeholder", "Please provide a reason for rejection")}
-              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 sm:text-sm" disabled={workflowSubmitting} />
-          </div>
-        </form>
-      </Modal>
-
-      {/* Collaborators Drawer */}
-      <Drawer
-        open={collaboratorDrawerOpen}
-        onClose={() => setCollaboratorDrawerOpen(false)}
-        title={t("collaborators", "Collaborators")}
-      >
-        <div className="space-y-6">
-          <form onSubmit={handleAddCollaborator} className="space-y-3 bg-gray-50 p-4 rounded-lg border border-gray-100">
-            <h4 className="text-sm font-medium text-gray-900">{t("add_collaborator", "Add Collaborator")}</h4>
-            <div className="space-y-2">
-              <select
-                required
-                value={newCollabUserId}
-                onChange={(e) => setNewCollabUserId(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none sm:text-sm"
-                disabled={collabSubmitting}
-              >
-                <option value="">-- {t("select_user", "Select a user")} --</option>
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>{u.username || u.email}</option>
-                ))}
-              </select>
-              <select
-                required
-                value={newCollabRole}
-                onChange={(e) => setNewCollabRole(e.target.value)}
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none sm:text-sm"
-                disabled={collabSubmitting}
-              >
-                <option value="Editor">Editor</option>
-                <option value="Viewer">Viewer</option>
-              </select>
             </div>
-            <Button type="submit" variant="primary" className="w-full" loading={collabSubmitting} disabled={collabSubmitting || !newCollabUserId}>
-              <Plus className="w-4 h-4" />
-              {t("add", "Add")}
-            </Button>
-          </form>
-
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-3">{t("current_collaborators", "Current Collaborators")}</h4>
-            {collaborators.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-4">{t("no_collaborators", "No collaborators yet")}</p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {collaborators.map(c => {
-                  const user = users.find(u => u.id === c.userId);
-                  return (
-                    <li key={c.id} className="py-3 flex items-center justify-between">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{user?.username || user?.email || c.userId}</p>
-                        <p className="text-xs text-gray-500">{c.role}</p>
-                      </div>
-                      <Button variant="text" size="sm" onClick={() => handleRemoveCollaborator(c.userId)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                        {t("remove", "Remove")}
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+          )}
         </div>
-      </Drawer>
+      </Modal>
 
       {/* Attachments Drawer */}
       <Drawer
-        open={attachmentsDrawerOpen}
-        onClose={() => setAttachmentsDrawerOpen(false)}
+        open={attachmentsDrawerOpen || activeDrawer === "attachments"}
+        onClose={() => { setAttachmentsDrawerOpen(false); setActiveDrawer(null); }}
         title={t("attachments", "Attachments")}
       >
         <div className="space-y-6">
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 flex flex-col items-center justify-center text-center">
-            <Paperclip className="w-6 h-6 text-gray-400 mb-2" />
-            <p className="text-sm font-medium text-gray-900 mb-1">Upload Attachment</p>
-            <p className="text-xs text-gray-500 mb-3">Any file type (PDF, Images, etc.)</p>
-            <label className={cn("cursor-pointer inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-[#1d74f5] hover:bg-blue-700 transition-colors", uploadingAttachment && "opacity-50 pointer-events-none")}>
-              {uploadingAttachment ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-              {uploadingAttachment ? "Uploading..." : "Select File"}
-              <input type="file" className="hidden" onChange={handleUploadAttachment} disabled={uploadingAttachment} />
-            </label>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-medium text-gray-900 mb-3">{t("files", "Files")}</h4>
+          <h4 className="text-sm font-medium text-gray-900 mb-3">{t("files", "Files")}</h4>
             {attachments.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-4">No attachments</p>
+              <p className="text-sm text-gray-500 text-center py-4">{t("no_attachments", "暂无附件")}</p>
             ) : (
               <ul className="divide-y divide-gray-100">
                 {attachments.map(att => (
@@ -872,27 +630,26 @@ export function ExperimentDetail() {
                 ))}
               </ul>
             )}
-          </div>
         </div>
       </Drawer>
 
       {/* Comments Drawer */}
       <Drawer
-        open={commentsDrawerOpen}
-        onClose={() => setCommentsDrawerOpen(false)}
+        open={commentsDrawerOpen || activeDrawer === "comments"}
+        onClose={() => { setCommentsDrawerOpen(false); setActiveDrawer(null); }}
         title={t("comments", "Comments")}
       >
         <div className="h-full flex flex-col -m-6">
           <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50/50">
             {comments.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-8">No comments yet. Start the conversation!</p>
+              <p className="text-sm text-gray-500 text-center py-8">{t("no_comments", "暂无评论，开始对话吧！")}</p>
             ) : (
               comments.map(c => {
                 const isMe = c.userId === JSON.parse(atob(localStorage.getItem('token')?.split('.')[1] || 'e30=')).sub;
                 return (
                   <div key={c.id} className={cn("flex flex-col max-w-[85%]", isMe ? "ml-auto items-end" : "mr-auto items-start")}>
                     <span className="text-[11px] text-gray-500 mb-1 px-1">
-                      {isMe ? "You" : "Collaborator"} • {format(new Date(c.createdAt), "MMM d, HH:mm")}
+                      {isMe ? t("you", "我") : t("collaborator", "协作者")} • {format(new Date(c.createdAt), "MMM d, HH:mm")}
                     </span>
                     <div className={cn("px-4 py-2.5 rounded-2xl text-sm shadow-sm", isMe ? "bg-[#1d74f5] text-white rounded-br-none" : "bg-white border border-gray-100 text-gray-900 rounded-bl-none")}>
                       {c.content}
@@ -908,7 +665,7 @@ export function ExperimentDetail() {
                 type="text"
                 value={newComment}
                 onChange={e => setNewComment(e.target.value)}
-                placeholder="Type a comment..."
+                placeholder={t("comment_placeholder", "输入评论...")}
                 className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
                 disabled={commentSubmitting}
               />
@@ -920,7 +677,7 @@ export function ExperimentDetail() {
         </div>
       </Drawer>
 
-      <Drawer open={versionsDrawerOpen} onClose={() => setVersionsDrawerOpen(false)} title={t("history", "Version History")}>
+      <Drawer open={versionsDrawerOpen || activeDrawer === "versions"} onClose={() => { setVersionsDrawerOpen(false); setActiveDrawer(null); }} title={t("history", "Version History")}>
         <VersionDiffViewer versions={versions} />
       </Drawer>
     </div>

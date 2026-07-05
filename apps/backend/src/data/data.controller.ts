@@ -107,32 +107,41 @@ export class DataController {
   }
 
   @Get('raw/:expId')
-  @ApiOperation({ summary: 'Query raw step data rows for an experiment.' })
-  async findRawSteps(@Param('expId') expId: string) {
-    return this.dataService.findRawSteps(expId);
-  }
-
-  @Post('pick-cells/:expId')
-  @ApiOperation({ summary: 'Auto or manual pick cells for an experiment.' })
-  async pickCells(
+  @ApiOperation({ summary: 'Query raw step data rows for an experiment. Optional ?source=formation|grading to filter by data source.' })
+  async findRawSteps(
     @Param('expId') expId: string,
-    @Body() dto: PickCellsDto,
-    @Query('projectId') projectId: string,
+    @Query('source') source?: string,
   ) {
-    const topN = dto.mode === 'auto' ? undefined : undefined;
-    return this.dataService.autoPickCells(expId, projectId, topN);
+    return this.dataService.findRawSteps(expId, source);
   }
 
-  @Get('picked-cells/:expId')
-  @ApiOperation({ summary: 'Get picked cells for an experiment.' })
-  async getPickedCells(@Param('expId') expId: string) {
-    return this.dataService.getPickedCells(expId);
+  @Post('pick-cells/:projectId')
+  @ApiOperation({ summary: 'Auto or manual pick cells for a project (project-scoped).' })
+  async pickCells(
+    @Param('projectId') projectId: string,
+    @Body() dto: PickCellsDto,
+    @CurrentUser() _user: RequestUser,
+  ) {
+    if (dto.mode === 'manual') {
+      return this.dataService.manualPickCells(projectId, dto.cellIds ?? []);
+    }
+    const topN = dto.topN != null && dto.topN > 0 ? dto.topN : undefined;
+    return this.dataService.autoPickCells(projectId, topN);
   }
 
-  @Post('sync-cells/:expId')
-  @ApiOperation({ summary: 'Sync picked cells to 5 target business tables.' })
-  async syncCells(@Param('expId') expId: string) {
-    return this.dataService.syncCellsToTables(expId);
+  @Get('picked-cells/:projectId')
+  @ApiOperation({ summary: 'Get picked cells for a project.' })
+  async getPickedCells(@Param('projectId') projectId: string) {
+    return this.dataService.getPickedCells(projectId);
+  }
+
+  @Post('sync-cells/:projectId')
+  @ApiOperation({ summary: 'Sync picked cells to all 6 target business tables (project-scoped, destructive).' })
+  async syncCells(
+    @Param('projectId') projectId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.dataService.syncCellsToTables(projectId, user.id);
   }
 
   @Get(':type/:expId')
@@ -158,6 +167,27 @@ export class DataController {
       return this.dataService.findByTypeWithGroups(type, expId, projectId);
     }
     return this.dataService.findByType(type, expId);
+  }
+
+  @Post(':type/:expId')
+  @ApiOperation({
+    summary: 'Create a new row in a business table (for manual entry, e.g. StorageSwelling).',
+  })
+  async createRow(
+    @Param('type') type: string,
+    @Param('expId') expId: string,
+    @Body() body: Record<string, unknown>,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const requiredPermission = `data_${type}:write`;
+    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
+    const hasGeneral = hasPermission(user.permissionList, 'data:write');
+    if (!hasSpecific && !hasGeneral) {
+      throw new ForbiddenException(
+        `You do not have the required permission: ${requiredPermission} or data:write`,
+      );
+    }
+    return this.dataService.createRow(type, expId, body);
   }
 
   @Put(':type/:id')

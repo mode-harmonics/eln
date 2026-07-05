@@ -8,6 +8,7 @@ import { SkeletonCard } from "../components/Skeleton";
 import { api, ApiError } from "../lib/api";
 import type { CellGroup } from "../types";
 import { GROUP_PALETTE } from "../utils/chartColors";
+import { Popconfirm } from "../components/Popconfirm";
 
 export function Groups() {
   const { t } = useTranslation();
@@ -31,8 +32,7 @@ export function Groups() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Delete confirm
-  const [deleteTarget, setDeleteTarget] = useState<CellGroup | null>(null);
+
 
   const fetchGroups = () => {
     if (!projectId) return;
@@ -107,17 +107,7 @@ export function Groups() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!deleteTarget || !projectId) return;
-    try {
-      await api.delete(`/api/v1/projects/${projectId}/groups/${deleteTarget.id}`);
-      setDeleteTarget(null);
-      fetchGroups();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "删除失败");
-      setDeleteTarget(null);
-    }
-  };
+
 
   const unusedColors = GROUP_PALETTE.filter(
     (c: string) => !groups.some((g) => g.color === c) || editingGroup?.color === c,
@@ -189,9 +179,23 @@ export function Groups() {
                 <Button variant="ghost" size="sm" onClick={() => openEdit(g)}>
                   <Pencil className="w-3.5 h-3.5" />
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(g)}>
-                  <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                </Button>
+                <Popconfirm
+                  title={t("delete_group_confirm", { name: g.name }).replace(/<strong>|<\/strong>/g, "")}
+                  onConfirm={async () => {
+                    if (!projectId) return;
+                    try {
+                      await api.delete(`/api/v1/projects/${projectId}/groups/${g.id}`);
+                      fetchGroups();
+                    } catch (err) {
+                      setError(err instanceof ApiError ? err.message : "删除失败");
+                    }
+                  }}
+                  placement="left"
+                >
+                  <Button variant="ghost" size="sm">
+                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                  </Button>
+                </Popconfirm>
               </div>
             </div>
           ))}
@@ -289,31 +293,6 @@ export function Groups() {
         </form>
       </Modal>
 
-      {/* Delete confirm */}
-      <Modal
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        title={t("delete_confirm_title")}
-        maxWidth="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
-              {t("cancel")}
-            </Button>
-            <Button variant="danger" onClick={handleDelete}>
-              <Trash2 className="w-4 h-4" />
-              {t("delete_row")}
-            </Button>
-          </>
-        }
-      >
-        <p
-          className="text-sm text-gray-600"
-          dangerouslySetInnerHTML={{
-            __html: t("delete_group_confirm", { name: deleteTarget?.name ?? "" }),
-          }}
-        />
-      </Modal>
     </div>
   );
 }
