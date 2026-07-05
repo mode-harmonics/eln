@@ -342,6 +342,7 @@ export function Roles() {
           </div>
         </div>
 
+        {viewMode === "list" ? (
         <TableWrapper>
           <Table>
             <TableHeader>
@@ -371,7 +372,7 @@ export function Roles() {
                   </TableCell>
                   {hasPermission("roles:write") && (
                     <TableCell className="text-right">
-                      <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                      <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-[#1d74f5]!">
                         <Edit3 className="w-4 h-4" />
                       </Button>
                     </TableCell>
@@ -402,7 +403,7 @@ export function Roles() {
               </CardContent>
               {hasPermission("roles:write") && (
                 <CardFooter className="justify-center mt-auto">
-                  <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                  <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-[#1d74f5]!">
                     <Edit3 className="w-4 h-4" />
                   </Button>
                 </CardFooter>
@@ -410,7 +411,7 @@ export function Roles() {
             </Card>
           ))}
         </div>
-        )
+        )}
         <Pagination
           currentPage={currentPage}
           totalItems={totalItems}
