@@ -10,6 +10,7 @@ import {
   FlaskConical,
   User,
   Globe,
+  Upload,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,6 +23,7 @@ import { Logo } from "./Logo";
 import { Breadcrumb } from "./Breadcrumb";
 import { NotificationBell } from "./NotificationBell";
 import { GlobalSearch } from "./GlobalSearch";
+import { TempUploadDrawer } from "./TempUploadDrawer";
 
 const NAVIGATION = [
   { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "projects:read" },
@@ -41,6 +43,7 @@ export function Layout() {
   const { hasPermission } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [tempUploadOpen, setTempUploadOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -212,6 +215,17 @@ export function Layout() {
               </>
             )}
           </nav>
+
+          {/* Temp Upload button — bottom of sidebar */}
+          <div className="px-4 pb-4 mt-auto">
+            <button
+              onClick={() => setTempUploadOpen(true)}
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-black/5 hover:text-gray-900 transition-colors group"
+            >
+              <Upload className="w-[18px] h-[18px] shrink-0 stroke-[2] text-gray-400 group-hover:text-gray-600" />
+              临时文件
+            </button>
+          </div>
         </div>
       </div>
 
@@ -239,6 +253,8 @@ export function Layout() {
             </div>
         </main>
       </div>
+
+      <TempUploadDrawer open={tempUploadOpen} onClose={() => setTempUploadOpen(false)} />
     </div>
   );
 }

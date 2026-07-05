@@ -16,6 +16,7 @@ import { GroupsModule } from './groups/groups.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SearchModule } from './search/search.module';
+import { TempFilesModule } from './temp-files/temp-files.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { SearchModule } from './search/search.module';
     NotificationsModule,
     DashboardModule,
     SearchModule,
+    TempFilesModule,
   ],
   providers: [ConfigService],
 })
