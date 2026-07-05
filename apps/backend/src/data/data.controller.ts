@@ -23,6 +23,13 @@ import { DataService } from './data.service';
 import { UploadDataDto } from './dto/upload-data.dto';
 import { PickCellsDto } from '../experiments/dto/pick-cells.dto';
 
+interface UploadedFile {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+  size: number;
+}
+
 const RECORD_TYPE_TO_PERMISSION: Record<string, string> = {
   ProcessData: 'process',
   CalendarLife: 'calendar',
@@ -45,9 +52,9 @@ export class DataController {
   @ApiOperation({
     summary: 'Upload multiple multi-sheet Excel workbooks; parses and inserts into the 7 battery-data tables.',
   })
-  @UseInterceptors(FilesInterceptor('files'))
+  @UseInterceptors(FilesInterceptor('files', 20, { limits: { fileSize: 50 * 1024 * 1024 } }))
   async upload(
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles() files: UploadedFile[],
     @Body() dto: UploadDataDto,
     @CurrentUser() user: RequestUser,
   ) {

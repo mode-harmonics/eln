@@ -6,10 +6,11 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { API_PREFIX } from '@eln/shared';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
 
   app.setGlobalPrefix(API_PREFIX);
@@ -17,6 +18,9 @@ async function bootstrap() {
     origin: config.get<string>('corsOrigin'),
     credentials: true,
   });
+
+  // Increase body parser limit for file uploads (Excel workbooks can be large)
+  app.useBodyParser('json', { limit: '50mb' });
 
   app.useGlobalPipes(
     new ValidationPipe({

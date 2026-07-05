@@ -20,6 +20,13 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { v4 as uuid } from 'uuid';
 
+interface UploadedFile {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+  size: number;
+}
+
 const TEMP_DIR = path.join(os.tmpdir(), 'eln-temp-files');
 
 // Ensure temp dir exists at startup
@@ -46,9 +53,9 @@ export class TempFilesController {
   @Post('upload')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: '临时上传一个或多个文件（存储于系统临时目录，重启后清空）。' })
-  @UseInterceptors(FilesInterceptor('files', 20))
+  @UseInterceptors(FilesInterceptor('files', 20, { limits: { fileSize: 50 * 1024 * 1024 } }))
   async upload(
-    @UploadedFiles() files: Express.Multer.File[],
+    @UploadedFiles() files: UploadedFile[],
     @CurrentUser() user: RequestUser,
   ) {
     if (!files || files.length === 0) {
