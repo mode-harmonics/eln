@@ -47,6 +47,15 @@ services:
       - "${BACKEND_PORT:-3000}:3000"
     volumes:
       - uploads:/app/apps/backend/uploads
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /app/apps/backend/env
+        printf 'DATABASE_URL=%s\nJWT_SECRET=%s\nJWT_EXPIRES_IN=%s\nPORT=%s\nCORS_ORIGIN=%s\nUPLOAD_DIR=%s\n' \
+          "$$DATABASE_URL" "$$JWT_SECRET" "$$JWT_EXPIRES_IN" "$$PORT" "$$CORS_ORIGIN" "$$UPLOAD_DIR" \
+          > /app/apps/backend/env/local.env
+        exec /app/docker-entrypoint.sh
 
   frontend:
     build:
