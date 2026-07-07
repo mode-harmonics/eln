@@ -135,6 +135,27 @@ export function ExperimentDetail() {
     }
   };
 
+  const downloadAttachment = async (attachmentId: string, fileName: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/v1/experiments/${experiment!.id}/attachments/${attachmentId}/download`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error("Download failed");
+    }
+  };
+
   const handleDeleteAttachment = async (attId: string) => {
     if (!experiment) return;
     try {
@@ -345,15 +366,15 @@ export function ExperimentDetail() {
                 </Button>
               }
             >
-              <button onClick={() => setActiveDrawer("versions")} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+              <button onClick={() => { setActiveDrawer("versions"); setVersionsDrawerOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
                 <History className="w-4 h-4 text-gray-400" />
                 {t("history", "History")}
               </button>
-              <button onClick={() => setActiveDrawer("attachments")} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+              <button onClick={() => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
                 <Paperclip className="w-4 h-4 text-gray-400" />
                 {t("attachments", "Attachments")}
               </button>
-              <button onClick={() => setActiveDrawer("comments")} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
+              <button onClick={() => { setActiveDrawer("comments"); setCommentsDrawerOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
                 <MessageSquare className="w-4 h-4 text-gray-400" />
                 {t("comments", "Comments")}
               </button>
@@ -621,15 +642,24 @@ export function ExperimentDetail() {
                         <FileDigit className="w-4 h-4 text-[#1d74f5]" />
                       </div>
                       <div className="min-w-0">
-                        <a href={`/api/v1/experiments/${experiment?.id}/attachments/${att.id}/download`} target="_blank" rel="noreferrer" className="text-sm font-medium text-blue-600 hover:underline truncate block">
+                        <button
+                          onClick={() => downloadAttachment(att.id, att.fileName)}
+                          className="text-sm font-medium text-blue-600 hover:underline truncate block text-left"
+                        >
                           {att.fileName}
-                        </a>
+                        </button>
                         <p className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</p>
                       </div>
                     </div>
-                    <Button variant="text" size="sm" onClick={() => handleDeleteAttachment(att.id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Popconfirm
+                      title={t("delete_attachment_confirm", "附件删除后关联的汇总数据也会一并删除，确定继续？")}
+                      onConfirm={() => handleDeleteAttachment(att.id)}
+                      placement="left"
+                    >
+                      <Button variant="text" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </Popconfirm>
                   </li>
                 ))}
               </ul>

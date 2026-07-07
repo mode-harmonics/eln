@@ -355,7 +355,6 @@ export function ProjectDetail() {
             onClose={() => setCellPickerOpen(false)}
             projectId={projectId!}
             processExperimentId={processExp.id}
-            alreadyPicked={hasPickedCells}
             onComplete={(cells) => {
               setPickedCells(cells);
               setRefetchTrigger((n) => n + 1);

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Loader2, Check, Layers, Zap, MousePointerClick, ChevronRight, AlertTriangle } from "lucide-react";
+import { Loader2, Check, Layers, Zap, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "./Button";
 import { Drawer } from "./Drawer";
 import { cn } from "../lib/utils";
@@ -11,43 +11,37 @@ interface CellPickerProps {
   onClose: () => void;
   projectId: string;
   processExperimentId: string;
-  alreadyPicked: boolean;
   onComplete?: (cellIds: string[]) => void;
 }
 
-export function CellPicker({ open, onClose, projectId, processExperimentId, alreadyPicked, onComplete }: CellPickerProps) {
-  const [mode, setMode] = useState<"auto" | "manual">("auto");
+export function CellPicker({ open, onClose, projectId, processExperimentId, onComplete }: CellPickerProps) {
   const [cells, setCells] = useState<{ cellId: string; fqTotal: number }[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [autoPicking, setAutoPicking] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [showResyncWarning, setShowResyncWarning] = useState(false);
 
+  // Load cells once on open
   useEffect(() => {
-    if (!open || !processExperimentId || mode !== "manual") return;
+    if (!open || !processExperimentId) return;
     setLoading(true);
-    setShowResyncWarning(false);
-    api.get<any[]>(`/api/v1/data/process/${processExperimentId}`)
-      .then((data) => {
-        const mapped = (data || [])
-          .filter((r: any) => r.cellId && r.fq1 && r.fq2)
-          .map((r: any) => ({
-            cellId: r.cellId,
-            fqTotal: (parseFloat(r.fq1) || 0) + (parseFloat(r.fq2) || 0),
-          }))
-          .sort((a: any, b: any) => b.fqTotal - a.fqTotal);
-        setCells(mapped);
-        setSelected(new Set(mapped.map((c: any) => c.cellId)));
-        setLoading(false);
-      })
-      .catch(() => { setLoading(false); toast("加载电芯数据失败", "error"); });
-  }, [open, processExperimentId, mode]);
-
-  useEffect(() => {
-    if (mode === "auto") {
-      setSelected(new Set());
-    }
-  }, [mode]);
+    Promise.all([
+      api.get<any[]>(`/api/v1/data/process/${processExperimentId}`),
+      api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`).catch(() => []),
+    ]).then(([processData, picked]) => {
+      const pickedIds = new Set((picked || []).map((p: any) => p.cellId));
+      const mapped = (processData || [])
+        .filter((r: any) => r.cellId && r.fq1 && r.fq2)
+        .map((r: any) => ({
+          cellId: r.cellId,
+          fqTotal: (parseFloat(r.fq1) || 0) + (parseFloat(r.fq2) || 0),
+        }))
+        .sort((a: any, b: any) => b.fqTotal - a.fqTotal);
+      setCells(mapped);
+      setSelected(new Set(mapped.filter((c: any) => pickedIds.has(c.cellId)).map((c: any) => c.cellId)));
+      setLoading(false);
+    }).catch(() => { setLoading(false); toast("加载电芯数据失败", "error"); });
+  }, [open, processExperimentId, projectId]);
 
   const toggleCell = (cellId: string) => {
     setSelected((prev) => {
@@ -58,30 +52,39 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, alre
     });
   };
 
+  const handleAutoPick = async () => {
+    setAutoPicking(true);
+    try {
+      // Auto-pick via algorithm — writes to DB
+      await api.post(`/api/v1/data/pick-cells/${projectId}`, { mode: "auto" });
+      const data = await api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`);
+      const pickedIds = (data || []).map((p: any) => p.cellId);
+      setSelected(new Set(pickedIds));
+      toast(`系统已自动选择 ${pickedIds.length} 个电芯，你可继续手动调整`, "success");
+    } catch (err: any) {
+      toast(err?.message ?? "自动挑选失败", "error");
+    } finally {
+      setAutoPicking(false);
+    }
+  };
+
   const doConfirm = async () => {
     setSyncing(true);
-    const picked = mode === "auto" ? [] : Array.from(selected);
+    const picked = Array.from(selected);
     try {
+      // Persist the final selection (overwrites existing picks)
       await api.post(`/api/v1/data/pick-cells/${projectId}`, {
-        mode,
-        ...(picked.length > 0 ? { cellIds: picked } : {}),
+        mode: "manual",
+        cellIds: picked,
       });
-      await api.post(`/api/v1/data/sync-cells/${projectId}`, {});
-      toast(`已挑选电芯并同步到全部数据表`, "success");
+
       onComplete?.(picked);
+      toast(`已挑选 ${picked.length} 个电芯`, "success");
       onClose();
     } catch (err: any) {
       toast(err?.message ?? "操作失败", "error");
     } finally {
       setSyncing(false);
-    }
-  };
-
-  const handleConfirmClick = () => {
-    if (alreadyPicked) {
-      setShowResyncWarning(true);
-    } else {
-      doConfirm();
     }
   };
 
@@ -92,76 +95,33 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, alre
       open={open}
       onClose={onClose}
       title="挑选电芯"
-      description="选择后续测试使用的电芯，确认后将同步到全部实验表"
+      description="选择后续测试使用的电芯"
       icon={<Layers className="w-4 h-4 text-[#1d74f5]" />}
       size="max-w-lg"
       footer={
-        showResyncWarning ? (
-          <div className="flex flex-col gap-3 w-full">
-            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
-              <span>重新挑选将<strong>清空并重建</strong>全部 6 类实验表中的电芯占位行（已手动录入或导入的数据也会被清空），请确认继续。</span>
-            </div>
-            <div className="flex items-center justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowResyncWarning(false)} disabled={syncing}>取消</Button>
-              <Button variant="danger" onClick={doConfirm} loading={syncing} disabled={syncing}>
-                {syncing ? "同步中..." : "确认清空并重新同步"}
-              </Button>
-            </div>
+        <div className="flex items-center justify-between w-full">
+          <p className="text-sm text-gray-500">
+            共 <span className="font-semibold text-gray-900">{cells.length}</span> 个电芯，已选 <span className="font-semibold text-[#1d74f5]">{selected.size}</span>
+          </p>
+          <div className="flex items-center gap-3">
+            <Button variant="secondary" onClick={onClose} disabled={syncing}>取消</Button>
+            <Button onClick={doConfirm} loading={syncing} disabled={syncing || selected.size === 0}>
+              {syncing ? "同步中..." : "确认挑选"}
+              {!syncing && <ChevronRight className="w-4 h-4" />}
+            </Button>
           </div>
-        ) : (
-          <div className="flex items-center justify-between w-full">
-            {mode === "manual" ? (
-              <p className="text-sm text-gray-500">
-                已选 <span className="font-semibold text-gray-900">{selected.size}</span> / {cells.length} 个电芯
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500">系统将自动挑选</p>
-            )}
-            <div className="flex items-center gap-3">
-              <Button variant="secondary" onClick={onClose} disabled={syncing}>取消</Button>
-              <Button onClick={handleConfirmClick} loading={syncing} disabled={syncing || (mode === "manual" && selected.size === 0)}>
-                {syncing ? "同步中..." : "确认挑选 & 同步"}
-                {!syncing && <ChevronRight className="w-4 h-4" />}
-              </Button>
-            </div>
-          </div>
-        )
+        </div>
       }
     >
       <div className="-mx-6 -mt-4 px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-        <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 w-fit border border-gray-200/60">
-          <button
-            onClick={() => setMode("auto")}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-medium transition-all",
-              mode === "auto" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700",
-            )}
-          >
-            <Zap className="w-3.5 h-3.5" />
-            自动挑选
-          </button>
-          <button
-            onClick={() => setMode("manual")}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-medium transition-all",
-              mode === "manual" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700",
-            )}
-          >
-            <MousePointerClick className="w-3.5 h-3.5" />
-            手动选择
-          </button>
-        </div>
+        <Button variant="secondary" size="sm" onClick={handleAutoPick} loading={autoPicking} disabled={autoPicking || cells.length === 0}>
+          <Sparkles className="w-3.5 h-3.5" />
+          {autoPicking ? "自动选择中..." : "自动选择"}
+        </Button>
       </div>
 
       <div className="py-4">
-        {mode === "auto" ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Zap className="w-8 h-8 text-gray-300 mb-3" />
-            <p className="text-sm font-medium text-gray-600">系统将根据后端策略自动挑选电芯</p>
-            <p className="text-xs text-gray-400 mt-1">确认后由后端服务完成电芯选择与同步</p>
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
           </div>

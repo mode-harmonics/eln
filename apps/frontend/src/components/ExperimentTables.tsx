@@ -187,7 +187,7 @@ function RowActions({ row, type, onRefresh, editing, onStartEdit, onSave, onCanc
 
 // ─── ProcessData: column config + color grouping ────────────────────────────
 // 黄色(手动输入) | 蓝色(设备获取) | 绿色(计算获取)
-// Headers get a subtle background; cells inherit matching text color.
+// border-r 加在每组最后一列上，形成竖向分隔线
 const P_HDR: Record<string, string> = {
   m0:'bg-amber-50 text-amber-800', m1:'bg-amber-50 text-amber-800', m2:'bg-amber-50 text-amber-800',
   m3:'bg-amber-50 text-amber-800', m4:'bg-amber-50 text-amber-800',
@@ -203,6 +203,11 @@ const P_HDR: Record<string, string> = {
   fq:'bg-emerald-50 text-emerald-800', fvg:'bg-emerald-50 text-emerald-800', ku:'bg-emerald-50 text-emerald-800',
   qcFirst:'bg-emerald-50 text-emerald-800', qdFirst:'bg-emerald-50 text-emerald-800', ceFirst:'bg-emerald-50 text-emerald-800',
 };
+// Section boundary fields — add a right border for visual separation
+const P_BOUNDARY = new Set(['mHold', 'ku', 'mLoss', 'gr1']);
+for (const k of P_BOUNDARY) {
+  if (P_HDR[k]) P_HDR[k] += ' border-r border-gray-300!';
+}
 const P_CELL: Record<string, string> = {};
 for (const [k, v] of Object.entries(P_HDR)) {
   P_CELL[k] = v.replace(/^bg-\S+ /, ''); // keep only text color
@@ -248,11 +253,38 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
   const { data, loading, error, refresh } = useTableData<any>('process', experimentId);
   const { editingId, editForm, saving, startEditing, cancelEditing, handleChange, handleSave } = useInlineEdit('process');
   const pRest = P_COLS.slice(1);
+
+  // Section groupings: defines how columns are grouped under section headers
+  interface SectionDef { label: string; count: number; }
+  const sections: SectionDef[] = [
+    { label: t('lab_weighing', '称重'), count: 5 },       // m0, m1, m2, mIn, mHold
+    { label: t('lab_formation', '化成'), count: 13 },      // v0,fu0,fr0,fq1,fq2,fq,v1,fvg,fu1,fr1,fu2,fr2,ku
+    { label: t('lab_seal', '二封'), count: 3 },            // m3, m4, mLoss
+    { label: t('lab_grading', '定容'), count: 7 },         // gu0,gr0,gqc1,gqd1,gqc2,gu1,gr1
+    { label: t('lab_computed', '综合计算'), count: 3 },    // qcFirst, qdFirst, ceFirst
+  ];
+
   return (
     <TableShell loading={loading} error={error}>
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50"><tr>
+        <thead className="bg-gray-50">
+          {/* Section header row */}
+          <tr>
+            <th className="sticky left-0 z-10 bg-gray-50 px-4 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap border-b border-gray-200" colSpan={1}></th>
+            {sections.map((sec, i) => (
+              <th
+                key={sec.label}
+                colSpan={sec.count}
+                className={"px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap border-b border-gray-200 text-center " + (i % 2 === 0 ? "text-gray-400 bg-gray-50" : "text-gray-400 bg-gray-100/60")}
+              >
+                {sec.label}
+              </th>
+            ))}
+            <th className="sticky right-0 z-10 bg-gray-50 px-4 py-1.5 border-b border-gray-200" colSpan={1}></th>
+          </tr>
+          {/* Column header row */}
+          <tr>
           <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('col_cell_id')}</th>
           {renderHeaders(pRest, t, P_HDR)}
           <th className="sticky right-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>

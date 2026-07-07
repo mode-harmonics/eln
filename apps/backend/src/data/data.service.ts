@@ -28,6 +28,7 @@ import { GroupsService } from '../groups/groups.service';
 import { CellGroupMember } from '../entities/cell-group-member.entity';
 import { ProjectsService } from '../projects/projects.service';
 import { pickBatteries } from '../battery-picker/pick-batteries';
+import { getColumnHeaders, RAW_STEP_COLUMNS } from './export-columns';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
@@ -352,19 +353,35 @@ export class DataService {
     });
 
     // Build records from cells that have all four metrics
+    // QD1st = gqd1 (分容放电容量1), GR1 = gr1 (分容后电阻)
+    // FVG = (v1 - v0) / qdFirst (化成产气量), KU = fu1 - fu2 (老化电压降)
+    // If stored computed values are null, compute them on the fly from raw fields
     const records: { id: string; QD1st: number; GR1: number; FVG: number; KU: number }[] = [];
     for (const r of processRows) {
       const qd1st = r.gqd1 != null ? Number(r.gqd1) : null;
       const gr1 = r.gr1 != null ? Number(r.gr1) : null;
-      const fvg = r.fvg != null ? Number(r.fvg) : null;
-      const ku = r.ku != null ? Number(r.ku) : null;
-      if (qd1st != null && gr1 != null && fvg != null && ku != null && r.cellId) {
+      if (qd1st == null || gr1 == null || !r.cellId) continue;
+
+      // FVG: use stored computed value, or compute from raw fields
+      const fvg = r.fvg != null
+        ? Number(r.fvg)
+        : (r.v1 != null && r.v0 != null && qd1st !== 0 ? (Number(r.v1) - Number(r.v0)) / qd1st : null);
+
+      // KU: use stored computed value, or compute from raw fields
+      const ku = r.ku != null
+        ? Number(r.ku)
+        : (r.fu1 != null && r.fu2 != null ? Number(r.fu1) - Number(r.fu2) : null);
+
+      if (fvg != null && ku != null) {
         records.push({ id: r.cellId, QD1st: qd1st, GR1: gr1, FVG: fvg, KU: ku });
       }
     }
 
     if (records.length === 0) {
-      throw new BadRequestException('No cells with complete metric data (QD1st, GR1, FVG, KU) found. Ensure process data has been fully uploaded.');
+      throw new BadRequestException(
+        '没有找到同时具备 QD1st(首次放电容量/gqd1)、GR1(定容后内阻/gr1)、FVG(化成产气量)、KU(老化电压降) 四项指标的电芯。'
+        + ' 请确认已同时上传化成和定容两份原始数据。'
+      );
     }
 
     // Run the algorithm
@@ -679,40 +696,70 @@ export class DataService {
 
     const metadata = experiment.metadata as Record<string, any> | null;
     const assayType = metadata?.assayType;
-    const map: any = { ProcessData: 'process', CalendarLife: 'calendar', StorageSwelling: 'swelling', EnergyEfficiency: 'efficiency', DcrTest: 'dcr', FastCharge: 'fastcharge', HtCycle: 'htcycle' };
+    const map: Record<string, string> = { ProcessData: 'process', CalendarLife: 'calendar', StorageSwelling: 'swelling', EnergyEfficiency: 'efficiency', DcrTest: 'dcr', FastCharge: 'fastcharge', HtCycle: 'htcycle' };
     const typeParam = typeof assayType === 'string' ? map[assayType] : undefined;
 
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Summary');
+    const sheet = workbook.addWorksheet('汇总数据');
 
     if (typeParam) {
       const data = await this.findByType(typeParam, experimentId) as Record<string, any>[];
+      const headers = getColumnHeaders(typeParam);
       if (data && data.length > 0) {
-        const columns = Object.keys(data[0]).filter(k => k !== 'id' && k !== 'experimentId' && k !== 'createdAt');
-        sheet.columns = columns.map(c => ({ header: c, key: c, width: 15 }));
+        // Determine which columns to include (preserve display order from headers map)
+        const cols = Object.keys(headers).filter(h => data[0][h] !== undefined);
+        sheet.columns = cols.map(c => ({ header: headers[c] || c, key: c, width: 18 }));
         data.forEach(row => sheet.addRow(row));
+        // Style header row
+        sheet.getRow(1).font = { bold: true };
       } else {
-        sheet.addRow(['No data available']);
+        sheet.addRow(['暂无数据']);
       }
     } else {
-      sheet.addRow(['Unknown assay type or no data']);
+      sheet.addRow(['未知实验类型或暂无数据']);
     }
     return workbook;
   }
 
   /** Export raw data to Excel */
   async exportRawData(experimentId: string): Promise<ExcelJS.Workbook> {
-    const data = await this.findRawSteps(experimentId);
+    const experiment = await this.getExperiment(experimentId);
+    if (!experiment) throw new NotFoundException(`Experiment not found.`);
+
+    const metadata = experiment.metadata as Record<string, any> | null;
+    const assayType = metadata?.assayType;
+    const isProcessData = assayType === 'ProcessData';
+
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Raw Data');
+
+    if (isProcessData) {
+      // ProcessData has two raw data sources
+      await this.addRawSheet(workbook, '化成原始数据', experimentId, 'formation');
+      await this.addRawSheet(workbook, '定容原始数据', experimentId, 'grading');
+    } else {
+      await this.addRawSheet(workbook, '原始数据', experimentId);
+    }
+
+    return workbook;
+  }
+
+  /** Helper: add a raw data sheet to the workbook. */
+  private async addRawSheet(
+    workbook: ExcelJS.Workbook,
+    sheetName: string,
+    experimentId: string,
+    source?: string,
+  ): Promise<void> {
+    const data = await this.findRawSteps(experimentId, source);
+    const sheet = workbook.addWorksheet(sheetName);
 
     if (data && data.length > 0) {
-      const columns = Object.keys(data[0]).filter(k => k !== 'id' && k !== 'experimentId');
-      sheet.columns = columns.map(c => ({ header: c, key: c, width: 15 }));
+      const cols = Object.keys(RAW_STEP_COLUMNS).filter(c => data[0][c] !== undefined);
+      sheet.columns = cols.map(c => ({ header: RAW_STEP_COLUMNS[c] || c, key: c, width: 15 }));
       data.forEach(row => sheet.addRow(row));
+      sheet.getRow(1).font = { bold: true };
     } else {
-      sheet.addRow(['No raw data available']);
+      sheet.addRow(['暂无原始数据']);
     }
-    return workbook;
   }
 }

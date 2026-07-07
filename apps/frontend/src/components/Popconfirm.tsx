@@ -101,7 +101,7 @@ export function Popconfirm({
 
   const style: React.CSSProperties = {
     position: "fixed",
-    zIndex: 110,
+    zIndex: 300,
   };
 
   if (triggerRect) {
