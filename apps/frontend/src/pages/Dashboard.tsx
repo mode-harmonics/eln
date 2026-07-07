@@ -120,19 +120,19 @@ export function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="flex flex-col items-center justify-center p-6 text-center border-gray-100 shadow-sm">
           <CardDescription className="font-medium mb-1 mt-0">{t("total_projects", "Total Projects")}</CardDescription>
-          <div className="text-3xl font-bold text-gray-900">{totalProjects}</div>
+          <div className="text-2xl font-bold text-gray-900">{totalProjects}</div>
         </Card>
         <Card className="flex flex-col items-center justify-center p-6 text-center border-gray-100 shadow-sm">
           <CardDescription className="font-medium mb-1 mt-0">{t("total_experiments", "Total Experiments")}</CardDescription>
-          <div className="text-3xl font-bold text-gray-900">{totalExperiments}</div>
+          <div className="text-2xl font-bold text-gray-900">{totalExperiments}</div>
         </Card>
         <Card className="flex flex-col items-center justify-center p-6 text-center border-gray-100 shadow-sm">
           <CardDescription className="font-medium mb-1 mt-0">{t("pending_approvals", "Pending Approvals")}</CardDescription>
-          <div className="text-3xl font-bold text-[#f27429]">{summary.pendingApprovals.length}</div>
+          <div className="text-2xl font-bold text-[#f27429]">{summary.pendingApprovals.length}</div>
         </Card>
         <Card className="flex flex-col items-center justify-center p-6 text-center border-gray-100 shadow-sm">
           <CardDescription className="font-medium mb-1 mt-0">{t("recent_activities", "Recent Activities")}</CardDescription>
-          <div className="text-3xl font-bold text-[#10b981]">{summary.recentActivities.length}</div>
+          <div className="text-2xl font-bold text-[#10b981]">{summary.recentActivities.length}</div>
         </Card>
       </div>
 
@@ -140,7 +140,7 @@ export function Dashboard() {
         {/* Charts */}
         <Card className="border-gray-100 shadow-sm">
           <CardHeader className="pb-0 mb-4">
-            <CardTitle className="text-lg">{t("project_status", "Project Status")}</CardTitle>
+            <CardTitle>{t("project_status", "Project Status")}</CardTitle>
           </CardHeader>
           <CardContent className="h-64 pt-0">
             <ResponsiveContainer width="100%" height="100%">
@@ -168,7 +168,7 @@ export function Dashboard() {
 
         <Card className="border-gray-100 shadow-sm">
           <CardHeader className="pb-0 mb-4">
-            <CardTitle className="text-lg">{t("experiment_status", "Experiment Status")}</CardTitle>
+            <CardTitle>{t("experiment_status", "Experiment Status")}</CardTitle>
           </CardHeader>
           <CardContent className="h-64 pt-0">
             <ResponsiveContainer width="100%" height="100%">
@@ -197,7 +197,7 @@ export function Dashboard() {
         {/* Pending Approvals */}
         <Card className="col-span-1 lg:col-span-2 border-gray-100 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-[#f27429]" />
               {t("my_pending_approvals", "Pending My Approval")}
             </CardTitle>
@@ -245,7 +245,7 @@ export function Dashboard() {
         {/* Recent Activities */}
         <Card className="col-span-1 lg:col-span-2 border-gray-100 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-lg">{t("recent_activities", "Recent Activities")}</CardTitle>
+            <CardTitle>{t("recent_activities", "Recent Activities")}</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             {summary.recentActivities.length === 0 ? (
