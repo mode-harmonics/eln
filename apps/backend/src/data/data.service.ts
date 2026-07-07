@@ -27,6 +27,7 @@ import { computeFastChargeTime } from './parsers/fast-charge.parser';
 import { GroupsService } from '../groups/groups.service';
 import { CellGroupMember } from '../entities/cell-group-member.entity';
 import { ProjectsService } from '../projects/projects.service';
+import { pickBatteries } from '../battery-picker/pick-batteries';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
@@ -120,7 +121,7 @@ export class DataService {
         if (fs.existsSync(att.filePath)) {
           try {
             fs.unlinkSync(att.filePath);
-          } catch (e) {}
+          } catch { /* file may already be gone — ignore */ }
         }
       }
       await this.dataSource.getRepository(Attachment).delete({ experimentId });
@@ -304,7 +305,7 @@ export class DataService {
         if (fs.existsSync(att.filePath)) {
           try {
             fs.unlinkSync(att.filePath);
-          } catch (e) {}
+          } catch { /* file may already be gone — ignore */ }
         }
       }
       this.logger.error('Excel upload transaction failed, rolled back.', err as Error);
@@ -329,11 +330,13 @@ export class DataService {
   }
 
   /**
-   * Auto-pick cells for a project using its ProcessData experiment.
+   * Auto-pick cells for a project using the battery selection algorithm.
    * 1. Resolve the project's ProcessData experiment
-   * 2. Filter cells with valid fq1+fq2, sort descending
-   * 3. Replace existing project-level picks
-   * 4. Auto-assign groups by prefix matching
+   * 2. Build input records from process data (QD1st=gqd1, GR1=gr1, FVG=fvg, KU=ku)
+   * 3. Run selectBatteries() — z-score outlier removal + global normalization
+   *    + sequential combinatorial enumeration
+   * 4. Persist the assigned cells as PickedCell rows
+   * 5. Auto-assign groups by prefix matching
    */
   async autoPickCells(projectId: string, topN?: number): Promise<PickedCell[]> {
     // Resolve the project's ProcessData experiment
@@ -348,37 +351,51 @@ export class DataService {
       where: { experimentId: processExp.id },
     });
 
-    // Filter cells with valid fq = fq1 + fq2
-    const withFq = processRows
-      .map((r) => ({
-        cellId: r.cellId,
-        fqTotal: (r.fq1 != null ? Number(r.fq1) : 0) + (r.fq2 != null ? Number(r.fq2) : 0),
-      }))
-      .filter((r) => r.fqTotal > 0 && r.cellId)
-      .sort((a, b) => b.fqTotal - a.fqTotal);
-
-    if (withFq.length === 0) {
-      throw new BadRequestException('No cells with valid formation capacity found.');
+    // Build records from cells that have all four metrics
+    const records: { id: string; QD1st: number; GR1: number; FVG: number; KU: number }[] = [];
+    for (const r of processRows) {
+      const qd1st = r.gqd1 != null ? Number(r.gqd1) : null;
+      const gr1 = r.gr1 != null ? Number(r.gr1) : null;
+      const fvg = r.fvg != null ? Number(r.fvg) : null;
+      const ku = r.ku != null ? Number(r.ku) : null;
+      if (qd1st != null && gr1 != null && fvg != null && ku != null && r.cellId) {
+        records.push({ id: r.cellId, QD1st: qd1st, GR1: gr1, FVG: fvg, KU: ku });
+      }
     }
 
-    const pickedList = topN != null && topN > 0 ? withFq.slice(0, topN) : withFq;
+    if (records.length === 0) {
+      throw new BadRequestException('No cells with complete metric data (QD1st, GR1, FVG, KU) found. Ensure process data has been fully uploaded.');
+    }
 
-    // Replace existing project-level picks
+    // Run the algorithm
+    const result = pickBatteries({ records });
+
+    // Determine which cell IDs to persist
+    let pickedIds = result.assignments.map((a) => a.sampleId);
+    if (topN != null && topN > 0 && topN < pickedIds.length) {
+      pickedIds = pickedIds.slice(0, topN);
+    }
+
+    // Log algorithm results for traceability
+    this.logger.log(
+      `Auto-pick result for project ${projectId}: groups=${JSON.stringify(result.groups.map(g => ({ group: g.group, ids: g.sampleIds, score: g.score })))} warnings=${JSON.stringify(result.warnings)}`,
+    );
+
+    // Replace existing picks
     const repo = this.dataSource.getRepository(PickedCell);
     await repo.delete({ projectId } as any);
 
-    const rows = pickedList.map((p) => ({
+    const rows = pickedIds.map((cellId) => ({
       id: uuid(),
       projectId,
-      cellId: p.cellId!,
+      cellId,
       pickedBy: 'auto',
     }));
     const saved = (await repo.save(rows as any)) as PickedCell[];
 
     // Auto-assign groups by prefix
-    const cellIds = saved.map((p) => p.cellId).filter((c): c is string => !!c);
     try {
-      const groupMap = await this.groupsService.getGroupMap(cellIds, projectId);
+      const groupMap = await this.groupsService.getGroupMap(pickedIds, projectId);
       const membersRepo = this.dataSource.getRepository(CellGroupMember);
       for (const [cellId, assignment] of Object.entries(groupMap)) {
         if (assignment.groupId) {

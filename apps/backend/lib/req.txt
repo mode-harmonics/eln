@@ -1,0 +1,153 @@
+第一步：去除容量异常值（仅以首次放电容量（QD1st）计算）
+	根据样品Z分数去除偏差较大的样本。计算样品Z = (x - μ) / σ（标准化得分 = (数据值 - 均值) / 标准差）。去除 |Z| ≥ 2的样本。
+	若去除后少于实验所需电池数量（如17支），则由人工来判断——缩减所需电池数量/等待补足电池
+（留有后门？：可跳过第一步，即不做异常值去除。——需沟通） 
+
+第二步：查找一致性较好的电池进行后续测试分配
+
+一、核心思路
+1.统一量纲：需要先对每个指标进行归一化，使所有指标处于同一尺度（如0~1之间）。
+2.定义子集的一致性得分：对候选子集 S，计算四个指标归一化值的极差之和（或标准差之和）。极差之和越小，表示该子集在四个维度上越“紧凑”，即一致性越好。
+3.逐级枚举最优子集：
+o第一轮：从全体样品中枚举所有大小为5的子集，计算一致性得分，选得分最小的5个样品分配给“高温循环”。
+o第二轮：从剩余样品中枚举所有大小为3的子集，选得分最小的3个给“4C DCR”和“能效”（两个测试共用电池）。
+o第三轮：再剩余中枚举大小3，选最优给“日历寿命”。
+o第四轮：再剩余中枚举大小3，选最优给“60℃存储胀气”。
+o第五轮：再剩余中枚举大小3，选最优给“快充时间”。
+4.打破平局规则：若多个子集得分相同，可依次比较：
+o四个极差的最大值（越小越好）
+o四个极差的方差（越小越好）
+o子集内样品在原样品编号中的顺序（如选索引和最小，确保可重复）
+
+二、具体步骤与公式
+2.1 数据归一化（基于全体样品的 min / max）
+设全体样品共 N 个（约20）。对每个指标 X∈ABCD：
+
+注：A：首次放电容量（QD1st）；B：定容后内阻（GR1）；C：化成产气量（FVG）；D：老化电压降（KU）
+
+Xnorm=X−minallXmaxallX−minallX
+
+这样每个指标的归一化值都在 01 区间内，且保留了相对顺序。
+注意：归一化参数必须固定使用全体样品的 min 和 max，不能每轮重新计算，否则不同批次之间不可比。
+2.2 子集的一致性得分
+对子集 S（大小 k），计算：
+scoreS=RAS+RBS+RCS+RDS
+
+其中 RXS=maxi∈SXnorm,i−mini∈SXnorm,i。
+2.3 枚举与选择
+第一轮（k=5）
+枚举所有 N5 种组合，计算每个组合的 score。
+选出 score 最小的组合（若有并列，用平局规则打破）。
+将该5个样品记为 “高温循环”组，并从样品池中移除。
+第二轮（k=3，剩余样品数 N'）
+在剩余样品中枚举所有 N'3 种组合，同样计算 score（注意：归一化参数仍使用全体样品的 min/max，不能变）。
+选出最小 score 的3个样品作为 “4C DCR”组，移除。
+第三、四、五轮同理，各选3个。
+
+
+Python 示例代码
+
+
+import pandas as pd
+import numpy as np
+from itertools import combinations
+
+def normalize_global(df, cols):
+    """基于全体样品对指定列进行 min-max 归一化，返回归一化后的DataFrame"""
+    df_norm = df.copy()
+    for col in cols:
+        min_val = df[col].min()
+        max_val = df[col].max()
+        if max_val == min_val:
+            df_norm[col] = 0.0  # 所有值相同，归一化为0
+        else:
+            df_norm[col] = (df[col] - min_val) / (max_val - min_val)
+    return df_norm
+
+def subset_score(subset_indices, df_norm, cols):
+    """计算子集在四个指标上的极差之和"""
+    sub = df_norm.loc[subset_indices, cols]
+    ranges = sub.max() - sub.min()
+    return ranges.sum()
+
+def select_best_subset(available_indices, df_norm, cols, k, tie_breaker='min_max_range'):
+    """
+    从可用索引中选出大小为k的最一致子集。
+    tie_breaker: 'min_max_range' -> 再比较各指标最大极差；'min_var' -> 比较极差方差
+    """
+    best_score = np.inf
+    best_subset = None
+    best_secondary = None
+    
+    for comb in combinations(available_indices, k):
+        score = subset_score(comb, df_norm, cols)
+        if score < best_score:
+            best_score = score
+            best_subset = comb
+            if tie_breaker == 'min_max_range':
+                sub = df_norm.loc[comb, cols]
+                best_secondary = (sub.max() - sub.min()).max()
+            elif tie_breaker == 'min_var':
+                sub = df_norm.loc[comb, cols]
+                best_secondary = (sub.max() - sub.min()).var()
+        elif score == best_score:
+            # 平局时按次级指标比较
+            sub = df_norm.loc[comb, cols]
+            if tie_breaker == 'min_max_range':
+                sec = (sub.max() - sub.min()).max()
+                if sec < best_secondary:
+                    best_score = score
+                    best_subset = comb
+                    best_secondary = sec
+            elif tie_breaker == 'min_var':
+                sec = (sub.max() - sub.min()).var()
+                if sec < best_secondary:
+                    best_score = score
+                    best_subset = comb
+                    best_secondary = sec
+    return list(best_subset)
+
+# 示例数据：生成20个随机样品，4个指标
+np.random.seed(42)
+n_samples = 20
+data = {
+    'ID': [f'S{i+1:02d}' for i in range(n_samples)],
+    'A': np.random.uniform(0, 10, n_samples),
+    'B': np.random.uniform(100, 200, n_samples),
+    'C': np.random.uniform(0, 1, n_samples),
+    'D': np.random.uniform(50, 80, n_samples)
+}
+df = pd.DataFrame(data).set_index('ID')
+
+# 1. 基于全体样品归一化
+cols = ['A','B','C','D']
+df_norm = normalize_global(df, cols)
+
+# 2. 逐级筛选
+all_indices = df_norm.index.tolist()
+used = set()
+
+# 高温循环：5个
+best_5 = select_best_subset([i for i in all_indices if i not in used], df_norm, cols, k=5)
+used.update(best_5)
+print("高温循环:", best_5)
+
+# 4C DCR & 能效：3个
+best_3_1 = select_best_subset([i for i in all_indices if i not in used], df_norm, cols, k=3)
+used.update(best_3_1)
+print("4C DCR & 能效:", best_3_1)
+
+# 日历寿命：3个
+best_3_2 = select_best_subset([i for i in all_indices if i not in used], df_norm, cols, k=3)
+used.update(best_3_2)
+print("日历寿命:", best_3_2)
+
+# 60℃存储胀气：3个
+best_3_3 = select_best_subset([i for i in all_indices if i not in used], df_norm, cols, k=3)
+used.update(best_3_3)
+print("60℃存储胀气:", best_3_3)
+
+# 快充时间：3个
+best_3_4 = select_best_subset([i for i in all_indices if i not in used], df_norm, cols, k=3)
+used.update(best_3_4)
+print("快充时间:", best_3_4)
