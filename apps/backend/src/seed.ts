@@ -13,6 +13,7 @@ import { EnergyEfficiency } from './entities/energy-efficiency.entity';
 import { DcrTest } from './entities/dcr-test.entity';
 import { FastCharge } from './entities/fast-charge.entity';
 import { HtCycle } from './entities/ht-cycle.entity';
+import { RawStepData } from './entities/raw-step-data.entity';
 
 const ROLE_DEFS: Array<{ name: string; permissionList: string[] }> = [
   {
@@ -146,6 +147,7 @@ async function seed(): Promise<void> {
       .filter(Boolean),
   );
   const ASSAY_TYPES: { key: string; label: string }[] = [
+    { key: 'ProcessData', label: '制程数据' },
     { key: 'CalendarLife', label: '日历寿命' },
     { key: 'StorageSwelling', label: '存储胀气' },
     { key: 'EnergyEfficiency', label: '能量效率' },
@@ -159,34 +161,21 @@ async function seed(): Promise<void> {
         experimentsRepo.create({
           id: uuid(),
           projectId: project.id,
-          title: `${at.label} - ${new Date().toISOString().split('T')[0]}`,
+          title: `${at.label} - Demo`,
           status: 'Draft',
           metadata: { assayType: at.key },
           versionNo: 1,
           createdBy: piUser.id,
         }),
       );
-      console.log(`Created business-table experiment: ${at.label}`);
+      console.log(`Created experiment: ${at.label}`);
     }
   }
 
   // --- 6. ProcessData experiment + 20 demo cells ---
-  const pdExpId = 'f5bc6334-3f11-4011-bcb2-59dde1f17375';
-  let pdExp = await experimentsRepo.findOne({ where: { id: pdExpId } });
-  if (!pdExp) {
-    pdExp = await experimentsRepo.save(
-      experimentsRepo.create({
-        id: pdExpId,
-        projectId: project.id,
-        title: 'ProcessData - Demo 20 Cells',
-        status: 'Draft',
-        metadata: { assayType: 'ProcessData' },
-        versionNo: 1,
-        createdBy: piUser.id,
-      }),
-    );
-    console.log('Created ProcessData experiment.');
-  }
+  // Find the ProcessData experiment for this project (now created above in section 5)
+  const allProjExps = await experimentsRepo.find({ where: { projectId: project.id } as any });
+  const pdExp = allProjExps.find((e) => (e.metadata as any)?.assayType === 'ProcessData')!;
 
   // Seed 20 demo processData rows if they don't already exist
   const existingPd = await AppDataSource.getRepository(ProcessData).count({
@@ -247,7 +236,73 @@ async function seed(): Promise<void> {
     console.log(`ProcessData already has ${existingPd} rows, skipping seed.`);
   }
 
-  // --- 7. Demo data for 6 business tables ---
+  // --- 7. Raw step data (formation + grading) for 20 cells ---
+  const allCellIds = Array.from({ length: 20 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
+  const rand = (min: number, max: number) => min + Math.random() * (max - min);
+  {
+    const repo = AppDataSource.getRepository(RawStepData);
+    const cnt = await repo.count({ where: { experimentId: pdExp.id } as any });
+    if (cnt === 0) {
+      const rows: Partial<RawStepData>[] = [];
+
+      // Formation steps for each cell
+      for (const cellName of allCellIds) {
+        let seq = 0;
+        const fSteps: { stepType: string; stepTime: string; capacity: string; startVoltage: string; endVoltage: string; startCurrent: string; endCurrent: string }[] = [
+          { stepType: '恒流充电', stepTime: '00:30:00', capacity: '2.500000', startVoltage: '3.200000', endVoltage: '3.650000', startCurrent: '5.000000', endCurrent: '4.800000' },
+          { stepType: '搁置', stepTime: '00:05:00', capacity: '', startVoltage: '3.650000', endVoltage: '3.620000', startCurrent: '0', endCurrent: '0' },
+          { stepType: '恒流充电', stepTime: '01:00:00', capacity: '8.000000', startVoltage: '3.620000', endVoltage: '4.200000', startCurrent: '8.000000', endCurrent: '7.500000' },
+          { stepType: '恒压充电', stepTime: '00:45:00', capacity: '4.500000', startVoltage: '4.200000', endVoltage: '4.200000', startCurrent: '7.500000', endCurrent: '0.125000' },
+          { stepType: '搁置', stepTime: '00:10:00', capacity: '', startVoltage: '4.200000', endVoltage: '4.150000', startCurrent: '0', endCurrent: '0' },
+          { stepType: '恒流放电', stepTime: '00:50:00', capacity: '0.500000', startVoltage: '4.150000', endVoltage: '3.600000', startCurrent: '-0.600000', endCurrent: '-0.550000' },
+          { stepType: '恒流充电', stepTime: '00:05:00', capacity: '0.600000', startVoltage: '3.600000', endVoltage: '3.720000', startCurrent: '6.000000', endCurrent: '5.800000' },
+          { stepType: '搁置', stepTime: '00:30:00', capacity: '', startVoltage: '3.720000', endVoltage: '3.690000', startCurrent: '0', endCurrent: '0' },
+        ];
+        for (const s of fSteps) {
+          seq++;
+          rows.push({
+            id: uuid(), experimentId: pdExp.id, cellName, cycleNo: 1, stepNo: seq, stepSeqNo: seq,
+            stepType: s.stepType, stepTime: s.stepTime, capacity: s.capacity || null,
+            startVoltage: s.startVoltage, endVoltage: s.endVoltage,
+            startCurrent: s.startCurrent, endCurrent: s.endCurrent,
+            dataSource: 'formation',
+          } as RawStepData);
+        }
+      }
+
+      // Grading steps for each cell: 恒流充电 → 恒流放电 → 恒流充电 → ... (grading profile)
+      for (const cellName of allCellIds) {
+        let seq = 0;
+        const gSteps: { stepType: string; stepTime: string; capacity: string; startVoltage: string; endVoltage: string; startCurrent: string; endCurrent: string }[] = [
+          { stepType: '搁置', stepTime: '00:05:00', capacity: '', startVoltage: '3.680000', endVoltage: '3.650000', startCurrent: '0', endCurrent: '0' },
+          { stepType: '恒流充电', stepTime: '01:30:00', capacity: '12.000000', startVoltage: '3.650000', endVoltage: '4.200000', startCurrent: '8.000000', endCurrent: '7.200000' },
+          { stepType: '恒压充电', stepTime: '00:30:00', capacity: '3.200000', startVoltage: '4.200000', endVoltage: '4.200000', startCurrent: '7.200000', endCurrent: '0.100000' },
+          { stepType: '搁置', stepTime: '00:10:00', capacity: '', startVoltage: '4.200000', endVoltage: '4.150000', startCurrent: '0', endCurrent: '0' },
+          { stepType: '恒流放电', stepTime: '01:00:00', capacity: '24.800000', startVoltage: '4.150000', endVoltage: '3.000000', startCurrent: '-25.000000', endCurrent: '-24.500000' },
+          { stepType: '搁置', stepTime: '00:10:00', capacity: '', startVoltage: '3.000000', endVoltage: '3.420000', startCurrent: '0', endCurrent: '0' },
+          { stepType: '恒流充电', stepTime: '00:30:00', capacity: '0.600000', startVoltage: '3.420000', endVoltage: '3.680000', startCurrent: '1.200000', endCurrent: '1.100000' },
+          { stepType: '搁置', stepTime: '00:05:00', capacity: '', startVoltage: '3.680000', endVoltage: '3.660000', startCurrent: '0', endCurrent: '0' },
+        ];
+        for (const s of gSteps) {
+          seq++;
+          rows.push({
+            id: uuid(), experimentId: pdExp.id, cellName, cycleNo: 1, stepNo: seq, stepSeqNo: seq + 100,
+            stepType: s.stepType, stepTime: s.stepTime, capacity: s.capacity || null,
+            startVoltage: s.startVoltage, endVoltage: s.endVoltage,
+            startCurrent: s.startCurrent, endCurrent: s.endCurrent,
+            dataSource: 'grading',
+          } as RawStepData);
+        }
+      }
+
+      await repo.save(rows);
+      console.log(`Seeded ${rows.length} raw step data rows (${allCellIds.length} cells × 2 sources).`);
+    } else {
+      console.log(`RawStepData already has ${cnt} rows, skipping.`);
+    }
+  }
+
+  // --- 8. Demo data for 6 business tables ---
   const cellIds = Array.from({ length: 20 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
   const r = (min: number, max: number) => min + Math.random() * (max - min);
 

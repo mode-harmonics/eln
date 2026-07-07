@@ -60,7 +60,7 @@ export function Projects() {
       .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : t("load_failed")); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [currentPage, searchQuery, refetchTrigger]);
+  }, [currentPage, searchQuery, refetchTrigger, pageSize]);
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
