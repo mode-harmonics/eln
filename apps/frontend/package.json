@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --port=5173 --host=0.0.0.0",
+    "dev:test": "vite --port=5173 --host=0.0.0.0",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",

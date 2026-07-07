@@ -116,7 +116,11 @@ export function ExperimentDetail() {
       const res = await fetch(`/api/v1/data/export/${type}/${experiment!.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error("Export failed");
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => res.statusText);
+        console.error(`Export failed (${res.status}):`, errBody);
+        throw new Error(`Export failed (${res.status})`);
+      }
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -127,7 +131,7 @@ export function ExperimentDetail() {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (e) {
-      toast.error(`Export failed`);
+      toast.error(`Export failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
   };
 

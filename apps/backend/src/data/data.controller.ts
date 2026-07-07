@@ -9,11 +9,13 @@ import {
   Post,
   Put,
   Query,
+  StreamableFile,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
-  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
+import { Readable } from 'stream';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -88,22 +90,28 @@ export class DataController {
 
   @Get('export/summary/:expId')
   @ApiOperation({ summary: 'Export summary data for an experiment.' })
-  async exportSummary(@Param('expId') expId: string, @Res() res: any) {
-    const workbook = await this.dataService.exportSummaryData(expId);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename=' + 'summary.xlsx');
-    await workbook.xlsx.write(res);
-    res.end();
+  async exportSummary(@Param('expId') expId: string) {
+    const buffer = await this.dataService.exportSummaryBuffer(expId);
+    const stream = new Readable();
+    stream.push(buffer);
+    stream.push(null);
+    return new StreamableFile(stream, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="summary.xlsx"',
+    });
   }
 
   @Get('export/raw/:expId')
   @ApiOperation({ summary: 'Export raw data for an experiment.' })
-  async exportRaw(@Param('expId') expId: string, @Res() res: any) {
-    const workbook = await this.dataService.exportRawData(expId);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename=' + 'raw.xlsx');
-    await workbook.xlsx.write(res);
-    res.end();
+  async exportRaw(@Param('expId') expId: string) {
+    const buffer = await this.dataService.exportRawBuffer(expId);
+    const stream = new Readable();
+    stream.push(buffer);
+    stream.push(null);
+    return new StreamableFile(stream, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="raw.xlsx"',
+    });
   }
 
   @Get('raw/:expId')

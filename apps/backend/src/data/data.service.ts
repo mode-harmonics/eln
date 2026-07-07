@@ -660,6 +660,18 @@ export class DataService {
     return { success: true };
   }
 
+  /** Export summary data to Excel — returns a Buffer. */
+  async exportSummaryBuffer(experimentId: string): Promise<Buffer> {
+    const workbook = await this.exportSummaryData(experimentId);
+    return Buffer.from(await workbook.xlsx.writeBuffer());
+  }
+
+  /** Export raw data to Excel — returns a Buffer. */
+  async exportRawBuffer(experimentId: string): Promise<Buffer> {
+    const workbook = await this.exportRawData(experimentId);
+    return Buffer.from(await workbook.xlsx.writeBuffer());
+  }
+
   /** Export summary data to Excel */
   async exportSummaryData(experimentId: string): Promise<ExcelJS.Workbook> {
     const experiment = await this.getExperiment(experimentId);
