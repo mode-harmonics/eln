@@ -4,23 +4,30 @@
  */
 
 /** Maps DB field name → Chinese display label for ProcessData */
+// Order matches the frontend P_COLS exactly: 称重→化成→二封→定容→综合计算
 export const PROCESS_COLUMNS: Record<string, string> = {
   cellId: '电芯编号',
   m0: 'm_d (注液前电芯重)',
   m1: 'm_a (预充后电芯重)',
   m2: 'm_w (二封后电芯重)',
-  m3: 'rn_d (二封前称重)',
-  m4: 'rn_a (二封后称重)',
+  mIn: 'm_v (注液量)',
+  mHold: 'm_cap (保液量)',
   v0: 'V_s (二封前电压)',
-  v1: 'V_e (二封后电压)',
   fu0: 'rU_s (化成前电压)',
   fr0: 'rR_s (化成前电阻)',
   fq1: 'rQ_s (化成充电容量1)',
   fq2: 'rQ_c (化成放电容量2)',
+  fq: 'rQ (化成充总容量)',
+  v1: 'V_e (二封后电压)',
+  fvg: 'rV_d (化成产气量)',
   fu1: 'rI_s (化成后电压1)',
   fr1: 'rR_e (化成后电阻1)',
   fu2: 'fI_a (化成后电压2)',
   fr2: 'fR_a (化成后电阻2)',
+  ku: 'fU (老化压降)',
+  m3: 'rn_d (二封前称重)',
+  m4: 'rn_a (二封后称重)',
+  mLoss: 'rn_total (质量损失)',
   gu0: 'GU_s (分容前电压)',
   gr0: 'GR_s (分容前电阻)',
   gqc1: 'GQC_s (分容充电容量1)',
@@ -28,38 +35,32 @@ export const PROCESS_COLUMNS: Record<string, string> = {
   gqc2: 'GQC_e (分容充电容量2)',
   gu1: 'GU_e (分容后电压)',
   gr1: 'GR_e (分容后电阻)',
-  // Computed
-  mIn: 'm_v (注液量)',
-  mLoss: 'rn_total (质量损失)',
-  mHold: 'm_cap (保液量)',
-  fq: 'rQ (化成充总容量)',
-  qdFirst: 'QD_eff (首次放电容量)',
-  fvg: 'rV_d (化成产气量)',
-  ku: 'fU (老化压降)',
   qcFirst: 'QC_eff (首次充电容量)',
+  qdFirst: 'QD_eff (首次放电容量)',
   ceFirst: 'CE_eff (首效)',
 };
 
 /** Maps DB field name → Chinese display label for CalendarLife */
+// Order matches frontend CAL_COLS
 export const CALENDAR_COLUMNS: Record<string, string> = {
   cellName: '电芯名称',
   dayCount: '天数',
   dq: '容量损失DQ',
   q: '容量Q',
-  ddcr: '放电DCR',
-  cdcr: '充电DCR',
-  u: '电压U',
-  r: '内阻R',
-  // Computed
   qRetention: 'QRT (容量保持率)',
   qRecovery: 'QRC (容量恢复率)',
+  ddcr: 'DDCR (放电直流内阻)',
   ddcrGrowth: 'ΔDDCR (放电DCR增长率)',
+  cdcr: 'CDCR (充电直流内阻)',
   cdcrGrowth: 'ΔCDCR (充电DCR增长率)',
+  u: 'U (电压)',
   uGrowth: 'ΔU (电压增长率)',
+  r: 'R (交流内阻)',
   rGrowth: 'ΔR (内阻增长率)',
 };
 
 /** Maps DB field name → Chinese display label for StorageSwelling */
+// Order matches frontend SWELL_COLS
 export const SWELLING_COLUMNS: Record<string, string> = {
   cellName: '电芯名称',
   qd1st: '首次放电容量(Ah)',
@@ -69,6 +70,7 @@ export const SWELLING_COLUMNS: Record<string, string> = {
 };
 
 /** Maps DB field name → Chinese display label for EnergyEfficiency */
+// Order matches frontend EFF_COLS
 export const EFFICIENCY_COLUMNS: Record<string, string> = {
   cellName: '电芯名称',
   de: '放电能量',
@@ -77,36 +79,47 @@ export const EFFICIENCY_COLUMNS: Record<string, string> = {
 };
 
 /** Maps DB field name → Chinese display label for DcrTest */
+// Order matches frontend DCR_COLS
 export const DCR_COLUMNS: Record<string, string> = {
   cellName: '电芯名称',
   q0: 'Q_0 (初始容量)',
-  du0: 'DU_0 (放电压降)',
-  du1: 'DU_1 (放电负载电压)',
+  du0: 'DU_0 (放电前电压)',
+  du1: 'DU_1 (放电后电压)',
   di: 'DI (放电电流)',
-  cu0: 'CU_0 (充电压降)',
-  cu1: 'CU_1 (充电负载电压)',
-  ci: 'CI (充电电流)',
-  c0: '容量c0 (Ah)',
   ddcr: 'DDCR (放电DCR)',
+  cu0: 'CU_0 (充电前电压)',
+  cu1: 'CU_1 (充电后电压)',
+  ci: 'CI (充电电流)',
   cdcr: 'CDCR (充电DCR)',
+  dRcProduct: 'DRC (放电R-C乘积)',
+  cRcProduct: 'CRC (充电R-C乘积)',
 };
 
 /** Maps DB field name → Chinese display label for FastCharge */
+// Order matches frontend FC_COLS (cellName + c0 + providedFastChargeTime on the parent row)
 export const FAST_CHARGE_COLUMNS: Record<string, string> = {
   cellName: '电芯名称',
   c0: '容量c0 (Ah)',
-  providedTime: '提供时间(min)',
+  providedFastChargeTime: '标称快充时间(min)',
+  stepNo: '工步号',
+  cutoffVoltage: '全电截止电压',
+  current: '电流',
+  rate: '倍率',
+  stepCapacity: '单步容量',
+  stepSoc: '单步SOC',
+  cumulativeSoc: '累计SOC',
+  stepTime: '单步时间(min)',
   computedFastChargeTime: '10%-80%SOC(min)',
-  cutoffVoltage: '满电截止电压',
 };
 
 /** Maps DB field name → Chinese display label for HtCycle */
+// Order matches frontend HT_COLS
 export const HT_CYCLE_COLUMNS: Record<string, string> = {
   cellName: '电芯名称',
+  ironDissolution: '铁溶出量',
   cycle: '循环圈数',
-  capacity: '放电容量',
-  retention: '容量保持率',
-  ironPpm: '铁溶出量',
+  dischargeCapacity: '放电容量',
+  capacityRetention: '容量保持率',
 };
 
 /** Maps DB field name → Chinese display label for RawStepData */

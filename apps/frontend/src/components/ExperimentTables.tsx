@@ -266,12 +266,12 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
 
   return (
     <TableShell loading={loading} error={error}>
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto overflow-y-auto max-h-150">
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+        <thead className="bg-gray-50 sticky top-0 z-20">
           {/* Section header row */}
           <tr>
-            <th className="sticky left-0 z-10 bg-gray-50 px-4 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap border-b border-gray-200" colSpan={1}></th>
+            <th className="sticky left-0 z-20 bg-gray-50 px-4 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap border-b border-gray-200" colSpan={1}></th>
             {sections.map((sec, i) => (
               <th
                 key={sec.label}
@@ -281,13 +281,13 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
                 {sec.label}
               </th>
             ))}
-            <th className="sticky right-0 z-10 bg-gray-50 px-4 py-1.5 border-b border-gray-200" colSpan={1}></th>
+            <th className="sticky right-0 z-20 bg-gray-50 px-4 py-1.5 border-b border-gray-200" colSpan={1}></th>
           </tr>
           {/* Column header row */}
           <tr>
-          <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('col_cell_id')}</th>
+          <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('col_cell_id')}</th>
           {renderHeaders(pRest, t, P_HDR)}
-          <th className="sticky right-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
+          <th className="sticky right-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
         </tr></thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {data.map((d: any) => {
@@ -345,11 +345,11 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn }: {
   }
   return (
     <TableShell loading={loading} error={error}>
-    <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200">
-      <thead className="bg-gray-50"><tr>
-        <th className={`sticky left-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${cellColorMap[firstCol.field] || 'text-gray-500'}`}>{t(firstCol.i18nKey)}</th>
+    <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200">
+      <thead className="bg-gray-50 sticky top-0 z-20"><tr>
+        <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${cellColorMap[firstCol.field] || 'text-gray-500'}`}>{t(firstCol.i18nKey)}</th>
         {renderHeaders(restCols, t, colorMap)}
-        <th className="sticky right-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
+        <th className="sticky right-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
       </tr></thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {data.map((d: any) => {
@@ -514,12 +514,12 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
 
   return (
     <TableShell loading={loading} error={error}>
-    <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200 border-collapse">
-      <thead className="bg-gray-50"><tr>
-        <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('col_cell_name')}</th>
+    <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200 border-collapse">
+      <thead className="bg-gray-50 sticky top-0 z-20"><tr>
+        <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('col_cell_name')}</th>
         {renderHeaders(FC_COLS, t)}
         <TooltipTh content="10%-80% SOC Fast Charge Time (min)" label={t('col_comp_computedTime')} />
-        <th className="sticky right-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
+        <th className="sticky right-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
       </tr></thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {flatRows.map((r: any, idx: number) => {
@@ -565,11 +565,11 @@ export function HtCycleTable({ experimentId }: { experimentId: string }) {
   const htRest = HT_COLS.slice(1);
   return (
     <TableShell loading={loading} error={error}>
-    <div className="overflow-x-auto"><table className="min-w-full divide-y divide-gray-200 border-collapse">
-      <thead className="bg-gray-50"><tr>
-        <th className={`sticky left-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${htColors[htFirst.field] || 'text-gray-500'}`}>{t(htFirst.i18nKey)}</th>
+    <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200 border-collapse">
+      <thead className="bg-gray-50 sticky top-0 z-20"><tr>
+        <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${htColors[htFirst.field] || 'text-gray-500'}`}>{t(htFirst.i18nKey)}</th>
         {renderHeaders(htRest, t, htColors)}
-        <th className="sticky right-0 z-10 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
+        <th className="sticky right-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
       </tr></thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {sorted.map((d: any) => {
