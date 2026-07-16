@@ -17,6 +17,9 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SearchModule } from './search/search.module';
 import { TempFilesModule } from './temp-files/temp-files.module';
+import { WorkflowModule } from './workflow/workflow.module';
+import { ExperimentDesignModule } from './experiment-design/experiment-design.module';
+import { ReagentProcurementModule } from './reagent-procurement/reagent-procurement.module';
 
 @Module({
   imports: [
@@ -41,6 +44,9 @@ import { TempFilesModule } from './temp-files/temp-files.module';
     DashboardModule,
     SearchModule,
     TempFilesModule,
+    WorkflowModule,
+    ExperimentDesignModule,
+    ReagentProcurementModule,
   ],
   providers: [ConfigService],
 })

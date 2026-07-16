@@ -41,6 +41,31 @@ export enum DataType {
   HtCycle = 'htcycle',
 }
 
+export enum WorkflowStatus {
+  Active = 'Active',
+  Completed = 'Completed',
+  Paused = 'Paused',
+}
+
+export enum StepStatus {
+  Pending = 'pending',
+  InProgress = 'in_progress',
+  Completed = 'completed',
+  Skipped = 'skipped',
+}
+
+export enum BuiltInStep {
+  ProjectCreation = 'project_creation',
+  ExperimentDesign = 'experiment_design',
+  Drying = 'drying',
+  LiquidInjection = 'liquid_injection',
+  Formation = 'formation',
+  SecondSealing = 'second_sealing',
+  CapacityGrading = 'capacity_grading',
+  BatterySelection = 'battery_selection',
+  Testing = 'testing',
+}
+
 export const ALL_DATA_TYPES: DataType[] = [
   DataType.Process,
   DataType.Calendar,

@@ -70,26 +70,60 @@ export function NotificationBell() {
       }
     }
     setIsOpen(false);
-    if (notif.relatedExperimentId) {
-      // Find project id? The API might not give projectId, just navigate to experiments directly.
-      // Assuming routing structure supports `/experiments/:id` or we can find it.
-      navigate(`/experiments/${notif.relatedExperimentId}`);
+    // Navigate based on payload
+    const projectId = notif.payload?.projectId;
+    const experimentId = notif.relatedExperimentId || notif.payload?.experimentId;
+    if (projectId && experimentId) {
+      navigate(`/projects/${projectId}/experiments/${experimentId}`);
+    } else if (projectId) {
+      navigate(`/projects/${projectId}`);
+    } else if (experimentId) {
+      // Fallback — try to find project from payload
+      navigate(`/experiments/${experimentId}`);
     }
   };
 
+  const renderNotificationType = (type: string) => {
+    const map: Record<string, { label: string; color: string }> = {
+      WORKFLOW_STEP_ASSIGNED: { label: "Step Assigned", color: "text-blue-600" },
+      WORKFLOW_STEP_COMPLETED: { label: "Step Completed", color: "text-green-600" },
+      WORKFLOW_COMPLETED: { label: "Project Completed", color: "text-green-700" },
+      REVIEW_SUBMITTED: { label: "Review Requested", color: "text-amber-600" },
+      REVIEW_APPROVED: { label: "Approved", color: "text-green-600" },
+      REVIEW_REJECTED: { label: "Rejected", color: "text-red-600" },
+      NEW_COMMENT: { label: "New Comment", color: "text-blue-600" },
+    };
+    return map[type] || { label: type.replace(/_/g, " "), color: "text-gray-600" };
+  };
+
   const renderNotificationMessage = (notif: Notification) => {
-    switch (notif.type) {
-      case 'REVIEW_SUBMITTED':
-        return <span className="font-medium text-gray-900">Review Requested: {notif.payload?.experimentTitle}</span>;
-      case 'REVIEW_APPROVED':
-        return <span className="font-medium text-green-600">Approved: {notif.payload?.experimentTitle}</span>;
-      case 'REVIEW_REJECTED':
-        return <span className="font-medium text-red-600">Rejected: {notif.payload?.experimentTitle}</span>;
-      case 'NEW_COMMENT':
-        return <span className="text-gray-900">New Comment: "{notif.payload?.commentPreview}..."</span>;
-      default:
-        return <span className="text-gray-900">New Notification</span>;
-    }
+    const info = renderNotificationType(notif.type);
+    const stepName = notif.payload?.stepName || notif.payload?.stepLabel;
+    const projectName = notif.payload?.projectName;
+    const experimentTitle = notif.payload?.experimentTitle;
+    const remaining = notif.payload?.remaining;
+
+    return (
+      <div className="space-y-0.5">
+        <span className={`text-[11px] font-semibold uppercase tracking-wide ${info.color}`}>
+          {info.label}
+        </span>
+        {stepName && (
+          <p className="text-xs text-gray-700 mt-0.5">
+            Step: <span className="font-medium">{stepName}</span>
+          </p>
+        )}
+        {experimentTitle && (
+          <p className="text-xs text-gray-500 truncate">{experimentTitle}</p>
+        )}
+        {projectName && !experimentTitle && (
+          <p className="text-xs text-gray-500">Project: {projectName}</p>
+        )}
+        {remaining !== undefined && (
+          <p className="text-[11px] text-gray-400">{remaining} sub-step(s) remaining</p>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -99,7 +133,7 @@ export function NotificationBell() {
         <button className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors mr-2">
           <Bell className="w-5 h-5" />
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-red-500 rounded-full">
+            <span className="absolute top-1 right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-red-500 rounded-full" style={{lineHeight: 16}}>
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
@@ -132,9 +166,9 @@ export function NotificationBell() {
                   className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${!notif.isRead ? 'bg-blue-50/30' : ''}`}
                 >
                   <div className="flex items-start gap-3">
-                    {!notif.isRead && <div className="w-2 h-2 mt-2 rounded-full bg-[#1d74f5] shrink-0" />}
+                    {!notif.isRead && <span className="inline-flex items-center h-4 shrink-0"><span className="w-4 h-4 rounded-full bg-[#1d74f5]" /></span>}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">
+                      <p className="text-sm truncate leading-4">
                         {renderNotificationMessage(notif)}
                       </p>
                       <p className="text-xs text-gray-400 mt-1">

@@ -5,6 +5,8 @@ export interface ProjectDto {
   name: string;
   description: string | null;
   status: ProjectStatus | string;
+  workflowStatus: string | null;
+  defaultCellCount: number;
   createdBy: string;
   createdAt: string;
   creator?: {

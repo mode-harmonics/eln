@@ -40,7 +40,8 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          "w-full rounded-lg border border-gray-200 bg-gray-50 pl-9 text-sm placeholder-gray-400 focus:bg-white focus:border-gray-300 focus:outline-none focus:ring-0 transition-colors",
+          "w-full rounded-lg border border-transparent bg-gray-50 pl-9 text-sm placeholder-gray-400 transition-colors",
+          "focus:border-gray-300 focus:bg-white focus:outline-none focus:ring-0",
           value ? "pr-9 py-1.5" : "pr-4 py-1.5",
         )}
       />

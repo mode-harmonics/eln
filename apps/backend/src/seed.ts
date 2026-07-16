@@ -14,18 +14,21 @@ import { DcrTest } from './entities/dcr-test.entity';
 import { FastCharge } from './entities/fast-charge.entity';
 import { HtCycle } from './entities/ht-cycle.entity';
 import { RawStepData } from './entities/raw-step-data.entity';
+import { WorkflowTemplate } from './entities/workflow-template.entity';
 
 const ROLE_DEFS: Array<{ name: string; permissionList: string[] }> = [
   {
     name: 'Owner',
     permissionList: [
       'projects:*', 'experiments:*', 'data:*', 'users:*', 'roles:*',
+      'workflow:*', 'workflow_template:*', 'experiment_design:*', 'procurement:*',
     ],
   },
   {
     name: 'Admin',
     permissionList: [
       'projects:read', 'projects:write', 'experiments:*', 'data:*', 'users:read',
+      'workflow:*', 'experiment_design:*', 'procurement:*',
     ],
   },
   {
@@ -33,6 +36,8 @@ const ROLE_DEFS: Array<{ name: string; permissionList: string[] }> = [
     permissionList: [
       'projects:read', 'experiments:read', 'experiments:write',
       'data:read', 'data:write',
+      'experiment_design:read', 'experiment_design:write',
+      'procurement:read', 'procurement:write',
     ],
   },
   {
@@ -59,6 +64,15 @@ async function seed(): Promise<void> {
         rolesRepo.create({ id: uuid(), name: def.name, permissionList: def.permissionList }),
       );
       console.log(`Created role: ${def.name}`);
+    } else {
+      // Patch existing roles with any missing permissions (e.g. new workflow perms)
+      const existing = new Set(role.permissionList || []);
+      const missing = def.permissionList.filter((p) => !existing.has(p));
+      if (missing.length > 0) {
+        role.permissionList = [...existing, ...missing];
+        await rolesRepo.save(role);
+        console.log(`Patched role "${def.name}" with: ${missing.join(', ')}`);
+      }
     }
     roleByName.set(def.name, role);
   }
@@ -459,6 +473,40 @@ async function seed(): Promise<void> {
       console.log(`Seeded ${rows.length} HtCycle rows.`);
     } else {
       console.log(`HtCycle already has ${cnt} rows, skipping.`);
+    }
+  }
+
+  // --- 9. Default workflow template ---
+  {
+    const repo = AppDataSource.getRepository(WorkflowTemplate);
+    const existing = await repo.findOne({ where: { isDefault: true } });
+    if (!existing) {
+      const defaultSteps = [
+        { name: 'experiment_design', label: '实验设计', builtInStep: 'experiment_design', isParallel: false, sortOrder: 1 },
+        { name: 'drying', label: '干燥', builtInStep: 'drying', isParallel: false, sortOrder: 2 },
+        { name: 'liquid_injection', label: '注液', builtInStep: 'liquid_injection', isParallel: false, sortOrder: 3 },
+        { name: 'formation', label: '化成', builtInStep: 'formation', isParallel: false, sortOrder: 4 },
+        { name: 'second_sealing', label: '二封', builtInStep: 'second_sealing', isParallel: false, sortOrder: 5 },
+        { name: 'capacity_grading', label: '定容', builtInStep: 'capacity_grading', isParallel: false, sortOrder: 6 },
+        { name: 'battery_selection', label: '挑选电池', builtInStep: 'battery_selection', isParallel: false, sortOrder: 7 },
+        {
+          name: 'testing', label: '测试', builtInStep: 'testing', isParallel: true,
+          parallelChildren: ['calendar_life', 'storage_swelling', 'energy_efficiency', 'dcr_test', 'fast_charge', 'ht_cycle'],
+          sortOrder: 8,
+        },
+      ];
+      await repo.save(
+        repo.create({
+          id: uuid(),
+          name: '默认实验流程',
+          description: '系统内置的默认电池实验流程模板',
+          isDefault: true,
+          steps: defaultSteps,
+        }),
+      );
+      console.log('Created default workflow template.');
+    } else {
+      console.log('Default workflow template already exists, skipping.');
     }
   }
 

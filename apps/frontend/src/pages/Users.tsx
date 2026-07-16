@@ -6,7 +6,7 @@ import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
-import { TextInput, Select, Checkbox } from "../components/FormFields";
+import { TextInput, FormSelect, Checkbox } from "../components/FormFields";
 import { Card, CardContent } from "../components/Card";
 import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { cn } from "../lib/utils";
@@ -335,7 +335,7 @@ export function Users() {
             required
             defaultValue={editingUser?.fullName}
           />
-          <Select
+          <FormSelect
             id="edit-role"
             label={t("role")}
             defaultValue={editingUser?.roleId || ""}
@@ -344,7 +344,7 @@ export function Users() {
             {roles.map((role) => (
               <option key={role.id} value={role.id}>{role.name}</option>
             ))}
-          </Select>
+          </FormSelect>
           <Checkbox
             id="edit-active"
             label={t("active")}
@@ -386,7 +386,7 @@ export function Users() {
             value={newUserName}
             onChange={(e) => setNewUserName(e.target.value)}
           />
-          <Select
+          <FormSelect
             id="role"
             label={t("role")}
             value={newUserRole}
@@ -395,7 +395,7 @@ export function Users() {
             {roles.map((role) => (
               <option key={role.id} value={role.id}>{role.name}</option>
             ))}
-          </Select>
+          </FormSelect>
         </form>
       </Modal>
     </div>

@@ -29,6 +29,7 @@ export const API_ROUTES = {
   data: {
     upload: `${API_PREFIX}/data/upload`,
     byType: (type: string, expId: string) => `${API_PREFIX}/data/${type}/${expId}`,
+
   },
   ai: {
     analyzeData: `${API_PREFIX}/ai/analyze-data`,
@@ -36,6 +37,25 @@ export const API_ROUTES = {
   },
   dashboard: {
     summary: `${API_PREFIX}/dashboard/summary`,
+  },
+  workflow: {
+    templates: `${API_PREFIX}/workflow/templates`,
+    templateById: (id: string) => `${API_PREFIX}/workflow/templates/${id}`,
+    instances: `${API_PREFIX}/workflow/instances`,
+    instanceByProject: (projectId: string) => `${API_PREFIX}/workflow/instances/${projectId}`,
+    transition: (projectId: string) => `${API_PREFIX}/workflow/instances/${projectId}/transition`,
+    permissions: (projectId: string) => `${API_PREFIX}/workflow/instances/${projectId}/permissions`,
+    steps: (projectId: string) => `${API_PREFIX}/workflow/instances/${projectId}/steps`,
+    stepAssignment: (projectId: string, stepName: string) => `${API_PREFIX}/workflow/instances/${projectId}/steps/${stepName}`,
+    myTasks: `${API_PREFIX}/workflow/tasks`,
+  },
+  projectDesign: {
+    designs: (projectId: string) => `${API_PREFIX}/projects/${projectId}/design`,
+    designById: (projectId: string, id: string) => `${API_PREFIX}/projects/${projectId}/design/${id}`,
+  },
+  procurement: {
+    list: (projectId: string) => `${API_PREFIX}/projects/${projectId}/procurement`,
+    procurementById: (projectId: string, id: string) => `${API_PREFIX}/projects/${projectId}/procurement/${id}`,
   },
 } as const;
 

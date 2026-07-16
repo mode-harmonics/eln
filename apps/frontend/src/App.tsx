@@ -1,9 +1,5 @@
 import React from "react";
-import {
-  createBrowserRouter,
-  RouterProvider,
-  Navigate,
-} from "react-router-dom";
+import { Navigate, createBrowserRouter, RouterProvider } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Projects } from "./pages/Projects";
@@ -11,6 +7,8 @@ import { ProjectScaffold } from "./pages/ProjectScaffold";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { ExperimentDetail } from "./pages/ExperimentDetail";
 import { Groups } from "./pages/Groups";
+import { ExperimentDesign } from "./pages/ExperimentDesign";
+import { WorkflowConfigPage } from "./pages/WorkflowConfig";
 import { Inventory } from "./pages/Inventory";
 import { Users } from "./pages/Users";
 import { Roles } from "./pages/Roles";
@@ -68,6 +66,15 @@ const router = createBrowserRouter([
             children: [
               { index: true, element: <ProjectDetail /> },
               {
+                path: "design",
+                element: <ExperimentDesign />,
+                handle: { breadcrumb: "experiment_design" },
+              },
+              {
+                path: "procurement",
+                element: <Navigate to="../design" replace />,
+              },
+              {
                 path: "groups",
                 element: <Groups />,
                 loader: async ({ params }) => {
@@ -114,6 +121,11 @@ const router = createBrowserRouter([
         path: "roles",
         element: <Roles />,
         handle: { breadcrumb: "role_management" },
+      },
+      {
+        path: "workflow-config",
+        element: <WorkflowConfigPage />,
+        handle: { breadcrumb: "workflow_config" },
       },
       {
         path: "profile",

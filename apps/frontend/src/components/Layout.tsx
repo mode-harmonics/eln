@@ -7,6 +7,7 @@ import {
   LogOut,
   Users,
   Shield,
+  Layers,
   FlaskConical,
   User,
   Globe,
@@ -22,7 +23,6 @@ import { Button } from "./Button";
 import { Logo } from "./Logo";
 import { Breadcrumb } from "./Breadcrumb";
 import { NotificationBell } from "./NotificationBell";
-import { GlobalSearch } from "./GlobalSearch";
 import { TempUploadDrawer } from "./TempUploadDrawer";
 
 const NAVIGATION = [
@@ -34,6 +34,7 @@ const NAVIGATION = [
 const SYSTEM_NAVIGATION = [
   { nameKey: "user_management", href: "/users", icon: Users, requiredPermission: "users:read" },
   { nameKey: "role_management", href: "/roles", icon: Shield, requiredPermission: "roles:read" },
+  { nameKey: "workflow_config", href: "/workflow-config", icon: Layers, requiredPermission: "roles:write" },
 ];
 
 export function Layout() {
@@ -242,9 +243,8 @@ export function Layout() {
         <main className="flex-1 overflow-y-auto">
           {/* Breadcrumb: wider, full-width */}
           <div className="w-full px-6 md:px-10 pt-6 md:pt-10 pb-4">
-            <div className="max-w-screen-xl mx-auto flex items-center justify-between gap-4 flex-wrap">
+            <div className="max-w-screen-xl mx-auto">
               <Breadcrumb />
-              <GlobalSearch />
             </div>
           </div>
             {/* Content: original width */}

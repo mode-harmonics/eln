@@ -31,6 +31,9 @@ export class Experiment {
   @Column({ type: 'jsonb', nullable: true, comment: '元数据' })
   metadata!: Record<string, unknown> | null;
 
+  @Column({ name: 'workflowStepName', type: 'varchar', length: 64, nullable: true, comment: '关联流程步骤名称' })
+  workflowStepName!: string | null;
+
   @Column({ name: 'aiAnalysisOutput', type: 'text', nullable: true, comment: 'AI分析输出' })
   aiAnalysisOutput!: string | null;
 

@@ -54,4 +54,13 @@ export class UsersController {
   async remove(@Param('id') id: string) {
     return this.usersService.remove(id);
   }
+
+  @Get('assignable')
+  @ApiOperation({ summary: 'Get lightweight user list for workflow assignment (no special permission required).' })
+  async findAssignable() {
+    const users = await this.usersService.findAll(undefined, undefined, undefined, false);
+    // findAll returns { items, total } when paginated, or array when not
+    const list = Array.isArray(users) ? users : (users as any).items ?? [];
+    return list.map((u: any) => ({ id: u.id, fullName: u.fullName, username: u.username }));
+  }
 }

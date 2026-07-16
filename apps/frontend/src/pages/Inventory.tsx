@@ -7,7 +7,7 @@ import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
-import { TextInput, Select } from "../components/FormFields";
+import { TextInput, FormSelect } from "../components/FormFields";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../components/Card";
 import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { cn } from "../lib/utils";
@@ -312,12 +312,12 @@ export function Inventory() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="type">Type</label>
-              <select id="type" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors">
+              <FormSelect id="type" className="w-full">
                 <option>Cathode Active Material</option>
                 <option>Anode Active Material</option>
                 <option>Electrolyte</option>
                 <option>Separator</option>
-              </select>
+              </FormSelect>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="quantity">Quantity</label>
@@ -341,11 +341,11 @@ export function Inventory() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="status">Status</label>
-              <select id="status" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors">
+              <FormSelect id="status" className="w-full">
                 <option value="In Stock">In Stock</option>
                 <option value="Low Stock">Low Stock</option>
                 <option value="Out of Stock">Out of Stock</option>
-              </select>
+              </FormSelect>
             </div>
           </div>
         </form>
@@ -366,12 +366,12 @@ export function Inventory() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-type">Type</label>
-              <select id="edit-type" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.type}>
+              <FormSelect id="edit-type" className="w-full" defaultValue={editingItem?.type}>
                 <option>Cathode Active Material</option>
                 <option>Anode Active Material</option>
                 <option>Electrolyte</option>
                 <option>Separator</option>
-              </select>
+              </FormSelect>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-quantity">Quantity</label>
@@ -395,11 +395,11 @@ export function Inventory() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="edit-status">Status</label>
-              <select id="edit-status" className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" defaultValue={editingItem?.status}>
+              <FormSelect id="edit-status" className="w-full" defaultValue={editingItem?.status}>
                 <option value="In Stock">In Stock</option>
                 <option value="Low Stock">Low Stock</option>
                 <option value="Out of Stock">Out of Stock</option>
-              </select>
+              </FormSelect>
             </div>
           </div>
         </form>

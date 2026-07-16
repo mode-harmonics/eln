@@ -26,3 +26,13 @@ export * from './cell-group-member.entity';
 
 // Picked cells
 export * from './picked-cell.entity';
+
+// Workflow entities
+export * from './workflow-template.entity';
+export * from './workflow-instance.entity';
+export * from './workflow-step-assignment.entity';
+
+// Experiment design & procurement
+export * from './experiment-design.entity';
+export * from './reagent-procurement.entity';
+

@@ -27,6 +27,16 @@ export class Project {
   status!: string;
 
   @Index()
+  @Column({ name: 'workflowInstanceId', type: 'uuid', nullable: true, comment: '关联流程实例ID' })
+  workflowInstanceId!: string | null;
+
+  @Column({ name: 'workflowStatus', type: 'varchar', length: 32, nullable: true, comment: '工作流状态(冗余快速查询)' })
+  workflowStatus!: string | null;
+
+  @Column({ name: 'defaultCellCount', type: 'int', default: 17, comment: '默认挑选电池数' })
+  defaultCellCount!: number;
+
+  @Index()
   @Column({ name: 'createdBy', type: 'uuid', comment: '创建者ID' })
   createdBy!: string;
 

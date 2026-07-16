@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, ReactNode } from "react";
+import { useState, useRef, useEffect, ReactNode, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "../lib/utils";
 
 interface DropdownProps {
@@ -15,42 +16,67 @@ export function Dropdown({ trigger, children, align = "right", position = "down"
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const isControlled = open !== undefined;
   const isOpen = isControlled ? open : internalIsOpen;
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
 
   const setIsOpen = (newOpen: boolean) => {
     if (!isControlled) setInternalIsOpen(newOpen);
     onOpenChange?.(newOpen);
   };
 
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const measure = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    setStyle({
+      position: "fixed",
+      zIndex: 9999,
+      minWidth: "12rem",
+      ...(position === "up"
+        ? { bottom: window.innerHeight - rect.top + 4, left: align === "right" ? rect.right - 192 : rect.left }
+        : { top: rect.bottom + 4, left: align === "right" ? Math.max(8, rect.right - 192) : rect.left }),
+    });
+  }, [align, position]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+    if (!isOpen) return;
+    measure();
+    const handler = (e: MouseEvent) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target as Node) &&
+        portalRef.current && !portalRef.current.contains(e.target as Node)
+      ) {
         setIsOpen(false);
       }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    };
+    const timer = setTimeout(() => document.addEventListener("mousedown", handler), 0);
+    return () => { clearTimeout(timer); document.removeEventListener("mousedown", handler); };
+  }, [isOpen, measure]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setIsOpen(false); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [isOpen]);
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      <div onClick={() => setIsOpen(!isOpen)} className="cursor-pointer inline-block w-full">
+    <div className="inline-block" ref={triggerRef}>
+      <div onClick={() => { if (!isOpen) measure(); setIsOpen(!isOpen); }} className="cursor-pointer">
         {trigger}
       </div>
-
-      {isOpen && (
+      {isOpen && createPortal(
         <div
+          ref={portalRef}
+          style={style}
           className={cn(
-            "absolute rounded bg-white py-1 shadow-2xl z-50 min-w-[12rem]",
-            position === "up" ? "bottom-full mb-2" : "top-full mt-2",
-            align === "right" ? "right-0" : "left-0",
-            className
+            "bg-white rounded-xl shadow-lg border border-gray-200/60 py-1 overflow-hidden",
+            className,
           )}
-          onClick={() => setIsOpen(false)}
         >
           {children}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

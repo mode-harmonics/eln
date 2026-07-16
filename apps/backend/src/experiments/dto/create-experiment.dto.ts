@@ -15,4 +15,12 @@ export class CreateExperimentDto {
   @IsString()
   @IsOptional()
   assayType?: string;
+
+  @ApiPropertyOptional({
+    description: '关联工作流步骤名称',
+    example: 'drying',
+  })
+  @IsString()
+  @IsOptional()
+  workflowStepName?: string;
 }

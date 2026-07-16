@@ -2,8 +2,8 @@ import * as React from "react"
 import { cn } from "../lib/utils"
 
 const TableWrapper = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("border border-gray-200 rounded bg-white overflow-hidden", className)}>
-    <div className="overflow-x-auto">
+  <div ref={ref} className={cn("border border-gray-200 rounded bg-white", className)}>
+    <div className="min-w-full inline-block align-middle">
       {props.children}
     </div>
   </div>

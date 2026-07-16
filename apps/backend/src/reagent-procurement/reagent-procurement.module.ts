@@ -1,0 +1,14 @@
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ReagentProcurementController } from './reagent-procurement.controller';
+import { ReagentProcurementService } from './reagent-procurement.service';
+import { ReagentProcurement } from '../entities/reagent-procurement.entity';
+import { ExperimentDesign } from '../entities/experiment-design.entity';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([ReagentProcurement, ExperimentDesign])],
+  controllers: [ReagentProcurementController],
+  providers: [ReagentProcurementService],
+  exports: [ReagentProcurementService],
+})
+export class ReagentProcurementModule {}
