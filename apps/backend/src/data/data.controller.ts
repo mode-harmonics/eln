@@ -114,6 +114,19 @@ export class DataController {
     });
   }
 
+  @Get('export/project/:projectId')
+  @ApiOperation({ summary: 'Export ALL business data for a project as an Excel workbook with Chinese headers.' })
+  async exportProjectData(@Param('projectId') projectId: string) {
+    const buffer = await this.dataService.exportProjectBuffer(projectId);
+    const stream = new Readable();
+    stream.push(buffer);
+    stream.push(null);
+    return new StreamableFile(stream, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="project-data.xlsx"',
+    });
+  }
+
   @Get('raw/:expId')
   @ApiOperation({ summary: 'Query raw step data rows for an experiment. Optional ?source=formation|grading to filter by data source.' })
   async findRawSteps(
@@ -131,7 +144,7 @@ export class DataController {
     @CurrentUser() _user: RequestUser,
   ) {
     if (dto.mode === 'manual') {
-      return this.dataService.manualPickCells(projectId, dto.cellIds ?? []);
+      return this.dataService.manualPickCells(projectId, dto.assignments, dto.cellIds);
     }
     const topN = dto.topN != null && dto.topN > 0 ? dto.topN : undefined;
     return this.dataService.autoPickCells(projectId, topN);

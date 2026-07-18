@@ -14,7 +14,7 @@ import { SummaryDataProps } from "../utils/dataSummary";
 import { Database, Download } from "lucide-react";
 import { Button } from "./Button";
 
-export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[] }) {
+export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]; projectId: string }) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("process");
 
@@ -30,50 +30,15 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
 
   const handleExport = async () => {
     try {
-      const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
-      const wb = new ExcelJS.Workbook();
-
-      const addSheet = (name: string, data: any[]) => {
-        if (!data || data.length === 0) return;
-        const sheet = wb.addWorksheet(name);
-
-        let flatRows = data;
-        if (name === "快充测试") {
-          flatRows = data.flatMap((d: any) => {
-            const steps = d.steps || [];
-            if (steps.length === 0) return [{ cellName: d.cellName, c0: d.c0, providedFastChargeTime: d.providedFastChargeTime, computedFastChargeTime: d.computedFastChargeTime }];
-            return steps.map((step: any) => ({ cellName: d.cellName, c0: d.c0, providedFastChargeTime: d.providedFastChargeTime, computedFastChargeTime: d.computedFastChargeTime, ...step }));
-          });
-        }
-
-        const keys = Array.from(
-          new Set(flatRows.flatMap(row => Object.keys(row)))
-        ).filter(k => k !== 'id' && k !== 'experimentId' && k !== 'createdAt' && k !== 'updatedAt' && k !== 'originalRow' && k !== 'steps');
-
-        sheet.columns = keys.map(k => ({ header: k, key: k, width: 15 }));
-
-        flatRows.forEach(row => {
-          const rowData: Record<string, any> = {};
-          keys.forEach(k => { rowData[k] = row[k]; });
-          sheet.addRow(rowData);
-        });
-      };
-
-      addSheet("制程数据", props.processData);
-      addSheet("日历寿命", props.calendarLife);
-      addSheet("存储胀气", props.storageSwelling);
-      addSheet("能量效率", props.energyEfficiency);
-      addSheet("DCR测试", props.dcrTest);
-      addSheet("快充测试", props.fastCharge);
-      addSheet("高温循环", props.htCycle);
-
-      if (wb.worksheets.length === 0) {
-        alert("当前项目没有任何明细数据可导出");
-        return;
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/v1/data/export/project/${props.projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => res.statusText);
+        throw new Error(`Export failed (${res.status}): ${errBody}`);
       }
-
-      const buffer = await wb.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -81,6 +46,7 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Export failed", error);
       alert("导出失败，请稍后重试");

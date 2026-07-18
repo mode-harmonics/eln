@@ -62,6 +62,39 @@ export interface UploadSummary {
   rowsInsertedByTable: Record<string, number>;
 }
 
+export function parseNum(v: any): number | null {
+  return (v == null || v === '') ? null : Number(v);
+}
+
+export function computeProcessDataDerivedFields(p: Record<string, any>, ctx: Record<string, any> = {}) {
+  const getVal = (key: string) => p[key] != null && p[key] !== '' ? p[key] : ctx[key];
+  const m0 = parseNum(getVal('m0')), m1 = parseNum(getVal('m1')), m2 = parseNum(getVal('m2')), m4 = parseNum(getVal('m4'));
+  const v0 = parseNum(getVal('v0')), v1 = parseNum(getVal('v1'));
+  const fq1 = parseNum(getVal('fq1')), fq2 = parseNum(getVal('fq2'));
+  const fu1 = parseNum(getVal('fu1')), fu2 = parseNum(getVal('fu2'));
+  const gqc1 = parseNum(getVal('gqc1')), gqd1 = parseNum(getVal('gqd1'));
+
+  const mIn = m1 !== null && m0 !== null ? m1 - m0 : null;
+  const mLoss = m1 !== null && m2 !== null ? m1 - m2 : null;
+  const mHold = m4 !== null && m0 !== null ? m4 - m0 : null;
+  const fq = fq1 !== null && fq2 !== null ? fq1 + fq2 : null;
+  const qdFirst = gqd1;
+  const fvg = v1 !== null && v0 !== null && qdFirst ? (v1 - v0) / qdFirst : null;
+  const ku = fu1 !== null && fu2 !== null ? fu1 - fu2 : null;
+  const qcFirst = fq !== null && gqc1 !== null ? fq + gqc1 : null;
+  const ceFirst = qdFirst !== null && qcFirst ? (qdFirst / qcFirst) * 100 : null;
+
+  p.mIn = mIn !== null ? mIn.toFixed(6) : null;
+  p.mLoss = mLoss !== null ? mLoss.toFixed(6) : null;
+  p.mHold = mHold !== null ? mHold.toFixed(6) : null;
+  p.fq = fq !== null ? fq.toFixed(6) : null;
+  p.qdFirst = qdFirst !== null ? String(qdFirst) : null;
+  p.fvg = fvg !== null ? fvg.toFixed(6) : null;
+  p.ku = ku !== null ? ku.toFixed(6) : null;
+  p.qcFirst = qcFirst !== null ? qcFirst.toFixed(6) : null;
+  p.ceFirst = ceFirst !== null ? ceFirst.toFixed(6) : null;
+}
+
 @Injectable()
 export class DataService {
   private readonly logger = new Logger(DataService.name);
@@ -73,6 +106,29 @@ export class DataService {
     private readonly projectsService: ProjectsService,
     private readonly workflowService: WorkflowService,
   ) { }
+
+  /**
+   * Retrieves all rows of a specified table (EntityClass) that belong to
+   * any experiment in the same project having the given assayType.
+   */
+  private async getProjectRows<T extends import('typeorm').ObjectLiteral>(
+    experimentId: string,
+    assayType: string,
+    EntityClass: import('typeorm').EntityTarget<T>,
+    whereConditions: Record<string, unknown>
+  ): Promise<T[]> {
+    const exp = await this.dataSource.getRepository(Experiment).findOne({ where: { id: experimentId } });
+    if (!exp) return [];
+
+    const projectExps = await this.dataSource.getRepository(Experiment).find({ where: { projectId: exp.projectId } });
+    const targetExpIds = projectExps.filter(e => (e.metadata as any)?.assayType === assayType).map(e => e.id);
+
+    if (targetExpIds.length === 0) return [];
+
+    return this.dataSource.getRepository(EntityClass).find({
+      where: { experimentId: In(targetExpIds), ...whereConditions } as any
+    });
+  }
 
   async getExperiment(id: string): Promise<Experiment | null> {
     return this.dataSource.getRepository(Experiment).findOne({ where: { id } });
@@ -212,6 +268,32 @@ export class DataService {
       rowsByTable['RawStepData'] = (rowsByTable['RawStepData'] ?? []).concat(rawSteps);
     }
 
+    // ─── Filter rows by picked cells ────────────────────────────────────
+    // If the experiment's project has picked cells with matching testType,
+    // discard any rows whose cellId/cellName isn't in the picked list.
+    if (assayType) {
+      const pickedCells = await this.dataSource.getRepository(PickedCell).find({
+        where: { projectId: experiment.projectId, testType: assayType },
+      });
+      if (pickedCells.length > 0) {
+        const allowedCellIds = new Set(pickedCells.map((pc) => pc.cellId));
+        const businessTableNames = ['processData', 'calendarLife', 'storageSwelling', 'energyEfficiency', 'dcrTest', 'fastCharge', 'htCycle'];
+        for (const tableName of businessTableNames) {
+          const rows = rowsByTable[tableName];
+          if (!rows || rows.length === 0) continue;
+          const cellField = tableName === 'processData' ? 'cellId' : 'cellName';
+          const before = rows.length;
+          rowsByTable[tableName] = rows.filter((r) => {
+            const val = r[cellField];
+            return val != null && allowedCellIds.has(String(val));
+          });
+          if (rowsByTable[tableName].length < before) {
+            this.logger.log(`Picked-cell filter removed ${before - rowsByTable[tableName].length} rows from ${tableName}`);
+          }
+        }
+      }
+    }
+
     // ─── Merge processData rows with same cellId ───────────────────────────
     // Formation and grading files produce separate rows per cellId.
     // We merge them so one cellId → one record with combined fields.
@@ -219,17 +301,7 @@ export class DataService {
     const processRows = rowsByTable['processData'];
     if (processRows && processRows.length > 0) {
       // 1. Fetch ALL ProcessData rows for this project so we can compute cross-step fields (mHold, etc.)
-      let allProjectProcessRows: Record<string, unknown>[] = [];
-      const exp = await this.dataSource.getRepository(Experiment).findOne({ where: { id: experimentId } });
-      if (exp) {
-        const projectExps = await this.dataSource.getRepository(Experiment).find({ where: { projectId: exp.projectId } });
-        const processExpIds = projectExps.filter(e => (e.metadata as any)?.assayType === 'ProcessData').map(e => e.id);
-        if (processExpIds.length > 0) {
-          allProjectProcessRows = await this.dataSource.getRepository(ProcessData).find({
-            where: { experimentId: In(processExpIds) }
-          }) as any;
-        }
-      }
+      const allProjectProcessRows = await this.getProjectRows(experimentId, 'ProcessData', ProcessData, {}) as any[];
 
       // Build a map of aggregated project rows to help with derived calculation
       const projectDataByCell = new Map<string, Record<string, unknown>>();
@@ -260,7 +332,7 @@ export class DataService {
         } else {
           // Merge non-null values from the new row into the existing one
           for (const [key, val] of Object.entries(row)) {
-            if (val != null && val !== '' && (existing[key] == null || existing[key] === '')) {
+            if (val != null && val !== '') {
               existing[key] = val;
             }
           }
@@ -272,43 +344,23 @@ export class DataService {
       }
 
       // Re-compute derived fields for the merged rows using context from ALL project steps
-      const parseNum = (v: any) => (v == null || v === '') ? null : Number(v);
       for (const p of merged.values()) {
         const cellId = p['cellId'] as string;
         const ctx = projectDataByCell.get(cellId) || {};
 
-        // Prefer value from current merged row, fallback to other steps in project
-        const getVal = (key: string) => p[key] != null && p[key] !== '' ? p[key] : ctx[key];
+        // Copy missing fields from previous steps to current row for persistence
+        for (const [key, val] of Object.entries(ctx)) {
+          if (!['id', 'experimentId', 'createdAt', 'attachmentId', 'cellId'].includes(key)) {
+            if (p[key] == null || p[key] === '') {
+              p[key] = val;
+            }
+          }
+        }
 
-        const m0 = parseNum(getVal('m0')), m1 = parseNum(getVal('m1')), m2 = parseNum(getVal('m2')), m4 = parseNum(getVal('m4'));
-        const v0 = parseNum(getVal('v0')), v1 = parseNum(getVal('v1'));
-        const fq1 = parseNum(getVal('fq1')), fq2 = parseNum(getVal('fq2'));
-        const fu1 = parseNum(getVal('fu1')), fu2 = parseNum(getVal('fu2'));
-        const gqc1 = parseNum(getVal('gqc1')), gqd1 = parseNum(getVal('gqd1'));
-
-        const mIn = m1 !== null && m0 !== null ? m1 - m0 : null;
-        const mLoss = m1 !== null && m2 !== null ? m1 - m2 : null;
-        const mHold = m4 !== null && m0 !== null ? m4 - m0 : null;
-        const fq = fq1 !== null && fq2 !== null ? fq1 + fq2 : null;
-        const qdFirst = gqd1;
-        const fvg = v1 !== null && v0 !== null && qdFirst ? (v1 - v0) / qdFirst : null;
-        const ku = fu1 !== null && fu2 !== null ? fu1 - fu2 : null;
-        const qcFirst = fq !== null && gqc1 !== null ? fq + gqc1 : null;
-        const ceFirst = qdFirst !== null && qcFirst ? (qdFirst / qcFirst) * 100 : null;
-
-        p.mIn = mIn !== null ? String(mIn.toFixed(6)) : null;
-        p.mLoss = mLoss !== null ? String(mLoss.toFixed(6)) : null;
-        p.mHold = mHold !== null ? String(mHold.toFixed(6)) : null;
-        p.fq = fq !== null ? String(fq.toFixed(6)) : null;
-        p.qdFirst = qdFirst !== null ? String(qdFirst) : null;
-        p.fvg = fvg !== null ? String(fvg.toFixed(6)) : null;
-        p.ku = ku !== null ? String(ku.toFixed(6)) : null;
-        p.qcFirst = qcFirst !== null ? String(qcFirst.toFixed(6)) : null;
-        p.ceFirst = ceFirst !== null ? String(ceFirst.toFixed(6)) : null;
+        computeProcessDataDerivedFields(p, ctx);
       }
 
-      // Deprecated block: calculations are now done in the merge loop above.
-      // This is kept empty to avoid git conflicts but the original logic was moved.
+      rowsByTable['processData'] = Array.from(merged.values());
     }
 
     const rowsInsertedByTable: Record<string, number> = {};
@@ -329,10 +381,29 @@ export class DataService {
       }
 
       for (const [tableName, rows] of Object.entries(rowsByTable)) {
-        // Skip internal markers
         if (tableName.startsWith('__')) continue;
         const EntityClass = TABLE_NAME_TO_ENTITY[tableName];
         if (!EntityClass || rows.length === 0) continue;
+
+        if (mode === 'merge' && tableName !== 'processData' && tableName !== 'RawStepData') {
+          const existingRows = await queryRunner.manager.find(EntityClass, { where: { experimentId } }) as any[];
+          for (const newRow of rows) {
+            const exist = existingRows.find(r => 
+              r.cellName === newRow.cellName &&
+              (newRow.dayCount === undefined || r.dayCount === newRow.dayCount) &&
+              (newRow.days === undefined || r.days === newRow.days) &&
+              (newRow.cycle === undefined || r.cycle === newRow.cycle)
+            );
+            if (exist) {
+              newRow.id = exist.id;
+              for (const [k, v] of Object.entries(exist)) {
+                if (v != null && v !== '' && (newRow[k] == null || newRow[k] === '')) {
+                  newRow[k] = v;
+                }
+              }
+            }
+          }
+        }
 
         await queryRunner.manager.save(EntityClass, rows);
         rowsInsertedByTable[tableName] = rows.length;
@@ -355,7 +426,137 @@ export class DataService {
       await queryRunner.release();
     }
 
+    await this.recomputeExperimentDerivedFields(experimentId);
+
     return { sheetsProcessed, sheetsSkipped, rowsInsertedByTable };
+  }
+
+  /**
+   * Re-calculates derived metrics across all accumulated business rows for an experiment.
+   * Ensures that multi-batch uploads retain baseline-dependent calculations
+   * (e.g. HtCycle retention relative to cycle 1, CalendarLife growth relative to day 0, etc.)
+   */
+  private async recomputeExperimentDerivedFields(experimentId: string): Promise<void> {
+    const num = (v: any) => (v == null || v === '') ? null : Number(v);
+
+    // 1. HtCycle
+    const htRepo = this.dataSource.getRepository(HtCycle);
+    const htRows = await htRepo.find({ where: { experimentId } });
+    if (htRows.length > 0) {
+      const byCell = new Map<string, HtCycle[]>();
+      for (const r of htRows) {
+        const list = byCell.get(r.cellName) || [];
+        list.push(r);
+        byCell.set(r.cellName, list);
+      }
+      let htModified = false;
+      for (const [, rows] of byCell) {
+        const baseCycle = rows.find(r => r.cycle === 1 || (r as any).cycleNo === 1);
+        if (baseCycle && baseCycle.dischargeCapacity) {
+          const baseCap = num(baseCycle.dischargeCapacity);
+          if (baseCap && baseCap !== 0) {
+            for (const r of rows) {
+              const cap = num(r.dischargeCapacity);
+              const expectedRetention = cap != null ? ((cap / baseCap) * 100).toFixed(6) : null;
+              if (r.capacityRetention !== expectedRetention) {
+                r.capacityRetention = expectedRetention;
+                htModified = true;
+              }
+            }
+          }
+        }
+      }
+      if (htModified) await htRepo.save(htRows);
+    }
+
+    // 2. CalendarLife
+    const calRepo = this.dataSource.getRepository(CalendarLife);
+    const calRows = await calRepo.find({ where: { experimentId } });
+    if (calRows.length > 0) {
+      const byCell = new Map<string, CalendarLife[]>();
+      for (const r of calRows) {
+        const list = byCell.get(r.cellName) || [];
+        list.push(r);
+        byCell.set(r.cellName, list);
+      }
+      let calModified = false;
+      for (const [, rows] of byCell) {
+        const day0 = rows.find(r => r.dayCount === 0);
+        if (day0) {
+          const q0 = num(day0.q ?? day0.dq);
+          const ddcr0 = num(day0.ddcr);
+          const cdcr0 = num(day0.cdcr);
+          const u0 = num(day0.u);
+          const r0 = num(day0.r);
+
+          for (const r of rows) {
+            if (r.dayCount === 0) {
+              if (q0 != null && r.qRetention !== '100.000000') { r.qRetention = '100.000000'; calModified = true; }
+              if (q0 != null && r.qRecovery !== '100.000000') { r.qRecovery = '100.000000'; calModified = true; }
+              if (r.ddcrGrowth !== '0.000000') { r.ddcrGrowth = '0.000000'; calModified = true; }
+              if (r.cdcrGrowth !== '0.000000') { r.cdcrGrowth = '0.000000'; calModified = true; }
+            } else {
+              const dq = num(r.dq);
+              if (dq != null && q0) {
+                const expRet = ((dq / q0) * 100).toFixed(6);
+                if (r.qRetention !== expRet) { r.qRetention = expRet; calModified = true; }
+              }
+              const ddcr = num(r.ddcr);
+              if (ddcr != null && ddcr0) {
+                const expDdcrG = ((ddcr / ddcr0 - 1) * 100).toFixed(6);
+                if (r.ddcrGrowth !== expDdcrG) { r.ddcrGrowth = expDdcrG; calModified = true; }
+              }
+              const cdcr = num(r.cdcr);
+              if (cdcr != null && cdcr0) {
+                const expCdcrG = ((cdcr / cdcr0 - 1) * 100).toFixed(6);
+                if (r.cdcrGrowth !== expCdcrG) { r.cdcrGrowth = expCdcrG; calModified = true; }
+              }
+              const u = num(r.u);
+              if (u != null && u0) {
+                const expUG = ((u / u0 - 1) * 100).toFixed(6);
+                if (r.uGrowth !== expUG) { r.uGrowth = expUG; calModified = true; }
+              }
+              const rv = num(r.r);
+              if (rv != null && r0) {
+                const expRG = ((rv / r0 - 1) * 100).toFixed(6);
+                if (r.rGrowth !== expRG) { r.rGrowth = expRG; calModified = true; }
+              }
+            }
+          }
+        }
+      }
+      if (calModified) await calRepo.save(calRows);
+    }
+
+    // 3. StorageSwelling
+    const swellRepo = this.dataSource.getRepository(StorageSwelling);
+    const swellRows = await swellRepo.find({ where: { experimentId } });
+    if (swellRows.length > 0) {
+      const byCell = new Map<string, StorageSwelling[]>();
+      for (const r of swellRows) {
+        const list = byCell.get(r.cellName) || [];
+        list.push(r);
+        byCell.set(r.cellName, list);
+      }
+      let swellModified = false;
+      for (const [, rows] of byCell) {
+        const day0 = rows.find(r => r.dayCount === 0);
+        if (day0) {
+          const v0 = num(day0.v);
+          for (const r of rows) {
+            const vNd = num(r.v);
+            const qd1st = num(r.qd1st);
+            if (r.dayCount === 0) {
+              if (r.vg !== '0.000000') { r.vg = '0.000000'; swellModified = true; }
+            } else if (vNd != null && v0 != null && qd1st != null && qd1st !== 0) {
+              const expVg = ((vNd - v0) / qd1st).toFixed(6);
+              if (r.vg !== expVg) { r.vg = expVg; swellModified = true; }
+            }
+          }
+        }
+      }
+      if (swellModified) await swellRepo.save(swellRows);
+    }
   }
 
   /** Return raw step rows for a given experiment, optionally filtered by dataSource ('formation' | 'grading'). */
@@ -380,6 +581,15 @@ export class DataService {
    * 5. Auto-assign groups by prefix matching
    */
   async autoPickCells(projectId: string, topN?: number): Promise<PickedCell[]> {
+    const TEST_ALLOCATION = [
+      { testType: 'CalendarLife', count: 3 },
+      { testType: 'StorageSwelling', count: 3 },
+      { testType: 'EnergyEfficiency', count: 3 },
+      { testType: 'DcrTest', count: 2 },
+      { testType: 'FastCharge', count: 3 },
+      { testType: 'HtCycle', count: 3 },
+    ];
+
     const exps = await this.dataSource.getRepository(Experiment).find({ where: { projectId } });
     const processExpIds = exps.filter((e) => (e.metadata as any)?.assayType === 'ProcessData').map(e => e.id);
 
@@ -402,77 +612,60 @@ export class DataService {
       mergedRows.set(row.cellId, existing);
     }
 
-    // Build records from cells that have all four metrics
-    const records: { id: string; QD1st: number; GR1: number; FVG: number; KU: number }[] = [];
+    // Build records from cells that have cellId
+    const records: { id: string; QD1st: number; fqTotal: number }[] = [];
     for (const r of mergedRows.values()) {
-      const qd1st = r.gqd1 != null ? Number(r.gqd1) : null;
-      const gr1 = r.gr1 != null ? Number(r.gr1) : null;
       const cellId = r.cellId as string;
-      if (qd1st == null || gr1 == null || !cellId) continue;
-
-      // FVG: use stored computed value, or compute from raw fields
-      const fvg = r.fvg != null
-        ? Number(r.fvg)
-        : (r.v1 != null && r.v0 != null && qd1st !== 0 ? (Number(r.v1) - Number(r.v0)) / qd1st : null);
-
-      // KU: use stored computed value, or compute from raw fields
-      const ku = r.ku != null
-        ? Number(r.ku)
-        : (r.fu1 != null && r.fu2 != null ? Number(r.fu1) - Number(r.fu2) : null);
-
-      if (fvg != null && ku != null) {
-        records.push({ id: cellId, QD1st: qd1st, GR1: gr1, FVG: fvg, KU: ku });
-      }
+      if (!cellId) continue;
+      
+      const qd1st = r.gqd1 != null ? Number(r.gqd1) : null;
+      const fq1 = r.fq1 != null ? Number(r.fq1) : 0;
+      const fq2 = r.fq2 != null ? Number(r.fq2) : 0;
+      
+      records.push({ id: cellId, QD1st: qd1st ?? -999999, fqTotal: fq1 + fq2 });
     }
 
     if (records.length === 0) {
-      throw new BadRequestException(
-        '没有找到同时具备 QD1st(首次放电容量/gqd1)、GR1(定容后内阻/gr1)、FVG(化成产气量)、KU(老化电压降) 四项指标的电芯。'
-        + ' 请确认已同时上传化成和定容两份原始数据。'
-      );
+      throw new BadRequestException('没有找到可用的电芯数据。');
     }
 
-    // Run the algorithm
-    const result = pickBatteries({ records });
+    // Sort: primary by QD1st (desc), secondary by fqTotal (desc)
+    records.sort((a, b) => {
+      if (a.QD1st !== b.QD1st) return b.QD1st - a.QD1st;
+      return b.fqTotal - a.fqTotal;
+    });
 
-    // Determine which cell IDs to persist
-    let pickedIds = result.assignments.map((a) => a.sampleId);
-    if (topN != null && topN > 0 && topN < pickedIds.length) {
-      pickedIds = pickedIds.slice(0, topN);
+    // Limit to 17 (or available)
+    const totalNeeded = TEST_ALLOCATION.reduce((sum, t) => sum + t.count, 0);
+    const sortedRecords = records.slice(0, totalNeeded);
+
+    // Allocate test types
+    let recordIndex = 0;
+    const assignments: { cellId: string, testType: string }[] = [];
+    for (const alloc of TEST_ALLOCATION) {
+      for (let i = 0; i < alloc.count; i++) {
+        if (recordIndex < sortedRecords.length) {
+          assignments.push({ cellId: sortedRecords[recordIndex].id, testType: alloc.testType });
+          recordIndex++;
+        }
+      }
     }
 
     // Log algorithm results for traceability
-    this.logger.log(
-      `Auto-pick result for project ${projectId}: groups=${JSON.stringify(result.groups.map(g => ({ group: g.group, ids: g.sampleIds, score: g.score })))} warnings=${JSON.stringify(result.warnings)}`,
-    );
+    this.logger.log(`Auto-pick result for project ${projectId}: assigned ${assignments.length} cells.`);
 
     // Replace existing picks
     const repo = this.dataSource.getRepository(PickedCell);
     await repo.delete({ projectId } as any);
 
-    const rows = pickedIds.map((cellId) => ({
+    const rows = assignments.map((a) => ({
       id: uuid(),
       projectId,
-      cellId,
+      cellId: a.cellId,
+      testType: a.testType,
       pickedBy: 'auto',
     }));
     const saved = (await repo.save(rows as any)) as PickedCell[];
-
-    // Auto-assign groups by prefix
-    try {
-      const groupMap = await this.groupsService.getGroupMap(pickedIds, projectId);
-      const membersRepo = this.dataSource.getRepository(CellGroupMember);
-      for (const [cellId, assignment] of Object.entries(groupMap)) {
-        if (assignment.groupId) {
-          await membersRepo.upsert(
-            { id: uuid(), groupId: assignment.groupId, cellIdentifier: cellId },
-            ['cellIdentifier'],
-          );
-        }
-      }
-    } catch (err) {
-      this.logger.warn('Auto group assignment failed (non-fatal):', err as Error);
-    }
 
     return saved;
   }
@@ -486,14 +679,17 @@ export class DataService {
   }
 
   /** Manual pick: replace picked cells for a project */
-  async manualPickCells(projectId: string, cellIds: string[]): Promise<PickedCell[]> {
+  async manualPickCells(projectId: string, assignments?: { cellId: string; testType: string }[], cellIds?: string[]): Promise<PickedCell[]> {
     const repo = this.dataSource.getRepository(PickedCell);
     await repo.delete({ projectId } as any);
 
-    const rows = cellIds.map((cellId) => ({
+    const assignmentsToUse = assignments ?? (cellIds?.map(id => ({ cellId: id, testType: null })) ?? []);
+
+    const rows = assignmentsToUse.map((a) => ({
       id: uuid(),
       projectId,
-      cellId,
+      cellId: a.cellId,
+      testType: a.testType ?? null,
       pickedBy: 'manual',
     }));
     return (await repo.save(rows as any)) as PickedCell[];
@@ -511,15 +707,22 @@ export class DataService {
     userId: string,
   ): Promise<{ table: string; experimentId: string; count: number }[]> {
     const picked = await this.getPickedCells(projectId);
-    const cellIds = picked.map((p) => p.cellId);
+    
+    // Group cellIds by testType
+    const cellsByTest = picked.reduce((m, p) => {
+      if (p.testType) {
+        (m[p.testType] = m[p.testType] ?? []).push(p.cellId);
+      }
+      return m;
+    }, {} as Record<string, string[]>);
 
-    const targets: { entity: new () => any; name: string; assayType: string; label: string }[] = [
-      { entity: CalendarLife, name: 'calendarLife', assayType: 'CalendarLife', label: '日历寿命' },
-      { entity: StorageSwelling, name: 'storageSwelling', assayType: 'StorageSwelling', label: '存储胀气' },
-      { entity: DcrTest, name: 'dcrTest', assayType: 'DcrTest', label: 'DCR测试' },
-      { entity: EnergyEfficiency, name: 'energyEfficiency', assayType: 'EnergyEfficiency', label: '能量效率' },
-      { entity: FastCharge, name: 'fastCharge', assayType: 'FastCharge', label: '快充时间' },
-      { entity: HtCycle, name: 'htCycle', assayType: 'HtCycle', label: '高温循环' },
+    const targets: { entity: new () => any; name: string; assayType: string; label: string; stepName: string }[] = [
+      { entity: CalendarLife, name: 'calendarLife', assayType: 'CalendarLife', label: '日历寿命', stepName: 'calendar_life' },
+      { entity: StorageSwelling, name: 'storageSwelling', assayType: 'StorageSwelling', label: '存储胀气', stepName: 'storage_swelling' },
+      { entity: DcrTest, name: 'dcrTest', assayType: 'DcrTest', label: 'DCR测试', stepName: 'dcr_test' },
+      { entity: EnergyEfficiency, name: 'energyEfficiency', assayType: 'EnergyEfficiency', label: '能量效率', stepName: 'energy_efficiency' },
+      { entity: FastCharge, name: 'fastCharge', assayType: 'FastCharge', label: '快充时间', stepName: 'fast_charge' },
+      { entity: HtCycle, name: 'htCycle', assayType: 'HtCycle', label: '高温循环', stepName: 'ht_cycle' },
     ];
 
     // Fetch all experiments for this project once
@@ -527,15 +730,24 @@ export class DataService {
 
     const results: { table: string; experimentId: string; count: number }[] = [];
 
-    for (const { entity, name, assayType, label } of targets) {
+    for (const { entity, name, assayType, label, stepName } of targets) {
+      const cellIdsForThis = cellsByTest[assayType] ?? [];
+      if (cellIdsForThis.length === 0) continue; // Skip if no cells assigned to this test
+
       // Find or auto-create the experiment for this assay type
-      let exp = allExps.find((e) => (e.metadata as any)?.assayType === assayType) ?? null;
+      let exp = allExps.find((e) => (e.metadata as any)?.assayType === assayType || e.workflowStepName === stepName) ?? null;
       if (!exp) {
         const today = new Date().toISOString().split('T')[0];
         exp = await this.projectsService.createExperiment(projectId, userId, {
           title: `${label} - ${today}`,
           assayType,
+          workflowStepName: stepName,
         });
+        allExps.push(exp);
+      } else if (!exp.workflowStepName) {
+        // Fix for existing experiments created by older code
+        exp.workflowStepName = stepName;
+        await this.dataSource.getRepository(Experiment).save(exp);
       }
 
       const repo = this.dataSource.getRepository(entity);
@@ -543,22 +755,34 @@ export class DataService {
       // Destructive: delete all existing rows for this experiment
       await repo.delete({ experimentId: exp.id } as any);
 
-      // Insert one placeholder row per picked cell
+      // Insert placeholder rows per picked cell
       let count = 0;
-      for (const cellId of cellIds) {
-        const extra: Record<string, unknown> =
-          name === 'calendarLife' ? { dayCount: 0 } :
-            name === 'storageSwelling' ? { dayCount: 0 } :
-              name === 'htCycle' ? { cycle: 1 } : {};
-        await repo.save(
-          repo.create({
-            id: uuid(),
-            experimentId: exp.id,
-            cellName: cellId,
-            ...extra,
-          } as any),
-        );
-        count++;
+      for (const cellId of cellIdsForThis) {
+        if (name === 'calendarLife' || name === 'storageSwelling') {
+          const days = [0, 7, 14, 21, 28, 35, 42];
+          for (const day of days) {
+            await repo.save(
+              repo.create({
+                id: uuid(),
+                experimentId: exp.id,
+                cellName: cellId,
+                dayCount: day,
+              } as any),
+            );
+            count++;
+          }
+        } else {
+          const extra: Record<string, unknown> = name === 'htCycle' ? { cycle: 1 } : {};
+          await repo.save(
+            repo.create({
+              id: uuid(),
+              experimentId: exp.id,
+              cellName: cellId,
+              ...extra,
+            } as any),
+          );
+          count++;
+        }
       }
       results.push({ table: name, experimentId: exp.id, count });
     }
@@ -652,12 +876,11 @@ export class DataService {
       order.cycle = 'ASC';
     }
 
-    if (Object.keys(order).length === 0) {
-      if (columns.includes('createdAt')) {
-        order.createdAt = 'ASC';
-      } else {
-        order.id = 'ASC';
-      }
+    if (columns.includes('createdAt')) {
+      order.createdAt = 'ASC';
+    }
+    if (columns.includes('id')) {
+      order.id = 'ASC';
     }
 
     return repo.find({
@@ -728,47 +951,14 @@ export class DataService {
 
       // Fetch all other ProcessData rows for this cellId in the project to compute derived fields
       let ctx: Record<string, unknown> = {};
-      const exp = await this.dataSource.getRepository(Experiment).findOne({ where: { id: p.experimentId } });
-      if (exp) {
-        const projectExps = await this.dataSource.getRepository(Experiment).find({ where: { projectId: exp.projectId } });
-        const processExpIds = projectExps.filter(e => (e.metadata as any)?.assayType === 'ProcessData').map(e => e.id);
-        if (processExpIds.length > 0) {
-          const projectRows = await repo.find({ where: { cellId, experimentId: In(processExpIds) } as any });
-          for (const r of projectRows) {
-            for (const [k, v] of Object.entries(r)) {
-              if (v != null && v !== '') ctx[k] = v;
-            }
-          }
+      const projectRows = await this.getProjectRows(p.experimentId, 'ProcessData', ProcessData, { cellId });
+      for (const r of projectRows) {
+        for (const [k, v] of Object.entries(r)) {
+          if (v != null && v !== '') ctx[k] = v;
         }
       }
 
-      const getVal = (key: string) => p[key] != null && p[key] !== '' ? p[key] : ctx[key];
-      const n = (v: any) => (v == null || v === '') ? null : Number(v);
-      const m0 = n(getVal('m0')), m1 = n(getVal('m1')), m2 = n(getVal('m2')), m4 = n(getVal('m4'));
-      const v0 = n(getVal('v0')), v1 = n(getVal('v1'));
-      const fq1 = n(getVal('fq1')), fq2 = n(getVal('fq2'));
-      const fu1 = n(getVal('fu1')), fu2 = n(getVal('fu2'));
-      const gqc1 = n(getVal('gqc1')), gqd1 = n(getVal('gqd1'));
-
-      const mIn = m1 !== null && m0 !== null ? m1 - m0 : null;
-      const mLoss = m1 !== null && m2 !== null ? m1 - m2 : null;
-      const mHold = m4 !== null && m0 !== null ? m4 - m0 : null;
-      const fq = fq1 !== null && fq2 !== null ? fq1 + fq2 : null;
-      const qdFirst = gqd1;
-      const fvg = v1 !== null && v0 !== null && qdFirst ? (v1 - v0) / qdFirst : null;
-      const ku = fu1 !== null && fu2 !== null ? fu1 - fu2 : null;
-      const qcFirst = fq !== null && gqc1 !== null ? fq + gqc1 : null;
-      const ceFirst = qdFirst !== null && qcFirst ? (qdFirst / qcFirst) * 100 : null;
-
-      p.mIn = mIn !== null ? mIn.toFixed(6) : null;
-      p.mLoss = mLoss !== null ? mLoss.toFixed(6) : null;
-      p.mHold = mHold !== null ? mHold.toFixed(6) : null;
-      p.fq = fq !== null ? fq.toFixed(6) : null;
-      p.qdFirst = qdFirst !== null ? String(qdFirst) : null;
-      p.fvg = fvg !== null ? fvg.toFixed(6) : null;
-      p.ku = ku !== null ? ku.toFixed(6) : null;
-      p.qcFirst = qcFirst !== null ? qcFirst.toFixed(6) : null;
-      p.ceFirst = ceFirst !== null ? ceFirst.toFixed(6) : null;
+      computeProcessDataDerivedFields(p, ctx);
     }
 
     if (type === 'fastcharge' || type === 'fastCharge') {
@@ -785,6 +975,145 @@ export class DataService {
         });
         const finalTime = computeFastChargeTime(c0, fc.steps);
         fc.computedFastChargeTime = finalTime !== null ? finalTime.toFixed(6) : null;
+      }
+    }
+
+    if (type === 'dcr' || type === 'dcrTest') {
+      const p = row as any;
+      const n = (v: any) => (v == null || v === '') ? null : Number(v);
+      let q0 = n(p.q0);
+      
+      if (q0 == null && p.experimentId) {
+        const processRows = await this.getProjectRows(p.experimentId, 'ProcessData', ProcessData, { cellId: p.cellName }) as any[];
+        for (const pr of processRows) {
+          if (pr.gqd1 != null) {
+            q0 = Number(pr.gqd1);
+            break;
+          }
+        }
+      }
+
+      const du0 = n(p.du0), du1 = n(p.du1), di = n(p.di);
+      const cu0 = n(p.cu0), cu1 = n(p.cu1), ci = n(p.ci);
+      
+      const ddcr = (du0 != null && du1 != null && di != null && di !== 0) ? Math.abs(du1 - du0) / Math.abs(di) : null;
+      const cdcr = (cu0 != null && cu1 != null && ci != null && ci !== 0) ? Math.abs(cu1 - cu0) / Math.abs(ci) : null;
+      
+      p.ddcr = ddcr != null ? ddcr.toFixed(6) : null;
+      p.cdcr = cdcr != null ? cdcr.toFixed(6) : null;
+      p.dRcProduct = (q0 != null && ddcr != null) ? (q0 * ddcr).toFixed(6) : null;
+      p.cRcProduct = (q0 != null && cdcr != null) ? (q0 * cdcr).toFixed(6) : null;
+    }
+
+    if (type === 'efficiency' || type === 'energyEfficiency') {
+      const p = row as any;
+      const n = (v: any) => (v == null || v === '') ? null : Number(v);
+      const de = n(p.de), ce = n(p.ce);
+      
+      const ee = (de != null && ce != null && ce !== 0) ? de / ce : null;
+      p.ee = ee != null ? ee.toFixed(6) : null;
+    }
+
+    if (type === 'calendar' || type === 'calendarLife') {
+      const p = row as any;
+      if (p.experimentId) {
+        const projectRows = await this.getProjectRows(p.experimentId, 'CalendarLife', repo.target as any, { cellName: p.cellName }) as any[];
+        if (projectRows.length > 0) {
+          
+          const idx = projectRows.findIndex(r => (r as any).id === p.id);
+          if (idx !== -1) projectRows[idx] = p;
+          
+          const day0 = projectRows.find(r => (r as any).dayCount === 0);
+          if (day0) {
+            const n = (v: any) => (v == null || v === '') ? null : Number(v);
+            const q0 = n((day0 as any).q);
+            const ddcr0 = n((day0 as any).ddcr);
+            const cdcr0 = n((day0 as any).cdcr);
+            const u0 = n((day0 as any).u);
+            const r0 = n((day0 as any).r);
+
+            for (const r of projectRows) {
+              const cur = r as any;
+              const dqVal = n(cur.dq), qVal = n(cur.q), ddcrVal = n(cur.ddcr), cdcrVal = n(cur.cdcr), uVal = n(cur.u), rVal = n(cur.r);
+              
+              if (cur.dayCount === 0) {
+                cur.qRetention = q0 != null ? '100.000000' : null;
+                cur.qRecovery  = q0 != null ? '100.000000' : null;
+                cur.ddcrGrowth = '0.000000';
+                cur.cdcrGrowth = '0.000000';
+                cur.uGrowth    = '0.000000';
+                cur.rGrowth    = '0.000000';
+              } else {
+                cur.qRetention = (dqVal != null && q0) ? ((dqVal / q0) * 100).toFixed(6) : null;
+                cur.qRecovery  = (qVal != null && q0)  ? ((qVal / q0) * 100).toFixed(6) : null;
+                cur.ddcrGrowth = (ddcrVal != null && ddcr0) ? ((ddcrVal / ddcr0 - 1) * 100).toFixed(6) : null;
+                cur.cdcrGrowth = (cdcrVal != null && cdcr0) ? ((cdcrVal / cdcr0 - 1) * 100).toFixed(6) : null;
+                cur.uGrowth    = (uVal != null && u0) ? ((uVal / u0 - 1) * 100).toFixed(6) : null;
+                cur.rGrowth    = (rVal != null && r0) ? ((rVal / r0 - 1) * 100).toFixed(6) : null;
+              }
+            }
+            await repo.save(projectRows);
+            return repo.findOne({ where: { id } as Record<string, unknown> });
+          }
+        }
+      }
+    }
+
+    if (type === 'swelling' || type === 'storageSwelling') {
+      const p = row as any;
+      if (p.experimentId) {
+        const projectRows = await this.getProjectRows(p.experimentId, 'StorageSwelling', repo.target as any, { cellName: p.cellName }) as any[];
+        if (projectRows.length > 0) {
+          
+          const idx = projectRows.findIndex(r => (r as any).id === p.id);
+          if (idx !== -1) projectRows[idx] = p;
+          
+          const day0 = projectRows.find(r => (r as any).dayCount === 0);
+          if (day0) {
+            const n = (v: any) => (v == null || v === '') ? null : Number(v);
+            const v0 = n((day0 as any).v);
+            
+            for (const r of projectRows) {
+              const cur = r as any;
+              const vNd = n(cur.v);
+              const qd1st = n(cur.qd1st);
+              
+              if (cur.dayCount === 0) {
+                cur.vg = '0.000000';
+              } else {
+                cur.vg = (vNd != null && v0 != null && qd1st != null && qd1st !== 0) ? ((vNd - v0) / qd1st).toFixed(6) : null;
+              }
+            }
+            await repo.save(projectRows);
+            return repo.findOne({ where: { id } as Record<string, unknown> });
+          }
+        }
+      }
+    }
+
+    if (type === 'htcycle' || type === 'htCycle') {
+      const p = row as any;
+      if (p.experimentId) {
+        const projectRows = await this.getProjectRows(p.experimentId, 'HtCycle', repo.target as any, { cellName: p.cellName }) as any[];
+        if (projectRows.length > 0) {
+          
+          const idx = projectRows.findIndex(r => (r as any).id === p.id);
+          if (idx !== -1) projectRows[idx] = p;
+          
+          const baseCycle = projectRows.find(r => (r as any).cycle === 1 || (r as any).cycleNo === 1);
+          if (baseCycle) {
+            const n = (v: any) => (v == null || v === '') ? null : Number(v);
+            const baseCap = n((baseCycle as any).dischargeCapacity);
+            
+            for (const r of projectRows) {
+              const cur = r as any;
+              const cap = n(cur.dischargeCapacity);
+              cur.capacityRetention = (cap != null && baseCap != null && baseCap !== 0) ? ((cap / baseCap) * 100).toFixed(6) : null;
+            }
+            await repo.save(projectRows);
+            return repo.findOne({ where: { id } as Record<string, unknown> });
+          }
+        }
       }
     }
 
@@ -822,7 +1151,7 @@ export class DataService {
     return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
-  /** Export summary data to Excel */
+  /** Export summary data to Excel — header labels + column order match the frontend tables exactly. */
   async exportSummaryData(experimentId: string): Promise<ExcelJS.Workbook> {
     const experiment = await this.getExperiment(experimentId);
     if (!experiment) throw new NotFoundException(`Experiment not found.`);
@@ -835,22 +1164,63 @@ export class DataService {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('汇总数据');
 
-    if (typeParam) {
-      const data = await this.findByType(typeParam, experimentId) as Record<string, any>[];
-      const headers = getColumnHeaders(typeParam);
-      if (data && data.length > 0) {
-        // Determine which columns to include (preserve display order from headers map)
-        const cols = Object.keys(headers).filter(h => data[0][h] !== undefined);
-        sheet.columns = cols.map(c => ({ header: headers[c] || c, key: c, width: 18 }));
-        data.forEach(row => sheet.addRow(row));
-        // Style header row
-        sheet.getRow(1).font = { bold: true };
-      } else {
-        sheet.addRow(['暂无数据']);
+    if (!typeParam) {
+      sheet.addRow(['未知实验类型或暂无数据']);
+      return workbook;
+    }
+
+    const rawData = await this.findByType(typeParam, experimentId) as Record<string, any>[];
+    const headers = getColumnHeaders(typeParam);
+    const fieldNames = Object.keys(headers); // ordered — same as export-columns.ts
+
+    if (!rawData || rawData.length === 0) {
+      sheet.addRow(['暂无数据']);
+      return workbook;
+    }
+
+    // Build flat rows, extracting only the fields defined in headers (in order)
+    const flatRows: Record<string, any>[] = [];
+
+    if (typeParam === 'fastcharge') {
+      // Flatten FastCharge steps like the frontend does
+      for (const d of rawData) {
+        const steps: any[] = d.steps ?? [];
+        if (steps.length === 0) {
+          flatRows.push({ cellName: d.cellName, c0: d.c0 });
+        } else {
+          for (const step of steps) {
+            const flat: Record<string, any> = {
+              cellName: d.cellName,
+              c0: d.c0,
+              stepNo: step.stepNo,
+              cutOffVoltage: step.cutOffVoltage,
+              current: step.current,
+              rate: step.rate,
+              stepCapacity: step.stepCapacity,
+              stepSoc: step.stepSoc,
+              cumulativeSoc: step.cumulativeSoc,
+              stepTime: step.stepTime,
+              providedFastChargeTime: d.providedFastChargeTime,
+              computedFastChargeTime: d.computedFastChargeTime,
+            };
+            flatRows.push(flat);
+          }
+        }
       }
     } else {
-      sheet.addRow(['未知实验类型或暂无数据']);
+      for (const row of rawData) {
+        const flat: Record<string, any> = {};
+        for (const f of fieldNames) {
+          flat[f] = row[f] ?? null;
+        }
+        flatRows.push(flat);
+      }
     }
+
+    // Set columns (only fields that exist in headers map, preserving order)
+    sheet.columns = fieldNames.map(f => ({ header: headers[f], key: f, width: 18 }));
+    flatRows.forEach(r => sheet.addRow(r));
+    sheet.getRow(1).font = { bold: true };
     return workbook;
   }
 
@@ -894,5 +1264,287 @@ export class DataService {
     } else {
       sheet.addRow(['暂无原始数据']);
     }
+  }
+
+  /**
+   * Export ALL business data for a project into one Excel workbook.
+   * One sheet per data type, with Chinese headers + section labels for ProcessData.
+   * Merges ProcessData by cellId across experiments (same as frontend ProjectDetail).
+   * Column order, section labels, and colors exactly match the frontend tables.
+   */
+  async exportProjectBuffer(projectId: string): Promise<Buffer> {
+    const exps = await this.dataSource.getRepository(Experiment).find({ where: { projectId } });
+    if (!exps.length) throw new NotFoundException('Project has no experiments.');
+
+    const expIdsByType: Record<string, string[]> = {};
+    const ASSAY_TYPE_MAP: Record<string, string> = {
+      ProcessData: 'process', CalendarLife: 'calendar', StorageSwelling: 'swelling',
+      EnergyEfficiency: 'efficiency', DcrTest: 'dcr', FastCharge: 'fastcharge', HtCycle: 'htcycle',
+    };
+    for (const exp of exps) {
+      const at = (exp.metadata as any)?.assayType as string;
+      if (at && ASSAY_TYPE_MAP[at]) {
+        if (!expIdsByType[at]) expIdsByType[at] = [];
+        expIdsByType[at].push(exp.id);
+      }
+    }
+
+    // ── ProcessData column config (order & colors match frontend P_COLS/P_HDR) ──
+    const PD_FIELDS = [
+      'cellId', 'm0', 'm1', 'mIn', 'm2', 'mLoss', 'v0', 'fu0', 'fr0',
+      'fq1', 'fq2', 'fq', 'v1', 'fvg', 'fu1', 'fr1', 'fu2', 'fr2',
+      'ku', 'm3', 'm4', 'mHold', 'gu0', 'gr0', 'gqc1', 'gqd1', 'gqc2',
+      'gu1', 'gr1', 'qcFirst', 'qdFirst', 'ceFirst',
+    ];
+    // Color groups: amber=yellow(manual), sky=blue(device), emerald=green(computed)
+    const PD_COLORS: Record<string, string> = {};
+    for (const f of ['m0', 'm1', 'm2', 'm3', 'm4', 'v0', 'v1', 'fu0', 'fr0', 'fu1', 'fr1', 'fu2', 'fr2', 'gu0', 'gr0']) {
+      PD_COLORS[f] = 'FFFEF3C7'; // amber-50 — manual input (editable)
+    }
+    for (const f of ['fq1', 'fq2', 'gqc1', 'gqd1', 'gqc2', 'gu1', 'gr1']) {
+      PD_COLORS[f] = 'FFF0F9FF'; // sky-50 — device obtained
+    }
+    for (const f of ['mIn', 'mLoss', 'mHold', 'fq', 'fvg', 'ku', 'qcFirst', 'qdFirst', 'ceFirst']) {
+      PD_COLORS[f] = 'FFECFDF5'; // emerald-50 — computed
+    }
+
+    // Section definitions: [label, firstField, lastField] — end is inclusive
+    const PD_SECTIONS: { label: string; startField: string; endField: string }[] = [
+      { label: '注液工序', startField: 'm0', endField: 'mLoss' },
+      { label: '化成前电池体积', startField: 'v0', endField: 'v0' },
+      { label: '化成工序', startField: 'fu0', endField: 'ku' },
+      { label: '二封', startField: 'm3', endField: 'mHold' },
+      { label: '定容工序', startField: 'gu0', endField: 'gr1' },
+      { label: '首圈数据', startField: 'qcFirst', endField: 'ceFirst' },
+    ];
+
+    // ── Color maps for other tables (matching frontend buildColorMap) ──
+    // amber=FFFEF3C7 (manual/editable), emerald=FFECFDF5 (computed/tooltip), sky=FFF0F9FF (device)
+    const CAL_COLORS: Record<string, string> = {
+      dayCount: 'FFFEF3C7', dq: 'FFFEF3C7', q: 'FFFEF3C7',
+      ddcr: 'FFFEF3C7', cdcr: 'FFFEF3C7', u: 'FFFEF3C7', r: 'FFFEF3C7',
+      qRetention: 'FFECFDF5', qRecovery: 'FFECFDF5',
+      ddcrGrowth: 'FFECFDF5', cdcrGrowth: 'FFECFDF5',
+      uGrowth: 'FFECFDF5', rGrowth: 'FFECFDF5',
+    };
+    const SWELL_COLORS: Record<string, string> = {
+      dayCount: 'FFFEF3C7', qd1st: 'FFFEF3C7', v: 'FFFEF3C7',
+      vg: 'FFECFDF5',
+    };
+    const EFF_COLORS: Record<string, string> = {
+      de: 'FFFEF3C7', ce: 'FFFEF3C7',
+      ee: 'FFECFDF5',
+    };
+    const DCR_COLORS: Record<string, string> = {
+      q0: 'FFFEF3C7', du0: 'FFFEF3C7', du1: 'FFFEF3C7', di: 'FFFEF3C7',
+      cu0: 'FFFEF3C7', cu1: 'FFFEF3C7', ci: 'FFFEF3C7',
+      ddcr: 'FFECFDF5', cdcr: 'FFECFDF5',
+      dRcProduct: 'FFECFDF5', cRcProduct: 'FFECFDF5',
+    };
+    const FC_COLORS: Record<string, string> = {
+      cutOffVoltage: 'FFFEF3C7', current: 'FFFEF3C7', rate: 'FFFEF3C7',
+      stepCapacity: 'FFFEF3C7', stepTime: 'FFFEF3C7',
+      stepSoc: 'FFECFDF5', cumulativeSoc: 'FFECFDF5',
+      computedFastChargeTime: 'FFF0F9FF', // sky — special computed
+    };
+    const HT_COLORS: Record<string, string> = {
+      cycle: 'FFFEF3C7', dischargeCapacity: 'FFFEF3C7',
+      capacityRetention: 'FFECFDF5',
+    };
+
+    // Map key → color map
+    const COLOR_MAPS: Record<string, Record<string, string>> = {
+      CalendarLife: CAL_COLORS,
+      StorageSwelling: SWELL_COLORS,
+      EnergyEfficiency: EFF_COLORS,
+      DcrTest: DCR_COLORS,
+      FastCharge: FC_COLORS,
+      HtCycle: HT_COLORS,
+    };
+
+    // ── Other table field orders (match frontend) ──
+    const CAL_FIELDS = ['cellName', 'dayCount', 'dq', 'q', 'qRetention', 'qRecovery', 'ddcr', 'ddcrGrowth', 'cdcr', 'cdcrGrowth', 'u', 'uGrowth', 'r', 'rGrowth'];
+    const SWELL_FIELDS = ['cellName', 'qd1st', 'dayCount', 'v', 'vg'];
+    const EFF_FIELDS = ['cellName', 'de', 'ce', 'ee'];
+    const DCR_FIELDS = ['cellName', 'q0', 'du0', 'du1', 'di', 'ddcr', 'cu0', 'cu1', 'ci', 'cdcr', 'dRcProduct', 'cRcProduct'];
+    // Frontend: cellName + computedFastChargeTime use rowSpan across steps; FC_COLS = stepNo..stepTime
+    const FC_FIELDS = ['cellName', 'c0', 'providedFastChargeTime', 'stepNo', 'cutOffVoltage', 'current', 'rate', 'stepCapacity', 'stepSoc', 'cumulativeSoc', 'stepTime', 'computedFastChargeTime'];
+    const HT_FIELDS = ['cellName', 'ironDissolution', 'cycle', 'dischargeCapacity', 'capacityRetention'];
+
+    const sheetDefs: {
+      key: string; name: string; fields: string[];
+      flattener?: (rows: any[]) => any[];
+      sections?: { label: string; startField: string; endField: string }[];
+    }[] = [
+      {
+        key: 'ProcessData', name: '制程数据', fields: PD_FIELDS,
+        sections: PD_SECTIONS,
+      },
+      { key: 'CalendarLife', name: '日历寿命', fields: CAL_FIELDS },
+      { key: 'StorageSwelling', name: '存储胀气', fields: SWELL_FIELDS },
+      { key: 'EnergyEfficiency', name: '能量效率', fields: EFF_FIELDS },
+      { key: 'DcrTest', name: 'DCR测试', fields: DCR_FIELDS },
+      { key: 'FastCharge', name: '快充测试', fields: FC_FIELDS },
+      { key: 'HtCycle', name: '高温循环', fields: HT_FIELDS },
+    ];
+
+    const workbook = new ExcelJS.Workbook();
+
+    for (const def of sheetDefs) {
+      const ids = expIdsByType[def.key];
+      if (!ids || ids.length === 0) continue;
+
+      const entityMap: Record<string, any> = {
+        ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle,
+      };
+      const EntityClass = entityMap[def.key];
+
+      const repo = this.dataSource.getRepository(EntityClass);
+      let rows: Record<string, any>[] = [];
+      for (const eid of ids) {
+        const batch = await repo.find({ where: { experimentId: eid } as any });
+        rows.push(...batch);
+      }
+      if (rows.length === 0) continue;
+
+      // Merge ProcessData by cellId (dedup across experiments)
+      if (def.key === 'ProcessData') {
+        const seen = new Map<string, Record<string, any>>();
+        for (const row of rows) {
+          const key = row.cellId || row.id;
+          if (!seen.has(key)) { seen.set(key, { ...row }); }
+          else {
+            const existing = seen.get(key)!;
+            for (const [k, v] of Object.entries(row)) {
+              if (v != null && v !== '' && (existing[k] == null || existing[k] === '')) existing[k] = v;
+            }
+          }
+        }
+        rows = Array.from(seen.values());
+      }
+
+      // Skip per-field filtering for FastCharge — step fields are in JSONB, not on parent
+      if (def.key === 'FastCharge') {
+        const sheet = workbook.addWorksheet(def.name);
+        const headers = getColumnHeaders('fastcharge');
+        const fcColors = COLOR_MAPS.FastCharge || {};
+        // Use the full field list as-is
+        const fCols = def.fields;
+
+        // Header row
+        const colRow = sheet.addRow(fCols.map(f => headers[f] || f));
+        colRow.font = { bold: true, size: 10 };
+        for (let i = 0; i < fCols.length; i++) {
+          const cell = colRow.getCell(i + 1);
+          const color = fcColors[fCols[i]];
+          if (color) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+            cell.font = { bold: true, size: 10, color: { argb: 'FF1F2937' } };
+          }
+        }
+
+        // Grouped data rows with cellName/c0/computedTime merged vertically
+        let dataStartRow = 2;
+        for (const parent of rows as any[]) {
+          const steps: any[] = parent.steps ?? [];
+          const n = Math.max(steps.length, 1);
+          for (let si = 0; si < n; si++) {
+            const s = steps[si] || {};
+            const vals = fCols.map(f => {
+              if (f === 'cellName' || f === 'c0' || f === 'providedFastChargeTime' || f === 'computedFastChargeTime') {
+                return si === 0 ? (parent[f] ?? null) : null;
+              }
+              return s[f] ?? null;
+            });
+            sheet.addRow(vals);
+          }
+          if (n > 1) {
+            const mergeCols = ['cellName', 'c0', 'providedFastChargeTime', 'computedFastChargeTime'];
+            for (const mf of mergeCols) {
+              const ci = fCols.indexOf(mf);
+              if (ci >= 0) sheet.mergeCells(dataStartRow, ci + 1, dataStartRow + n - 1, ci + 1);
+            }
+          }
+          dataStartRow += n;
+        }
+        continue;
+      }
+
+      // Flatten if needed
+      const flatRows = def.flattener ? def.flattener(rows) : rows;
+      // Filter fields to only those present in data
+      const cols = def.fields ? def.fields.filter(f => flatRows[0]?.[f] !== undefined) : [];
+      if (cols.length === 0) continue;
+
+      const sheet = workbook.addWorksheet(def.name);
+
+      const headers = getColumnHeaders(ASSAY_TYPE_MAP[def.key] || '');
+      const headerLabels = cols.map(f => headers[f] || f);
+
+      if (def.sections) {
+        // ── Row 1: Section header with merged cells ──
+        const secRowVals: (string | null)[] = new Array(cols.length).fill(null);
+        const merges: { sc: number; ec: number }[] = [];
+        for (const sec of def.sections) {
+          const sc = cols.indexOf(sec.startField);
+          const ec = cols.lastIndexOf(sec.endField);
+          if (sc === -1 || ec === -1) continue;
+          secRowVals[sc] = sec.label;
+          if (ec > sc) merges.push({ sc: sc + 1, ec: ec + 1 });
+        }
+        const secRow = sheet.addRow(secRowVals);
+        secRow.font = { bold: true, size: 10, color: { argb: 'FF6B7280' } };
+        secRow.alignment = { horizontal: 'center', vertical: 'middle' };
+        for (const m of merges) sheet.mergeCells(1, m.sc, 1, m.ec);
+        // Alternating section background
+        def.sections.forEach((sec, i) => {
+          const sc = cols.indexOf(sec.startField);
+          const ec = cols.lastIndexOf(sec.endField);
+          if (sc === -1) return;
+          const color = i % 2 === 0 ? 'FFF9FAFB' : 'FFF1F5F9';
+          for (let c = sc; c <= ec; c++) {
+            if (c >= 0 && c < cols.length) {
+              secRow.getCell(c + 1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+            }
+          }
+        });
+
+        // ── Row 2: Column headers with background colors ──
+        const colorMap = def.key === 'ProcessData' ? PD_COLORS : (COLOR_MAPS[def.key] || {});
+        const colRow = sheet.addRow(headerLabels);
+        colRow.font = { bold: true, size: 10 };
+        for (let i = 0; i < cols.length; i++) {
+          const cell = colRow.getCell(i + 1);
+          const color = colorMap[cols[i]];
+          if (color) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+            cell.font = { bold: true, size: 10, color: { argb: cols[i] === 'cellId' || cols[i] === 'cellName' ? 'FF374151' : 'FF1F2937' } };
+          }
+        }
+
+        // ── Rows 3+: Data ──
+        for (const row of flatRows) {
+          sheet.addRow(cols.map(f => row[f] ?? null));
+        }
+      } else {
+        // ── Other tables: single header row with colors ──
+        const otherColors = COLOR_MAPS[def.key];
+        const colRow = sheet.addRow(headerLabels);
+        colRow.font = { bold: true, size: 10 };
+        for (let i = 0; i < cols.length; i++) {
+          const cell = colRow.getCell(i + 1);
+          const color = otherColors?.[cols[i]];
+          if (color) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+            cell.font = { bold: true, size: 10, color: { argb: 'FF1F2937' } };
+          }
+        }
+        for (const row of flatRows) {
+          sheet.addRow(cols.map(f => row[f] ?? null));
+        }
+      }
+    }
+
+    return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 }

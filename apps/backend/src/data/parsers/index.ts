@@ -6,3 +6,4 @@ export * from './energy-efficiency.parser';
 export * from './dcr-test.parser';
 export * from './fast-charge.parser';
 export * from './ht-cycle.parser';
+export * from './storage-swelling.parser';

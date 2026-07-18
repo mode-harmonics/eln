@@ -361,7 +361,12 @@ export function ProjectDetail() {
                     <div className="flex items-center justify-between px-2 py-2">
                       <Link
                         to={route || "#"}
-                        onClick={(e) => { if (!route) e.preventDefault(); }}
+                        onClick={(e) => { 
+                          if (!route) e.preventDefault(); 
+                          if (step.stepName === "battery_selection" && (isInProgress || isComplete)) {
+                            setCellPickerOpen(true);
+                          }
+                        }}
                         className={cn("flex items-center gap-3 flex-1 min-w-0 no-underline", isPending && "opacity-50 cursor-not-allowed")}
                       >
                         <div className={cn("w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-medium text-[11px]",
@@ -387,17 +392,13 @@ export function ProjectDetail() {
 
                       {/* Right action controls on step card */}
                       <div className="flex items-center gap-2 shrink-0">
-
-                        {step.stepName === "battery_selection" && isInProgress && (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            className="!py-1 !px-2.5 !text-xs"
-                            onClick={() => setCellPickerOpen(true)}
+                        {step.stepName === "battery_selection" && (isInProgress || isComplete) && (
+                          <div 
+                            className="p-1 text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCellPickerOpen(true); }}
                           >
-                            <Layers className="w-3.5 h-3.5" />
-                            挑选电池 ({pickedCells.length})
-                          </Button>
+                            <ChevronRight className="w-4 h-4" />
+                          </div>
                         )}
                         {route && (
                           <Link to={route} className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
@@ -436,7 +437,7 @@ export function ProjectDetail() {
                                   {React.isValidElement(cm.icon) ? React.cloneElement(cm.icon as React.ReactElement, { className: "w-3 h-3" }) : cm.icon}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <span className={cn("text-[13px] block", child.status === "completed" ? "text-gray-900 line-through opacity-70" : child.status === "in_progress" ? "text-blue-600 font-medium" : "text-gray-600")}>
+                                  <span className={cn("text-[13px] block", child.status === "completed" ? "text-gray-900" : child.status === "in_progress" ? "text-blue-600 font-medium" : "text-gray-600")}>
                                     {cm.label}
                                   </span>
                                   {child.assignedUserId && (
@@ -445,7 +446,10 @@ export function ProjectDetail() {
                                     </p>
                                   )}
                                 </div>
-                                <StatusBadge status={child.status} />
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <StatusBadge status={child.status} />
+                                  {childRoute && <ChevronRight className="w-4 h-4 text-gray-300" />}
+                                </div>
                               </Link>
 
                             </div>
@@ -550,14 +554,15 @@ export function ProjectDetail() {
       {activeTab === "raw_data" && (dataLoading ? <SkeletonCard rows={5} /> :
         <ProjectRawData loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
           storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
-          fastCharge={fastCharge} htCycle={htCycle} groups={groups} />
+          fastCharge={fastCharge} htCycle={htCycle} groups={groups} projectId={projectId!} />
       )}
 
 
       {/* CellPicker */}
       {(() => {
         const pe = experiments.find((e) => (e as any).metadata?.assayType === "ProcessData") as any;
-        return pe ? <CellPicker open={cellPickerOpen} onClose={() => setCellPickerOpen(false)} projectId={projectId!} processExperimentId={pe.id} onComplete={(cells) => { setPickedCells(cells); setRefetchTrigger((n) => n + 1); }} /> : null;
+        const isBatterySelectionCompleted = visibleSteps.find((s) => s.stepName === "battery_selection")?.status === "completed";
+        return pe ? <CellPicker open={cellPickerOpen} onClose={() => setCellPickerOpen(false)} projectId={projectId!} processExperimentId={pe.id} readonly={isBatterySelectionCompleted} onComplete={(cells) => { setPickedCells(cells); setRefetchTrigger((n) => n + 1); }} /> : null;
       })()}
     </div>
   );
@@ -568,9 +573,15 @@ export function ProjectDetail() {
 function stepRoute(stepName: string, projectId: string, experiments: Experiment[]): string | null {
   switch (stepName) {
     case "experiment_design": return null; // Unify with testing: parent steps have no arrow
+    case "testing": return null;
     case "design_sub": return `/projects/${projectId}/design?tab=design`;
     case "procurement_sub": return `/projects/${projectId}/design?tab=procurement`;
     case "battery_selection": return null;
+    case "drying":
+    case "liquid_injection": {
+      const exp = experiments.find((e) => (e as any).workflowStepName === "drying_injection");
+      return exp ? `/projects/${projectId}/experiments/${exp.id}` : null;
+    }
   }
   const exp = experiments.find((e) => (e as any).workflowStepName === stepName);
   return exp ? `/projects/${projectId}/experiments/${exp.id}` : null;

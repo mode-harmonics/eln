@@ -240,8 +240,7 @@ export function ExperimentDetail() {
     setCompletingStep(true);
     try {
       await api.put(`/api/v1/workflow/instances/${experiment.projectId}/transition`);
-      toast.success(t("step_completed_success", "当前工步已提交，进入下一步！"));
-      navigate(experiment.projectId ? `/projects/${experiment.projectId}?tab=experiments` : "/projects");
+      toast.success(t("step_completed_success", "当前工步已提交"));
     } catch (err: any) {
       toast.error(err?.message ?? t("submit_failed", "提交失败"));
     } finally {
@@ -317,24 +316,16 @@ export function ExperimentDetail() {
     if (!experiment || uploadDataFiles.length === 0) return;
     setUploadDataSubmitting(true);
     try {
-      if (uploadDataType === 'raw') {
-        await Promise.all(
-          uploadDataFiles.map(async (file) => {
-            const form = new FormData();
-            form.append("file", file);
-            await api.upload(`/api/v1/experiments/${experiment.id}/attachments`, form);
-          })
-        );
-        api.get<any[]>(`/api/v1/experiments/${experiment.id}/attachments`)
-          .then(res => setAttachments(Array.isArray(res) ? res : []))
-          .catch(() => {});
-      } else {
+      if (uploadDataType === 'raw' || uploadDataType === 'summary') {
         const form = new FormData();
         uploadDataFiles.forEach((file) => form.append("files", file));
         form.append("experimentId", experiment.id);
         form.append("mode", "merge");
         await api.upload("/api/v1/data/upload", form);
       }
+      api.get<any[]>(`/api/v1/experiments/${experiment.id}/attachments`)
+        .then(res => setAttachments(Array.isArray(res) ? res : []))
+        .catch(() => {});
       toast(t("upload_success", "上传成功"), "success");
       setUploadDataOpen(false);
       setUploadDataFiles([]);
@@ -348,13 +339,13 @@ export function ExperimentDetail() {
 
   const renderTable = () => {
     switch (assayType) {
-      case "ProcessData": return <ProcessDataTable experimentId={experiment.id} stepName={experiment.workflowStepName} />;
-      case "CalendarLife": return <CalendarLifeTable experimentId={experiment.id} />;
-      case "StorageSwelling": return <StorageSwellingTable experimentId={experiment.id} />;
-      case "EnergyEfficiency": return <EnergyEfficiencyTable experimentId={experiment.id} />;
-      case "DcrTest": return <DcrTestTable experimentId={experiment.id} />;
-      case "FastCharge": return <FastChargeTable experimentId={experiment.id} />;
-      case "HtCycle": return <HtCycleTable experimentId={experiment.id} />;
+      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName} />;
+      case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} />;
+      case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} />;
+      case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} />;
+      case "DcrTest": return <DcrTestTable key={refreshCounter} experimentId={experiment.id} />;
+      case "FastCharge": return <FastChargeTable key={refreshCounter} experimentId={experiment.id} />;
+      case "HtCycle": return <HtCycleTable key={refreshCounter} experimentId={experiment.id} />;
       default:
         return (
           <div className="p-8 text-center text-sm text-gray-500">
@@ -373,7 +364,7 @@ export function ExperimentDetail() {
             <h1 className="text-2xl font-bold text-gray-900 truncate">{experiment.title}</h1>
             {assayType && (
               <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 shrink-0">
-                {t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
+                {assayType !== 'ProcessData' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
                 {experiment.workflowStepName && ` - ${t(`step_${experiment.workflowStepName}`, STEP_NAME_MAP[experiment.workflowStepName] || experiment.workflowStepName)}`}
               </span>
             )}
@@ -504,7 +495,7 @@ export function ExperimentDetail() {
             assayType={assayType || "Unknown"} 
             experimentId={experiment.id} 
             projectId={experiment.projectId} 
-            title={experiment.workflowStepName ? `${t(RECORD_TYPE_TO_I18N_KEY[assayType || "Unknown"] || assayType)} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined} 
+            title={experiment.workflowStepName ? `${assayType !== 'ProcessData' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType || "Unknown"] || assayType)} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined}
           />
 
           {/* Data Section */}

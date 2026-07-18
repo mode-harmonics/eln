@@ -2,8 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Check, Edit3, Loader2, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
-import { Button } from "./Button";
-import { Modal } from "./Modal";
 import { Tooltip, TooltipTh } from "./Tooltip";
 import { Popconfirm } from "./Popconfirm";
 
@@ -59,7 +57,7 @@ function renderHeaders(cols: ColDef[], t: (k: string) => string, colorMap?: Reco
     if (c.tooltip) {
       return <TooltipTh key={c.field} content={c.tooltip} label={headerText} className={colorCls} />;
     }
-    return <th key={c.field} className={`px-3 py-1.5 w-[140px] min-w-[140px] max-w-[140px] text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${colorCls || 'text-gray-500'}`}>{headerText}</th>;
+    return <th key={c.field} className={`px-3 py-1.5 w-[150px] min-w-[150px] max-w-[150px] text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${colorCls || 'text-gray-500'}`}>{headerText}</th>;
   });
 }
 
@@ -193,19 +191,19 @@ function RowActions({ row, type, onRefresh, editing, onStartEdit, onSave, onCanc
 // 黄色(手动输入) | 蓝色(设备获取) | 绿色(计算获取)
 // border-r 加在每组最后一列上，形成竖向分隔线
 const P_HDR: Record<string, string> = {
-  m0:'text-amber-600', m1:'text-amber-600', m2:'text-amber-600',
-  m3:'text-amber-600', m4:'text-amber-600',
-  v0:'text-amber-600', v1:'text-amber-600',
-  fu0:'text-amber-600', fr0:'text-amber-600',
-  fu1:'text-amber-600', fr1:'text-amber-600',
-  fu2:'text-amber-600', fr2:'text-amber-600',
-  gu0:'text-amber-600', gr0:'text-amber-600',
-  fq1:'text-sky-600', fq2:'text-sky-600',
-  gqc1:'text-sky-600', gqd1:'text-sky-600', gqc2:'text-sky-600',
-  gu1:'text-sky-600', gr1:'text-sky-600',
-  mIn:'text-emerald-600', mLoss:'text-emerald-600', mHold:'text-emerald-600',
-  fq:'text-emerald-600', fvg:'text-emerald-600', ku:'text-emerald-600',
-  qcFirst:'text-emerald-600', qdFirst:'text-emerald-600', ceFirst:'text-emerald-600',
+  m0: 'text-amber-600', m1: 'text-amber-600', m2: 'text-amber-600',
+  m3: 'text-amber-600', m4: 'text-amber-600',
+  v0: 'text-amber-600', v1: 'text-amber-600',
+  fu0: 'text-amber-600', fr0: 'text-amber-600',
+  fu1: 'text-amber-600', fr1: 'text-amber-600',
+  fu2: 'text-amber-600', fr2: 'text-amber-600',
+  gu0: 'text-amber-600', gr0: 'text-amber-600',
+  fq1: 'text-sky-600', fq2: 'text-sky-600',
+  gqc1: 'text-sky-600', gqd1: 'text-sky-600', gqc2: 'text-sky-600',
+  gu1: 'text-sky-600', gr1: 'text-sky-600',
+  mIn: 'text-emerald-600', mLoss: 'text-emerald-600', mHold: 'text-emerald-600',
+  fq: 'text-emerald-600', fvg: 'text-emerald-600', ku: 'text-emerald-600',
+  qcFirst: 'text-emerald-600', qdFirst: 'text-emerald-600', ceFirst: 'text-emerald-600',
 };
 // Section boundary fields — add a right border for visual separation
 const P_BOUNDARY = new Set(['mHold', 'ku', 'v0', 'mLoss', 'gr1']);
@@ -284,17 +282,17 @@ export function ProcessDataTable({ experimentId, stepName, staticData }: { exper
   const sectionFilter = stepName ? PD_STEP_SECTIONS[stepName] : null;
   const sections = sectionFilter
     ? sectionFilter.map((i) => ({
-        label: t(P_SECTIONS[i].labelKey, P_SECTIONS[i].fallback),
-        count: P_SECTIONS[i].end - P_SECTIONS[i].start,
-        start: P_SECTIONS[i].start,
-        end: P_SECTIONS[i].end,
-      }))
+      label: t(P_SECTIONS[i].labelKey, P_SECTIONS[i].fallback),
+      count: P_SECTIONS[i].end - P_SECTIONS[i].start,
+      start: P_SECTIONS[i].start,
+      end: P_SECTIONS[i].end,
+    }))
     : P_SECTIONS.map((s) => ({
-        label: t(s.labelKey, s.fallback),
-        count: s.end - s.start,
-        start: s.start,
-        end: s.end,
-      }));
+      label: t(s.labelKey, s.fallback),
+      count: s.end - s.start,
+      start: s.start,
+      end: s.end,
+    }));
 
   // Build filtered column list
   const pRest = P_COLS.slice(1);
@@ -304,50 +302,50 @@ export function ProcessDataTable({ experimentId, stepName, staticData }: { exper
 
   return (
     <TableShell loading={loading} error={error}>
-    <div className="overflow-x-auto overflow-y-auto max-h-150">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50 sticky top-0 z-20">
-          {/* Section header row */}
-          <tr>
-            <th className="sticky left-0 z-20 bg-gray-50 px-4 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap border-b border-gray-200" colSpan={1}></th>
-            {sections.map((sec, i) => (
-              <th
-                key={sec.label}
-                colSpan={sec.count}
-                className={"px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap border-b border-gray-200 text-center " + (i % 2 === 0 ? "text-gray-400 bg-gray-50" : "text-gray-400 bg-gray-100/60")}
-              >
-                {sec.label}
-              </th>
-            ))}
-            <th className="sticky right-0 z-20 bg-gray-50 px-4 py-1.5 border-b border-gray-200" colSpan={1}></th>
-          </tr>
-          {/* Column header row */}
-          <tr>
-          <th className="sticky left-0 z-20 bg-gray-50 px-3 py-1.5 min-w-[120px] text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[4px_0_12px_rgba(0,0,0,0.05)]">{t('col_cell_id')}</th>
-          {renderHeaders(visiblePCols, t, P_HDR)}
-          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
-        </tr></thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {data.map((d: any) => {
-            const isEditing = editingId === d.id;
-            return (
-              <tr key={d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
-                <td className="sticky left-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap text-sm text-gray-900 shadow-[4px_0_12px_rgba(0,0,0,0.05)]">{d.cellId}</td>
-                {renderCells(visiblePCols, d, P_CELL, isEditing, editForm, handleChange)}
-                <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)] w-[70px] min-w-[70px] max-w-[70px]">
-                  {staticData ? null : <RowActions row={d} type="process" onRefresh={refresh}
-                    editing={isEditing}
-                    onStartEdit={() => startEditing(d)}
-                    onSave={() => handleSave(d.id, refresh)}
-                    onCancel={cancelEditing}
-                    saving={saving} />}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+      <div className="overflow-x-auto overflow-y-auto max-h-150">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50 sticky top-0 z-20">
+            {/* Section header row */}
+            <tr>
+              <th className="sticky left-0 z-20 bg-gray-50 px-4 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap border-b border-gray-200" colSpan={1}></th>
+              {sections.map((sec, i) => (
+                <th
+                  key={sec.label}
+                  colSpan={sec.count}
+                  className={"px-4 py-1.5 text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap border-b border-gray-200 text-center " + (i % 2 === 0 ? "text-gray-400 bg-gray-50" : "text-gray-400 bg-gray-100/60")}
+                >
+                  {sec.label}
+                </th>
+              ))}
+              <th className="sticky right-0 z-20 bg-gray-50 px-4 py-1.5 border-b border-gray-200" colSpan={1}></th>
+            </tr>
+            {/* Column header row */}
+            <tr>
+              <th className="sticky left-0 z-20 bg-gray-50 px-3 py-1.5 min-w-[120px] text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[4px_0_12px_rgba(0,0,0,0.05)]">{t('col_cell_id')}</th>
+              {renderHeaders(visiblePCols, t, P_HDR)}
+              {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
+            </tr></thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {data.map((d: any) => {
+              const isEditing = editingId === d.id;
+              return (
+                <tr key={d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
+                  <td className="sticky left-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap text-sm text-gray-900 shadow-[4px_0_12px_rgba(0,0,0,0.05)]">{d.cellId}</td>
+                  {renderCells(visiblePCols, d, P_CELL, isEditing, editForm, handleChange)}
+                  <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)] w-[70px] min-w-[70px] max-w-[70px]">
+                    {staticData ? null : <RowActions row={d} type="process" onRefresh={refresh}
+                      editing={isEditing}
+                      onStartEdit={() => startEditing(d)}
+                      onSave={() => handleSave(d.id, refresh)}
+                      onCancel={cancelEditing}
+                      saving={saving} />}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </TableShell>
   );
 }
@@ -386,32 +384,32 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, static
   }
   return (
     <TableShell loading={loading} error={error}>
-    <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200">
-      <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-        <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${cellColorMap[firstCol.field] || 'text-gray-500'}`}>{t(firstCol.i18nKey)}</th>
-        {renderHeaders(restCols, t, colorMap)}
-        {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
-      </tr></thead>
-      <tbody className="bg-white divide-y divide-gray-200">
-        {data.map((d: any) => {
-          const isEditing = editingId === (keyFn?.(d) ?? d.id);
-          return (
-            <tr key={keyFn?.(d) ?? d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
-              <td className={`sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm ${cellColorMap[firstCol.field] || 'text-gray-900'}`}>{String(d[firstCol.field] ?? '')}</td>
-              {renderCells(restCols, d, cellColorMap, isEditing, editForm, handleChange)}
-              <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)] w-[70px] min-w-[70px] max-w-[70px]">
-                {staticData ? null : <RowActions row={d} type={type} onRefresh={refresh}
-                  editing={isEditing}
-                  onStartEdit={() => startEditing(d)}
-                  onSave={() => handleSave(d.id, refresh)}
-                  onCancel={cancelEditing}
-                  saving={saving} />}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table></div></TableShell>
+      <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50 sticky top-0 z-20"><tr>
+          <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 min-w-[120px] text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${cellColorMap[firstCol.field] || 'text-gray-500'}`}>{t(firstCol.i18nKey)}</th>
+          {renderHeaders(restCols, t, colorMap)}
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
+        </tr></thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {data.map((d: any) => {
+            const isEditing = editingId === (keyFn?.(d) ?? d.id);
+            return (
+              <tr key={keyFn?.(d) ?? d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
+                <td className={`sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm shadow-[4px_0_12px_rgba(0,0,0,0.05)] ${cellColorMap[firstCol.field] || 'text-gray-900'}`}>{String(d[firstCol.field] ?? '')}</td>
+                {renderCells(restCols, d, cellColorMap, isEditing, editForm, handleChange)}
+                <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)] w-[70px] min-w-[70px] max-w-[70px]">
+                  {staticData ? null : <RowActions row={d} type={type} onRefresh={refresh}
+                    editing={isEditing}
+                    onStartEdit={() => startEditing(d)}
+                    onSave={() => handleSave(d.id, refresh)}
+                    onCancel={cancelEditing}
+                    saving={saving} />}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table></div></TableShell>
   );
 }
 
@@ -441,8 +439,8 @@ export function CalendarLifeTable(props: { experimentId?: string; staticData?: a
 // ─── StorageSwelling ───────────────────────────────────────────────────────
 const SWELL_COLS: ColDef[] = [
   { field: 'cellName', i18nKey: 'col_cell_name' },
-  { field: 'qd1st', i18nKey: 'col_qd1st', editable: true },
   { field: 'dayCount', i18nKey: 'col_day', editable: true },
+  { field: 'qd1st', i18nKey: 'col_qd1st', editable: true },
   { field: 'v', i18nKey: 'col_v_volume', editable: true },
   { field: 'vg', i18nKey: 'col_comp_vg', tooltip: 'Gas Volume = (v - v_0d) / qd1st (mL/Ah)' },
 ];
@@ -558,36 +556,42 @@ export function FastChargeTable({ experimentId, staticData }: { experimentId?: s
 
   return (
     <TableShell loading={loading} error={error}>
-    <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200 border-collapse">
-      <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-        <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('col_cell_name')}</th>
-        {renderHeaders(FC_COLS, t)}
-        <TooltipTh content="10%-80% SOC Fast Charge Time (min)" label={t('col_comp_computedTime')} />
-        {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
-      </tr></thead>
-      <tbody className="bg-white divide-y divide-gray-200">
-        {flatRows.map((r: any, idx: number) => {
-          const isEditing = isEditingRow(r, idx);
-          return (
-            <tr key={`${r.originalRow.id}-${idx}`} className={isEditing ? 'bg-blue-50/20' : ''}>
-              <td className="sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100 font-medium">{r.cellName}</td>
-              {renderCells(FC_COLS, r, undefined, isEditing, editForm, handleChange)}
-              <td className={`px-4 py-2 whitespace-nowrap text-sm ${FC_COMP} border-l border-gray-100 font-medium`}>
-                {r.computedFastChargeTime ? `${r.computedFastChargeTime} min` : 'N/A'}
-              </td>
-              <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap border-l border-gray-100 w-[70px] min-w-[70px] max-w-[70px]">
-                {staticData ? null : <RowActions row={r} type="fastcharge" onRefresh={refresh}
-                  editing={isEditing}
-                  onStartEdit={() => startEditing(r)}
-                  onSave={() => handleSave(r)}
-                  onCancel={cancelEditing}
-                  saving={saving} />}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table></div></TableShell>
+      <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200 border-collapse">
+        <thead className="bg-gray-50 sticky top-0 z-20"><tr>
+          <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('col_cell_name')}</th>
+          {renderHeaders(FC_COLS, t)}
+          <TooltipTh content="10%-80% SOC Fast Charge Time (min)" label={t('col_comp_computedTime')} />
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
+        </tr></thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {flatRows.map((r: any, idx: number) => {
+            const isEditing = isEditingRow(r, idx);
+            return (
+              <tr key={`${r.originalRow.id}-${idx}`} className={isEditing ? 'bg-blue-50/20' : ''}>
+                {r.isFirstStep ? (
+                  <td rowSpan={r.totalSteps} className="sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100 font-medium align-middle">
+                    {r.cellName}
+                  </td>
+                ) : null}
+                {renderCells(FC_COLS, r, undefined, isEditing, editForm, handleChange)}
+                {r.isFirstStep ? (
+                  <td rowSpan={r.totalSteps} className={`px-4 py-2 whitespace-nowrap text-sm ${FC_COMP} border-l border-gray-100 font-medium align-middle`}>
+                    {r.computedFastChargeTime ? `${r.computedFastChargeTime} min` : 'N/A'}
+                  </td>
+                ) : null}
+                <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap border-l border-gray-100 w-[70px] min-w-[70px] max-w-[70px]">
+                  {staticData ? null : <RowActions row={r} type="fastcharge" onRefresh={refresh}
+                    editing={isEditing}
+                    onStartEdit={() => startEditing(r)}
+                    onSave={() => handleSave(r)}
+                    onCancel={cancelEditing}
+                    saving={saving} />}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table></div></TableShell>
   );
 }
 
@@ -612,31 +616,31 @@ export function HtCycleTable({ experimentId, staticData }: { experimentId?: stri
   const htRest = HT_COLS.slice(1);
   return (
     <TableShell loading={loading} error={error}>
-    <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200 border-collapse">
-      <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-        <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${htColors[htFirst.field] || 'text-gray-500'}`}>{t(htFirst.i18nKey)}</th>
-        {renderHeaders(htRest, t, htColors)}
-        {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
-      </tr></thead>
-      <tbody className="bg-white divide-y divide-gray-200">
-        {sorted.map((d: any) => {
-          const isEditing = editingId === d.id;
-          return (
-            <tr key={d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
-              <td className={`sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm ${htColors[htFirst.field] || 'text-gray-900'} font-medium`}>{String(d[htFirst.field] ?? '')}</td>
-              {renderCells(htRest, d, htColors, isEditing, editForm, handleChange)}
-              <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)] w-[70px] min-w-[70px] max-w-[70px]">
-                {staticData ? null : <RowActions row={d} type="htcycle" onRefresh={refresh}
-                  editing={isEditing}
-                  onStartEdit={() => startEditing(d)}
-                  onSave={() => handleSave(d.id, refresh)}
-                  onCancel={cancelEditing}
-                  saving={saving} />}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table></div></TableShell>
+      <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200 border-collapse">
+        <thead className="bg-gray-50 sticky top-0 z-20"><tr>
+          <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${htColors[htFirst.field] || 'text-gray-500'}`}>{t(htFirst.i18nKey)}</th>
+          {renderHeaders(htRest, t, htColors)}
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
+        </tr></thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {sorted.map((d: any) => {
+            const isEditing = editingId === d.id;
+            return (
+              <tr key={d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
+                <td className={`sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm ${htColors[htFirst.field] || 'text-gray-900'} font-medium`}>{String(d[htFirst.field] ?? '')}</td>
+                {renderCells(htRest, d, htColors, isEditing, editForm, handleChange)}
+                <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)] w-[70px] min-w-[70px] max-w-[70px]">
+                  {staticData ? null : <RowActions row={d} type="htcycle" onRefresh={refresh}
+                    editing={isEditing}
+                    onStartEdit={() => startEditing(d)}
+                    onSave={() => handleSave(d.id, refresh)}
+                    onCancel={cancelEditing}
+                    saving={saving} />}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table></div></TableShell>
   );
 }
