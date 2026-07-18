@@ -14,6 +14,7 @@ import {
 } from "../components/ExperimentTables";
 import { ExperimentChart } from "../components/ExperimentChart";
 import { Button } from "../components/Button";
+import { ButtonGroup } from "../components/ButtonGroup";
 import { Dropdown } from "../components/Dropdown";
 import { Modal } from "../components/Modal";
 import { Drawer } from "../components/Drawer";
@@ -83,7 +84,7 @@ export function ExperimentDetail() {
   // Re-fetch experiment data after upload
   useEffect(() => {
     if (refreshCounter === 0 || !experiment?.id) return;
-    api.get<ExperimentDetail>(`/api/v1/experiments/${experiment.id}`).then(setExperiment).catch(() => {});
+    api.get<ExperimentDetail>(`/api/v1/experiments/${experiment.id}`).then(setExperiment).catch(() => { });
   }, [refreshCounter]);
 
   useEffect(() => {
@@ -236,11 +237,14 @@ export function ExperimentDetail() {
     hasPermission(`data_${permissionType}:read`);
   const canWrite = hasPermission("experiments:write");
 
+  const hasRawData = true;
+
   // Data view mode: summary / raw
   const [dataView, setDataView] = useState<"summary" | "raw">("summary");
 
   // For ProcessData experiments, raw data has two sources: formation (化成) and grading (定容)
   const isProcessData = assayType === "ProcessData";
+  const isProcessRawData = isProcessData && ["formation", "capacity_grading"].includes(experiment.workflowStepName || "");
   const [rawSource, setRawSource] = useState<"formation" | "grading">("formation");
   const [rawSteps, setRawSteps] = useState<any[]>([]);
   const [rawLoading, setRawLoading] = useState(false);
@@ -248,13 +252,13 @@ export function ExperimentDetail() {
 
   useEffect(() => {
     if (dataView !== "raw" || !experiment) return;
-    const sourceParam = isProcessData ? rawSource : undefined;
+    const sourceParam = isProcessRawData ? rawSource : undefined;
     const cacheKey = sourceParam ?? "all";
     if (rawLoaded[cacheKey]) return;
 
     let cancelled = false;
     setRawLoading(true);
-    const url = isProcessData
+    const url = isProcessRawData
       ? `/api/v1/data/raw/${experiment.id}?source=${rawSource}`
       : `/api/v1/data/raw/${experiment.id}`;
     api.get<any[]>(url)
@@ -297,7 +301,7 @@ export function ExperimentDetail() {
 
   const renderTable = () => {
     switch (assayType) {
-      case "ProcessData": return <ProcessDataTable experimentId={experiment.id} />;
+      case "ProcessData": return <ProcessDataTable experimentId={experiment.id} stepName={experiment.workflowStepName} />;
       case "CalendarLife": return <CalendarLifeTable experimentId={experiment.id} />;
       case "StorageSwelling": return <StorageSwellingTable experimentId={experiment.id} />;
       case "EnergyEfficiency": return <EnergyEfficiencyTable experimentId={experiment.id} />;
@@ -314,9 +318,9 @@ export function ExperimentDetail() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-4 border-b border-gray-100">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-4 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur z-30 pt-2">
         <div className="min-w-0">
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-2xl font-bold text-gray-900 truncate">{experiment.title}</h1>
@@ -342,76 +346,91 @@ export function ExperimentDetail() {
             <span>v{experiment.versionNo}</span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {/* Upload data button — visible for non-StorageSwelling types with write permission */}
-          {assayType !== "StorageSwelling" && canWrite && (
-            <Button variant="primary" size="sm" onClick={() => setUploadDataOpen(true)}>
-              <UploadCloud className="w-4 h-4" />
-              {t("import_data", "导入数据")}
-            </Button>
-          )}
-
-          <Popconfirm
-            title={t("delete_experiment_confirm")}
-            open={deleteConfirmOpen}
-            onOpenChange={setDeleteConfirmOpen}
-            onConfirm={handleDeleteExperiment}
-            placement="bottom"
-          >
-            <Dropdown
-              trigger={
-                <Button variant="secondary" size="sm">
-                  <MoreHorizontal className="w-4 h-4" />
-                  {t("more", "更多")}
-                </Button>
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {/* Quick drawer toggles */}
+          <ButtonGroup
+            items={[
+              ...(canWrite ? [{
+                id: "edit",
+                label: "编辑",
+                icon: <Edit3 className="w-4 h-4 text-gray-500" />,
+                title: t("edit", "编辑信息"),
+                onClick: openEditModal
+              }] : []),
+              {
+                id: "history",
+                label: "历史",
+                icon: <History className="w-4 h-4" />,
+                title: t("history", "历史版本"),
+                onClick: () => { setActiveDrawer("versions"); setVersionsDrawerOpen(true); }
+              },
+              {
+                id: "attachments",
+                label: "附件",
+                icon: <Paperclip className="w-4 h-4" />,
+                title: t("attachments", "附件"),
+                onClick: () => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); },
+                badge: attachments.length > 0 ? <span className="w-1.5 h-1.5 rounded-full bg-blue-500 absolute top-1 right-1" /> : undefined,
+                className: "relative"
+              },
+              {
+                id: "comments",
+                label: "讨论",
+                icon: <MessageSquare className="w-4 h-4" />,
+                title: t("comments", "评论"),
+                onClick: () => { setActiveDrawer("comments"); setCommentsDrawerOpen(true); },
+                badge: comments.length > 0 ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 absolute top-1 right-1" /> : undefined,
+                className: "relative"
               }
-            >
-              <button onClick={() => { setActiveDrawer("versions"); setVersionsDrawerOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
-                <History className="w-4 h-4 text-gray-400" />
-                {t("history", "History")}
-              </button>
-              <button onClick={() => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
-                <Paperclip className="w-4 h-4 text-gray-400" />
-                {t("attachments", "Attachments")}
-              </button>
-              <button onClick={() => { setActiveDrawer("comments"); setCommentsDrawerOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
-                <MessageSquare className="w-4 h-4 text-gray-400" />
-                {t("comments", "Comments")}
-              </button>
-              {canWrite && (
-                <>
-                  <div className="border-t border-gray-100 my-1" />
-                  <button onClick={openEditModal} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
-                    <Edit3 className="w-4 h-4 text-gray-400" />
-                    {t("edit")}
-                  </button>
-                  <button onClick={() => setDeleteConfirmOpen(true)} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors text-left">
-                    <Trash2 className="w-4 h-4" />
-                    {t("delete")}
-                  </button>
-                </>
-              )}
-            </Dropdown>
-          </Popconfirm>
+            ]}
+          />
 
-          <Dropdown
-            trigger={
-              <Button variant="secondary" size="sm">
-                <Download className="w-4 h-4" />
-                {t("export")}
-                <ChevronDown className="w-3.5 h-3.5 opacity-50" />
-              </Button>
-            }
-          >
-            <button onClick={() => handleExport('summary')} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
-              <Table2 className="w-4 h-4 text-gray-400" />
-              {t("export_summary", "导出汇总数据")}
-            </button>
-            <button onClick={() => handleExport('raw')} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors text-left">
-              <FileDigit className="w-4 h-4 text-gray-400" />
-              {t("export_raw", "导出原始数据")}
-            </button>
-          </Dropdown>
+          {/* Import / Export Group */}
+          <ButtonGroup
+            items={[
+              ...(assayType !== "StorageSwelling" && canWrite ? [{
+                id: "import",
+                label: t("import_data", "导入"),
+                icon: <UploadCloud className="w-3.5 h-3.5" />,
+                badge: <ChevronDown className="w-3 h-3 opacity-50 ml-0.5" />,
+                dropdownContent: (
+                  <>
+                    <button onClick={() => { setUploadDataType('summary'); setUploadDataOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors text-left">
+                      <Table2 className="w-3.5 h-3.5 text-gray-400" />
+                      {t("import_summary", "导入汇总数据")}
+                    </button>
+                    {hasRawData && (
+                      <button onClick={() => { setUploadDataType('raw'); setUploadDataOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors text-left">
+                        <FileDigit className="w-3.5 h-3.5 text-gray-400" />
+                        {t("import_raw", "导入原始数据")}
+                      </button>
+                    )}
+                  </>
+                )
+              }] : []),
+              {
+                id: "export",
+                label: t("export", "导出"),
+                icon: <Download className="w-3.5 h-3.5" />,
+                onClick: () => { },
+                badge: <ChevronDown className="w-3 h-3 opacity-50 ml-0.5" />,
+                dropdownContent: (
+                  <>
+                    <button onClick={() => handleExport('summary')} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors text-left">
+                      <Table2 className="w-3.5 h-3.5 text-gray-400" />
+                      {t("export_summary", "导出汇总 Excel")}
+                    </button>
+                    {hasRawData && (
+                      <button onClick={() => handleExport('raw')} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors text-left">
+                        <FileDigit className="w-3.5 h-3.5 text-gray-400" />
+                        {t("export_raw", "导出原始工步 Excel")}
+                      </button>
+                    )}
+                  </>
+                )
+              }
+            ]}
+          />
         </div>
       </div>
 
@@ -569,12 +588,12 @@ export function ExperimentDetail() {
       {/* Upload Data Modal */}
       <Modal open={uploadDataOpen} onClose={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} title={t("import_data", "导入数据")}
         footer={
-          <>
-            <Button variant="secondary" onClick={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} disabled={uploadDataSubmitting}>{t("upload_cancel", "取消")}</Button>
-            <Button variant="primary" onClick={handleDataUpload} loading={uploadDataSubmitting} disabled={uploadDataSubmitting || uploadDataFiles.length === 0}>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} disabled={uploadDataSubmitting}>{t("cancel")}</Button>
+            <Button variant="primary" size="sm" onClick={handleDataUpload} loading={uploadDataSubmitting} disabled={uploadDataSubmitting || uploadDataFiles.length === 0}>
               {uploadDataSubmitting ? t("uploading", "上传中...") : t("import_data", "导入数据")}
             </Button>
-          </>
+          </div>
         }>
         <div className="space-y-4">
           <div
@@ -594,13 +613,13 @@ export function ExperimentDetail() {
             <p className="text-sm font-medium text-gray-600 mb-1">{t("upload_drag_hint", "拖拽或点击选择 Excel 文件")}</p>
             <p className="text-xs text-gray-400">{t("upload_supported_formats", "支持 .xlsx / .xls 格式，可同时选择多个文件")}</p>
             <input type="file" accept=".xlsx,.xls" multiple className="hidden" ref={uploadInputRef}
-                onChange={(e) => {
-                  if (e.target.files && e.target.files.length > 0) {
-                    const files = Array.from(e.target.files);
-                    setUploadDataFiles((prev) => [...prev, ...files]);
-                  }
-                  if (uploadInputRef.current) uploadInputRef.current.value = "";
-                }} />
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  const files = Array.from(e.target.files);
+                  setUploadDataFiles((prev) => [...prev, ...files]);
+                }
+                if (uploadInputRef.current) uploadInputRef.current.value = "";
+              }} />
           </div>
           {uploadDataFiles.length > 0 && (
             <div className="space-y-1.5 border border-gray-100 rounded-lg divide-y divide-gray-100 max-h-48 overflow-y-auto">
@@ -631,39 +650,39 @@ export function ExperimentDetail() {
       >
         <div className="space-y-6">
           <h4 className="text-sm font-medium text-gray-900 mb-3">{t("files", "Files")}</h4>
-            {attachments.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-4">{t("no_attachments", "暂无附件")}</p>
-            ) : (
-              <ul className="divide-y divide-gray-100">
-                {attachments.map(att => (
-                  <li key={att.id} className="py-3 flex items-center justify-between">
-                    <div className="min-w-0 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center shrink-0">
-                        <FileDigit className="w-4 h-4 text-[#1d74f5]" />
-                      </div>
-                      <div className="min-w-0">
-                        <button
-                          onClick={() => downloadAttachment(att.id, att.fileName)}
-                          className="text-sm font-medium text-blue-600 hover:underline truncate block text-left"
-                        >
-                          {att.fileName}
-                        </button>
-                        <p className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</p>
-                      </div>
+          {attachments.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">{t("no_attachments", "暂无附件")}</p>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {attachments.map(att => (
+                <li key={att.id} className="py-3 flex items-center justify-between">
+                  <div className="min-w-0 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center shrink-0">
+                      <FileDigit className="w-4 h-4 text-[#1d74f5]" />
                     </div>
-                    <Popconfirm
-                      title={t("delete_attachment_confirm", "附件删除后关联的汇总数据也会一并删除，确定继续？")}
-                      onConfirm={() => handleDeleteAttachment(att.id)}
-                      placement="left"
-                    >
-                      <Button variant="text" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </Popconfirm>
-                  </li>
-                ))}
-              </ul>
-            )}
+                    <div className="min-w-0">
+                      <button
+                        onClick={() => downloadAttachment(att.id, att.fileName)}
+                        className="text-sm font-medium text-blue-600 hover:underline truncate block text-left"
+                      >
+                        {att.fileName}
+                      </button>
+                      <p className="text-xs text-gray-500">{(att.fileSize / 1024).toFixed(1)} KB</p>
+                    </div>
+                  </div>
+                  <Popconfirm
+                    title={t("delete_attachment_confirm", "附件删除后关联的汇总数据也会一并删除，确定继续？")}
+                    onConfirm={() => handleDeleteAttachment(att.id)}
+                    placement="left"
+                  >
+                    <Button variant="text" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </Popconfirm>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </Drawer>
 

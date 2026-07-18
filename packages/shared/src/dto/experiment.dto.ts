@@ -18,6 +18,7 @@ export interface ExperimentDto {
   aiAnalysisOutput: string | null;
   versionNo: number;
   cellPicked: boolean;
+  workflowStepName: string | null;
   createdBy: string;
   createdAt: string;
   updatedAt: string;

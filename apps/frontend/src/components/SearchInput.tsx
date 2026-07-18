@@ -1,6 +1,6 @@
 import React from "react";
 import { Search, X } from "lucide-react";
-import { Button } from "./Button";
+
 import { cn } from "../lib/utils";
 
 interface SearchInputProps {
@@ -26,35 +26,31 @@ export function SearchInput({
       }}
       className={cn("relative w-full max-w-lg flex items-center", className)}
     >
-      <Button
+      <button
         type="submit"
-        variant="ghost"
-        size="sm"
-        className="absolute left-1.5 top-1/2 -translate-y-1/2"
+        className="absolute left-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-900 transition-colors rounded"
       >
         <Search className="h-4 w-4" />
-      </Button>
+      </button>
       <input
         type="text"
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          "w-full rounded-lg border border-transparent bg-gray-50 pl-9 text-sm placeholder-gray-400 transition-colors",
-          "focus:border-gray-300 focus:bg-white focus:outline-none focus:ring-0",
-          value ? "pr-9 py-1.5" : "pr-4 py-1.5",
+          "w-full bg-transparent border-0 border-b border-gray-200 pl-9 text-[13px] text-gray-900 placeholder-gray-400 transition-colors rounded-none",
+          "focus:border-gray-900 focus:outline-none focus:ring-0",
+          value ? "pr-9 py-2" : "pr-4 py-2",
         )}
       />
       {value && (
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="sm"
           onClick={() => { onChange(""); onSubmit?.(); }}
-          className="absolute right-1.5 top-1/2 -translate-y-1/2"
+          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-900 transition-colors rounded"
         >
           <X className="h-4 w-4" />
-        </Button>
+        </button>
       )}
     </form>
   );

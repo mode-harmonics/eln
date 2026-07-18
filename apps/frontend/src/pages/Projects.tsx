@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { Search, Loader2, Edit3, Trash2, Plus } from "lucide-react";
+import { Search, Loader2, Edit3, Trash2, Plus, FileText } from "lucide-react";
 
 function childLabel(name: string): string {
   const map: Record<string, string> = {
@@ -15,20 +15,20 @@ function childLabel(name: string): string {
   };
   return map[name] || name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
-import { Pagination } from "../components/Pagination";
-import { ViewToggle } from "../components/ViewToggle";
+
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
+import { Pagination } from "../components/Pagination";
 import { TextInput, Textarea, FormSelect } from "../components/FormFields";
 import { PageLoader } from "../components/PageLoader";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../components/Card";
 import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { cn } from "../lib/utils";
-import { useViewMode } from "../hooks/useViewMode";
+
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
-import type { Project, PaginatedProjects } from "../types";
+import type { Project } from "../types";
 import { Popconfirm } from "../components/Popconfirm";
 import { toast } from "../components/Toast";
 
@@ -69,13 +69,13 @@ export function Projects() {
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [creating, setCreating] = useState(false);
-  const [viewMode, setViewMode] = useViewMode("projects_view_mode", "grid");
-  const [currentPage, setCurrentPage] = useState(1);
+
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
-  const [refetchTrigger, setRefetchTrigger] = useState(0);
-  const [pageSize, setPageSize] = useState(6);
 
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -107,18 +107,27 @@ export function Projects() {
     let cancelled = false;
     setLoading(true);
     const queryParams = new URLSearchParams();
-    queryParams.append("page", String(currentPage));
-    queryParams.append("limit", String(pageSize));
+    queryParams.append("page", page.toString());
+    queryParams.append("limit", limit.toString());
     if (searchQuery.trim()) {
       queryParams.append("search", searchQuery.trim());
     }
 
-    api.get<PaginatedProjects>(`/api/v1/projects?${queryParams.toString()}`)
-      .then((res) => { if (!cancelled) { setProjects(res.items); setTotalItems(res.total); } })
+    api.get<any>(`/api/v1/projects?${queryParams.toString()}`)
+      .then((res) => {
+        if (cancelled) return;
+        if (Array.isArray(res)) {
+          setProjects(res);
+          setTotalItems(res.length);
+        } else {
+          setProjects(res.items || []);
+          setTotalItems(res.total || 0);
+        }
+      })
       .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : t("load_failed")); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [currentPage, searchQuery, refetchTrigger, pageSize]);
+  }, [searchQuery, page, limit, refetchTrigger]);
 
   const handleCreateProject = async () => {
     if (createStep !== 2) return;
@@ -193,7 +202,6 @@ export function Projects() {
       setCreateStep(1);
       setSearchQuery("");
       setSearchInput("");
-      setCurrentPage(1);
       setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : t("create_failed"));
@@ -231,7 +239,7 @@ export function Projects() {
     }
   };
 
-  if (loading) {
+  if (loading && projects.length === 0) {
     return <PageLoader />;
   }
 
@@ -252,11 +260,14 @@ export function Projects() {
           <SearchInput
             value={searchInput}
             onChange={setSearchInput}
-            onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
+            onSubmit={() => {
+              setPage(1);
+              setSearchQuery(searchInput);
+            }}
             placeholder={t("search_projects")}
           />
           <div className="flex items-center gap-4">
-            <ViewToggle viewMode={viewMode} setViewMode={setViewMode} />
+
             {hasPermission("projects:write") && (
               <Button onClick={() => setIsModalOpen(true)} size="sm" variant="secondary">
                 <Plus className="w-4 h-4" />
@@ -266,53 +277,7 @@ export function Projects() {
           </div>
         </div>
 
-        {viewMode === "grid" ? (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
-              <Link key={project.id} to={`/projects/${project.id}`}>
-                <Card className="group h-full flex flex-col">
-                  <CardHeader>
-                    <div>
-                      <CardTitle className="group-hover:text-[#1d74f5]">{project.name}</CardTitle>
-                      <CardDescription>{t("created")} {format(new Date(project.createdAt), "MMM d, yyyy")}</CardDescription>
-                    </div>
-                    {projectStatusBadge(project)}
-                  </CardHeader>
-                  <CardContent className="line-clamp-2">
-                    {project.description}
-                  </CardContent>
-                  <CardFooter>
-                    <span className="text-[13px] text-gray-500">
-                      {t("pi")}: <span className="font-medium text-gray-700">{project.creator?.fullName || project.createdBy}</span>
-                    </span>
-                    {hasPermission("projects:write") && (
-                      <div className="flex items-center gap-2">
-                        <Popconfirm
-                          title={t("delete_project_confirm", { name: project.name })}
-                          onConfirm={() => handleDeleteProject(project)}
-                          placement="top"
-                        >
-                          <Button variant="text" onClick={(e) => { e.stopPropagation(); }} className="!text-gray-400 hover:!text-red-600">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </Popconfirm>
-                        <Button variant="text" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
-                          <Edit3 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </CardFooter>
-                </Card>
-              </Link>
-            ))}
-            {projects.length === 0 && (
-              <div className="col-span-3 p-12 text-center text-sm text-gray-400">
-                {t("no_projects")}
-              </div>
-            )}
-          </div>
-        ) : (
-          <TableWrapper>
+        <TableWrapper>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -320,7 +285,7 @@ export function Projects() {
                   <TableHead>{t("pi")}</TableHead>
                   <TableHead>{t("status")}</TableHead>
                   <TableHead>{t("created")}</TableHead>
-                  {hasPermission("projects:write") && <TableHead className="text-right">{t("actions")}</TableHead>}
+                  {hasPermission("projects:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">{t("actions")}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -336,7 +301,7 @@ export function Projects() {
                     </TableCell>
                     <TableCell>{format(new Date(project.createdAt), "MMM d, yyyy")}</TableCell>
                     {hasPermission("projects:write") && (
-                      <TableCell className="text-right">
+                      <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                         <div className="inline-flex items-center gap-3">
                           <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]"><Edit3 className="w-4 h-4" /></Button>
                           <Popconfirm
@@ -353,34 +318,51 @@ export function Projects() {
                     )}
                   </TableRow>
                 ))}
+                {projects.length === 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="py-24">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                          <FileText className="w-5 h-5 text-gray-500" />
+                        </div>
+                        <h3 className="text-[15px] font-semibold text-gray-900 mb-1">{t("no_projects")}</h3>
+                        <p className="text-[13px] text-gray-500">Projects will appear here once created.</p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </TableWrapper>
-        )}
-        <Pagination
-          currentPage={currentPage}
-          totalItems={totalItems}
-          pageSize={pageSize}
-          onPageChange={setCurrentPage}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setCurrentPage(1);
-          }}
-        />
       </div>
+
+      {totalItems > limit && (
+        <div className="flex justify-end pt-4 border-t border-gray-100">
+          <Pagination
+            currentPage={page}
+            totalItems={totalItems}
+            pageSize={limit}
+            onPageChange={setPage}
+            onPageSizeChange={(newSize) => {
+              setLimit(newSize);
+              setPage(1);
+            }}
+          />
+        </div>
+      )}
 
       <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("create_new_project")}
         maxWidth="2xl"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" variant="secondary" onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
             {createStep === 2 && (
-              <Button type="button" variant="secondary" onClick={() => { setCreateStep(1); setAssignmentError(null); }}>{t("previous")}</Button>
+              <Button size="sm" type="button" variant="secondary" onClick={() => { setCreateStep(1); setAssignmentError(null); }}>{t("previous")}</Button>
             )}
             {createStep === 2 ? (
-              <Button type="button" loading={creating} onClick={handleCreateProject}>{t("create_project")}</Button>
+              <Button size="sm" type="button" loading={creating} onClick={handleCreateProject}>{t("create_project")}</Button>
             ) : (
-              <Button type="button" onClick={() => {
+              <Button size="sm" type="button" onClick={() => {
                 if (!newProjectName.trim()) return;
                 setCreateStep(2);
               }}>{t("next")}</Button>
@@ -528,8 +510,8 @@ export function Projects() {
       <Modal open={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={t("edit_project")}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
-            <Button type="submit" form="modal-edit-form" loading={saving}>{t("save")}</Button>
+            <Button size="sm" variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" type="submit" form="modal-edit-form" loading={saving}>{t("save")}</Button>
           </>
         }>
         <form id="modal-edit-form" onSubmit={handleUpdateProject} className="space-y-5">

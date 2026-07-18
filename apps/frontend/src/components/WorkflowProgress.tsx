@@ -157,8 +157,7 @@ function StatusBadge({ status }: { status: string }) {
 
 const LABEL_MAP: Record<string, string> = {
   experiment_design: "Experiment Design",
-  drying: "Drying",
-  liquid_injection: "Liquid Injection",
+  drying_injection: "Drying & Injection",
   formation: "Formation",
   second_sealing: "Second Sealing",
   capacity_grading: "Capacity Grading",

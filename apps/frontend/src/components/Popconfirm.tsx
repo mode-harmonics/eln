@@ -136,7 +136,7 @@ export function Popconfirm({
         <div
           id="popconfirm-portal"
           style={style}
-          className="bg-white rounded-xl shadow-xl border border-gray-200 p-3.5 min-w-[200px]"
+          className="bg-white rounded-md shadow-sm border border-gray-100 p-3.5 min-w-[200px]"
         >
           <div className="text-[12px] font-semibold text-gray-700 mb-2.5 whitespace-nowrap text-left">
             {title}
@@ -150,7 +150,7 @@ export function Popconfirm({
             </button>
             <button
               onClick={handleConfirm}
-              className="px-2.5 py-1 text-[10px] font-bold text-white bg-red-500 rounded-md hover:bg-red-650 transition-colors shadow-sm shadow-red-500/10 cursor-pointer"
+              className="px-2.5 py-1 text-[10px] font-bold text-white bg-red-500 rounded-md hover:bg-red-600 transition-colors cursor-pointer"
             >
               {finalConfirmText}
             </button>

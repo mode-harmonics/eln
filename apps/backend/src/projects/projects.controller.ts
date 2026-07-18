@@ -24,8 +24,8 @@ export class ProjectsController {
     @Query('limit') limit?: number,
     @Query('search') search?: string,
   ) {
-    const pageNum = page ? parseInt(page as any, 10) : 1;
-    const limitNum = limit ? parseInt(limit as any, 10) : 10;
+    const pageNum = page ? parseInt(page as any, 10) : undefined;
+    const limitNum = limit ? parseInt(limit as any, 10) : undefined;
     return this.projectsService.findVisibleToUser(user.id, pageNum, limitNum, search);
   }
 

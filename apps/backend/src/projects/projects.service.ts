@@ -9,6 +9,8 @@ import { Attachment } from '../entities/attachment.entity';
 import { PickedCell } from '../entities/picked-cell.entity';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 import { CreateExperimentDto } from '../experiments/dto';
+import { GroupsService } from '../groups/groups.service';
+import { ProcessData } from '../entities/process-data.entity';
 
 @Injectable()
 export class ProjectsService {
@@ -18,29 +20,27 @@ export class ProjectsService {
     @InjectRepository(ExperimentCollaborator)
     private readonly collaboratorsRepo: Repository<ExperimentCollaborator>,
     @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly groupsService: GroupsService,
   ) {}
 
   async findVisibleToUser(
     userId: string,
-    page: number = 1,
-    limit: number = 10,
+    page?: number,
+    limit?: number,
     search?: string,
-  ): Promise<{ items: Project[]; total: number }> {
-    const subQuery = this.projectsRepo.manager
-      .createQueryBuilder(Experiment, 'experiment')
-      .select('experiment.projectId')
-      .innerJoin(
-        ExperimentCollaborator,
-        'collaborator',
-        'collaborator.experimentId = experiment.id',
-      )
-      .where('collaborator.userId = :userId', { userId });
-
+  ): Promise<{ items: Project[]; total?: number } | Project[]> {
     const query = this.projectsRepo
       .createQueryBuilder('project')
       .leftJoinAndSelect('project.creator', 'creator')
       .where(
-        '(project.createdBy = :userId OR project.id IN (' + subQuery.getQuery() + '))',
+        '(project.createdBy = :userId OR project.id IN (' +
+          this.projectsRepo.manager
+            .createQueryBuilder(Experiment, 'experiment')
+            .select('experiment.projectId')
+            .innerJoin(ExperimentCollaborator, 'collaborator', 'collaborator.experimentId = experiment.id')
+            .where('collaborator.userId = :userId')
+            .getQuery() +
+        '))',
         { userId },
       );
 
@@ -52,13 +52,17 @@ export class ProjectsService {
       );
     }
 
-    query
-      .orderBy('project.createdAt', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit);
+    query.orderBy('project.createdAt', 'DESC');
 
-    const [items, total] = await query.getManyAndCount();
-    return { items, total };
+    if (page !== undefined && limit !== undefined) {
+      query.skip((page - 1) * limit).take(limit);
+      const [items, total] = await query.getManyAndCount();
+      return { items, total };
+    }
+
+    // No pagination — return all
+    const items = await query.getMany();
+    return items;
   }
 
   async findOne(id: string): Promise<Project> {
@@ -163,7 +167,29 @@ export class ProjectsService {
       createdBy: userId,
     });
 
-    return this.experimentsRepo.save(experiment);
+    const saved = await this.experimentsRepo.save(experiment);
+
+    // If it's a process step (like drying_injection, formation, grading), pre-fill ProcessData with cell IDs
+    if (dto.assayType === 'ProcessData') {
+      const groups = await this.groupsService.findByProject(projectId);
+      const cellIds: string[] = [];
+      for (const g of groups) {
+        const members = await this.groupsService.getMembers(g.id);
+        cellIds.push(...members.map(m => m.cellIdentifier));
+      }
+      
+      if (cellIds.length > 0) {
+        const processRepo = this.dataSource.getRepository(ProcessData);
+        const rows = cellIds.map(cellId => processRepo.create({
+          id: uuid(),
+          experimentId: saved.id,
+          cellId,
+        }));
+        await processRepo.save(rows);
+      }
+    }
+
+    return saved;
   }
 
   async update(id: string, dto: UpdateProjectDto): Promise<Project> {

@@ -93,7 +93,7 @@ export function ReagentProcurement() {
 
       <TableWrapper className="max-h-[600px] overflow-y-auto">
         <Table>
-          <TableHeader className="sticky top-0 z-10">
+          <TableHeader className="sticky top-0 z-20">
             <TableRow>
               <TableHead>#</TableHead>
               <TableHead>{t("design_group")}</TableHead>
@@ -105,7 +105,7 @@ export function ReagentProcurement() {
               <TableHead>{t("procurement_quantity")}</TableHead>
               <TableHead>{t("procurement_is_valid")}</TableHead>
               <TableHead>{t("procurement_remark")}</TableHead>
-              <TableHead className="w-[70px]">{t("actions")}</TableHead>
+              <TableHead className="w-[70px] sticky right-0 z-20 bg-white">{t("actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -128,7 +128,7 @@ export function ReagentProcurement() {
                     </button>
                   </TableCell>
                   <TableCell><InlineCell value={record.remark || ""} onSave={(v) => updateField(record, "remark", v)} saving={savingId === record.id} editing={editingId === record.experimentDesignId} /></TableCell>
-                  <TableCell>
+                  <TableCell className={cn("sticky right-0 z-10", record.isRedundancy ? "bg-amber-50 group-hover:bg-amber-100" : "bg-white group-hover:bg-gray-50")}>
                     <div className="flex items-center gap-1">
                       {editingId === record.experimentDesignId ? (
                         <>

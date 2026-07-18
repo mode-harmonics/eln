@@ -17,7 +17,10 @@ function useTableData<T>(type: string, experimentId: string) {
   const refresh = () => setRef((n) => n + 1);
 
   useEffect(() => {
-    if (!experimentId) return;
+    if (!experimentId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     api.get<T[]>(`/api/v1/data/${type}/${experimentId}`)
       .then(setData)
@@ -55,7 +58,7 @@ function renderHeaders(cols: ColDef[], t: (k: string) => string, colorMap?: Reco
     if (c.tooltip) {
       return <TooltipTh key={c.field} content={c.tooltip} label={t(c.i18nKey)} className={colorCls} />;
     }
-    return <th key={c.field} className={`px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${colorCls || 'text-gray-500'}`}>{t(c.i18nKey)}</th>;
+    return <th key={c.field} className={`px-3 py-1.5 min-w-[120px] text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${colorCls || 'text-gray-500'}`}>{t(c.i18nKey)}</th>;
   });
 }
 
@@ -204,7 +207,7 @@ const P_HDR: Record<string, string> = {
   qcFirst:'bg-emerald-50 text-emerald-800', qdFirst:'bg-emerald-50 text-emerald-800', ceFirst:'bg-emerald-50 text-emerald-800',
 };
 // Section boundary fields — add a right border for visual separation
-const P_BOUNDARY = new Set(['mHold', 'ku', 'mLoss', 'gr1']);
+const P_BOUNDARY = new Set(['mHold', 'ku', 'v0', 'mLoss', 'gr1']);
 for (const k of P_BOUNDARY) {
   if (P_HDR[k]) P_HDR[k] += ' border-r border-gray-300!';
 }
@@ -215,11 +218,13 @@ for (const [k, v] of Object.entries(P_HDR)) {
 
 const P_COLS: ColDef[] = [
   { field: 'cellId', i18nKey: 'col_cell_id' },
+  // ── 注液 ──
   { field: 'm0', i18nKey: 'col_m0', editable: true },
   { field: 'm1', i18nKey: 'col_m1', editable: true },
-  { field: 'm2', i18nKey: 'col_m2', editable: true },
   { field: 'mIn', i18nKey: 'col_comp_mIn', tooltip: 'Injection Mass = m1 - m0' },
-  { field: 'mHold', i18nKey: 'col_comp_mHold', tooltip: 'Hold Mass = m4 - m0' },
+  { field: 'm2', i18nKey: 'col_m2', editable: true },
+  { field: 'mLoss', i18nKey: 'col_comp_mLoss', tooltip: 'Loss Mass = m1 - m2' },
+  // ── 化成 ──
   { field: 'v0', i18nKey: 'col_v0', editable: true },
   { field: 'fu0', i18nKey: 'col_fu0', editable: true },
   { field: 'fr0', i18nKey: 'col_fr0', editable: true },
@@ -235,7 +240,7 @@ const P_COLS: ColDef[] = [
   { field: 'ku', i18nKey: 'col_comp_ku', tooltip: 'Aging Voltage Drop = fu1 - fu2' },
   { field: 'm3', i18nKey: 'col_m3', editable: true },
   { field: 'm4', i18nKey: 'col_m4', editable: true },
-  { field: 'mLoss', i18nKey: 'col_comp_mLoss', tooltip: 'Loss Mass = m1 - m2' },
+  { field: 'mHold', i18nKey: 'col_comp_mHold', tooltip: 'Hold Mass = m4 - m0' },
   { field: 'gu0', i18nKey: 'col_gu0', editable: true },
   { field: 'gr0', i18nKey: 'col_gr0', editable: true },
   { field: 'gqc1', i18nKey: 'col_gqc1', editable: true },
@@ -248,21 +253,53 @@ const P_COLS: ColDef[] = [
   { field: 'ceFirst', i18nKey: 'col_comp_ceFirst', tooltip: '1st Coulombic Efficiency = qdFirst / qcFirst * 100' },
 ];
 
-export function ProcessDataTable({ experimentId }: { experimentId: string }) {
-  const { t } = useTranslation();
-  const { data, loading, error, refresh } = useTableData<any>('process', experimentId);
-  const { editingId, editForm, saving, startEditing, cancelEditing, handleChange, handleSave } = useInlineEdit('process');
-  const pRest = P_COLS.slice(1);
+// Step name → section index filter for ProcessData steps
+const PD_STEP_SECTIONS: Record<string, number[]> = {
+  drying_injection: [0], // 干燥注液 — m0, m1, mIn, m2, mLoss
+  formation: [1, 2],       // 化成前电池体积 + 化成工序
+  second_sealing: [3],     // 二封
+  capacity_grading: [4],   // 定容
+};
 
-  // Section groupings: defines how columns are grouped under section headers
-  interface SectionDef { label: string; count: number; }
-  const sections: SectionDef[] = [
-    { label: t('lab_weighing', '称重'), count: 5 },       // m0, m1, m2, mIn, mHold
-    { label: t('lab_formation', '化成'), count: 13 },      // v0,fu0,fr0,fq1,fq2,fq,v1,fvg,fu1,fr1,fu2,fr2,ku
-    { label: t('lab_seal', '二封'), count: 3 },            // m3, m4, mLoss
-    { label: t('lab_grading', '定容'), count: 7 },         // gu0,gr0,gqc1,gqd1,gqc2,gu1,gr1
-    { label: t('lab_computed', '综合计算'), count: 3 },    // qcFirst, qdFirst, ceFirst
-  ];
+// Section definitions with column start/end indices (excluding cellId)
+const P_SECTIONS: Array<{ labelKey: string; fallback: string; start: number; end: number }> = [
+  { labelKey: 'lab_injection', fallback: '注液工序', start: 0, end: 5 },          // m0, m1, mIn, m2, mLoss = 5 cols
+  { labelKey: 'lab_preFormVol', fallback: '化成前电池体积', start: 5, end: 6 },   // v0 = 1 col
+  { labelKey: 'lab_formation', fallback: '化成工序', start: 6, end: 18 },         // fu0..ku = 12 cols
+  { labelKey: 'lab_seal', fallback: '二封', start: 18, end: 21 },                 // m3, m4, mHold = 3 cols
+  { labelKey: 'lab_grading', fallback: '定容工序', start: 21, end: 28 },          // gu0..gr1 = 7 cols
+  { labelKey: 'lab_firstCycle', fallback: '首圈数据', start: 28, end: 31 },       // qcFirst, qdFirst, ceFirst = 3 cols
+];
+
+export function ProcessDataTable({ experimentId, stepName, staticData }: { experimentId?: string; stepName?: string; staticData?: any[] }) {
+  const { t } = useTranslation();
+  const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>('process', experimentId || '');
+  const data = staticData || fetchData;
+  const loading = staticData ? false : fetchLoading;
+  const error = staticData ? null : fetchErr;
+  const { editingId, editForm, saving, startEditing, cancelEditing, handleChange, handleSave } = useInlineEdit('process');
+
+  // Determine which sections to show
+  const sectionFilter = stepName ? PD_STEP_SECTIONS[stepName] : null;
+  const sections = sectionFilter
+    ? sectionFilter.map((i) => ({
+        label: t(P_SECTIONS[i].labelKey, P_SECTIONS[i].fallback),
+        count: P_SECTIONS[i].end - P_SECTIONS[i].start,
+        start: P_SECTIONS[i].start,
+        end: P_SECTIONS[i].end,
+      }))
+    : P_SECTIONS.map((s) => ({
+        label: t(s.labelKey, s.fallback),
+        count: s.end - s.start,
+        start: s.start,
+        end: s.end,
+      }));
+
+  // Build filtered column list
+  const pRest = P_COLS.slice(1);
+  const visiblePCols = sectionFilter && sections.length === 1
+    ? pRest.slice(sections[0].start, sections[0].end)
+    : pRest;
 
   return (
     <TableShell loading={loading} error={error}>
@@ -285,24 +322,24 @@ export function ProcessDataTable({ experimentId }: { experimentId: string }) {
           </tr>
           {/* Column header row */}
           <tr>
-          <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('col_cell_id')}</th>
-          {renderHeaders(pRest, t, P_HDR)}
-          <th className="sticky right-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
+          <th className="sticky left-0 z-20 bg-gray-50 px-3 py-1.5 min-w-[120px] text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[4px_0_12px_rgba(0,0,0,0.05)]">{t('col_cell_id')}</th>
+          {renderHeaders(visiblePCols, t, P_HDR)}
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-3 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
         </tr></thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {data.map((d: any) => {
             const isEditing = editingId === d.id;
             return (
               <tr key={d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
-                <td className="sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm text-gray-900">{d.cellId}</td>
-                {renderCells(pRest, d, P_CELL, isEditing, editForm, handleChange)}
-                <td className="sticky right-0 z-10 bg-white px-4 py-2 whitespace-nowrap">
-                  <RowActions row={d} type="process" onRefresh={refresh}
+                <td className="sticky left-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap text-sm text-gray-900 shadow-[4px_0_12px_rgba(0,0,0,0.05)]">{d.cellId}</td>
+                {renderCells(visiblePCols, d, P_CELL, isEditing, editForm, handleChange)}
+                <td className="sticky right-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">
+                  {staticData ? null : <RowActions row={d} type="process" onRefresh={refresh}
                     editing={isEditing}
                     onStartEdit={() => startEditing(d)}
                     onSave={() => handleSave(d.id, refresh)}
                     onCancel={cancelEditing}
-                    saving={saving} />
+                    saving={saving} />}
                 </td>
               </tr>
             );
@@ -329,11 +366,14 @@ function buildColorMap(cols: ColDef[]): Record<string, string> {
 }
 
 // ─── Shared render helper for simple row-cell pattern ────────────────────────
-function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn }: {
-  cols: ColDef[]; cellNameField?: string; type: string; experimentId: string;
-  t: (k: string) => string; keyFn?: (d: any) => string;
+function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, staticData }: {
+  cols: ColDef[]; cellNameField?: string; type: string; experimentId?: string;
+  t: (k: string) => string; keyFn?: (d: any) => string; staticData?: any[];
 }) {
-  const { data, loading, error, refresh } = useTableData<any>(type, experimentId);
+  const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>(type, experimentId || '');
+  const data = staticData || fetchData;
+  const loading = staticData ? false : fetchLoading;
+  const error = staticData ? null : fetchErr;
   const { editingId, editForm, saving, startEditing, cancelEditing, handleChange, handleSave } = useInlineEdit(type);
   const colorMap = buildColorMap(cols);
   const firstCol = cols[0];
@@ -349,7 +389,7 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn }: {
       <thead className="bg-gray-50 sticky top-0 z-20"><tr>
         <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${cellColorMap[firstCol.field] || 'text-gray-500'}`}>{t(firstCol.i18nKey)}</th>
         {renderHeaders(restCols, t, colorMap)}
-        <th className="sticky right-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
+        {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-3 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
       </tr></thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {data.map((d: any) => {
@@ -358,13 +398,13 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn }: {
             <tr key={keyFn?.(d) ?? d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
               <td className={`sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm ${cellColorMap[firstCol.field] || 'text-gray-900'}`}>{String(d[firstCol.field] ?? '')}</td>
               {renderCells(restCols, d, cellColorMap, isEditing, editForm, handleChange)}
-              <td className="sticky right-0 z-10 bg-white px-4 py-2 whitespace-nowrap">
-                <RowActions row={d} type={type} onRefresh={refresh}
+              <td className="sticky right-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">
+                {staticData ? null : <RowActions row={d} type={type} onRefresh={refresh}
                   editing={isEditing}
                   onStartEdit={() => startEditing(d)}
                   onSave={() => handleSave(d.id, refresh)}
                   onCancel={cancelEditing}
-                  saving={saving} />
+                  saving={saving} />}
               </td>
             </tr>
           );
@@ -391,9 +431,9 @@ const CAL_COLS: ColDef[] = [
   { field: 'r', i18nKey: 'col_r_acir', editable: true },
   { field: 'rGrowth', i18nKey: 'col_comp_rGrowth', tooltip: 'Internal Resistance Increase = (r / r_0d - 1) * 100' },
 ];
-export function CalendarLifeTable(props: { experimentId: string }) {
+export function CalendarLifeTable(props: { experimentId?: string; staticData?: any[] }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={CAL_COLS} type="calendar" experimentId={props.experimentId} t={t}
+  return <SimpleTable cols={CAL_COLS} type="calendar" experimentId={props.experimentId} staticData={props.staticData} t={t}
     keyFn={(d: any) => d.id || d.dayCount} />;
 }
 
@@ -405,9 +445,9 @@ const SWELL_COLS: ColDef[] = [
   { field: 'v', i18nKey: 'col_v_volume', editable: true },
   { field: 'vg', i18nKey: 'col_comp_vg', tooltip: 'Gas Volume = (v - v_0d) / qd1st (mL/Ah)' },
 ];
-export function StorageSwellingTable(props: { experimentId: string }) {
+export function StorageSwellingTable(props: { experimentId?: string; staticData?: any[] }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={SWELL_COLS} type="swelling" experimentId={props.experimentId} t={t} />;
+  return <SimpleTable cols={SWELL_COLS} type="swelling" experimentId={props.experimentId} staticData={props.staticData} t={t} />;
 }
 
 // ─── EnergyEfficiency ──────────────────────────────────────────────────────
@@ -417,9 +457,9 @@ const EFF_COLS: ColDef[] = [
   { field: 'ce', i18nKey: 'col_ce', editable: true },
   { field: 'ee', i18nKey: 'col_comp_ee', tooltip: 'Energy Efficiency Ratio = de / ce' },
 ];
-export function EnergyEfficiencyTable(props: { experimentId: string }) {
+export function EnergyEfficiencyTable(props: { experimentId?: string; staticData?: any[] }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={EFF_COLS} type="efficiency" experimentId={props.experimentId} t={t} />;
+  return <SimpleTable cols={EFF_COLS} type="efficiency" experimentId={props.experimentId} staticData={props.staticData} t={t} />;
 }
 
 // ─── DcrTest ───────────────────────────────────────────────────────────────
@@ -437,9 +477,9 @@ const DCR_COLS: ColDef[] = [
   { field: 'dRcProduct', i18nKey: 'col_comp_dRcProduct', tooltip: 'Discharge R-C Product = q0 * ddcr (Ah·Ω)' },
   { field: 'cRcProduct', i18nKey: 'col_comp_cRcProduct', tooltip: 'Charge R-C Product = q0 * cdcr (Ah·Ω)' },
 ];
-export function DcrTestTable(props: { experimentId: string }) {
+export function DcrTestTable(props: { experimentId?: string; staticData?: any[] }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={DCR_COLS} type="dcr" experimentId={props.experimentId} t={t} />;
+  return <SimpleTable cols={DCR_COLS} type="dcr" experimentId={props.experimentId} staticData={props.staticData} t={t} />;
 }
 
 // ─── FastCharge (special: flatRows + computed time with custom cell render) ─
@@ -455,9 +495,12 @@ const FC_COLS: ColDef[] = [
 ];
 const FC_COMP = 'text-sky-600';
 
-export function FastChargeTable({ experimentId }: { experimentId: string }) {
+export function FastChargeTable({ experimentId, staticData }: { experimentId?: string; staticData?: any[] }) {
   const { t } = useTranslation();
-  const { data, loading, error, refresh } = useTableData<any>('fastcharge', experimentId);
+  const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>('fastcharge', experimentId || '');
+  const data = staticData || fetchData;
+  const loading = staticData ? false : fetchLoading;
+  const error = staticData ? null : fetchErr;
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -519,7 +562,7 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
         <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('col_cell_name')}</th>
         {renderHeaders(FC_COLS, t)}
         <TooltipTh content="10%-80% SOC Fast Charge Time (min)" label={t('col_comp_computedTime')} />
-        <th className="sticky right-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
+        {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-3 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
       </tr></thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {flatRows.map((r: any, idx: number) => {
@@ -532,12 +575,12 @@ export function FastChargeTable({ experimentId }: { experimentId: string }) {
                 {r.computedFastChargeTime ? `${r.computedFastChargeTime} min` : 'N/A'}
               </td>
               <td className="sticky right-0 z-10 bg-white px-4 py-2 whitespace-nowrap border-l border-gray-100">
-                <RowActions row={r} type="fastcharge" onRefresh={refresh}
+                {staticData ? null : <RowActions row={r} type="fastcharge" onRefresh={refresh}
                   editing={isEditing}
                   onStartEdit={() => startEditing(r)}
                   onSave={() => handleSave(r)}
                   onCancel={cancelEditing}
-                  saving={saving} />
+                  saving={saving} />}
               </td>
             </tr>
           );
@@ -555,9 +598,12 @@ const HT_COLS: ColDef[] = [
   { field: 'dischargeCapacity', i18nKey: 'col_capacity', editable: true },
   { field: 'capacityRetention', i18nKey: 'col_retention', render: (v) => v != null ? `${typeof v === 'number' ? v.toFixed(4) : v}%` : '-' },
 ];
-export function HtCycleTable({ experimentId }: { experimentId: string }) {
+export function HtCycleTable({ experimentId, staticData }: { experimentId?: string; staticData?: any[] }) {
   const { t } = useTranslation();
-  const { data, loading, error, refresh } = useTableData<any>('htcycle', experimentId);
+  const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>('htcycle', experimentId || '');
+  const data = staticData || fetchData;
+  const loading = staticData ? false : fetchLoading;
+  const error = staticData ? null : fetchErr;
   const { editingId, editForm, saving, startEditing, cancelEditing, handleChange, handleSave } = useInlineEdit('htcycle');
   const sorted = [...data].sort((a: any, b: any) => (a.cellName ?? '').localeCompare(b.cellName ?? '') || (a.cycle - b.cycle));
   const htColors = buildColorMap(HT_COLS);
@@ -569,7 +615,7 @@ export function HtCycleTable({ experimentId }: { experimentId: string }) {
       <thead className="bg-gray-50 sticky top-0 z-20"><tr>
         <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${htColors[htFirst.field] || 'text-gray-500'}`}>{t(htFirst.i18nKey)}</th>
         {renderHeaders(htRest, t, htColors)}
-        <th className="sticky right-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>
+        {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-3 py-1.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t('actions')}</th>}
       </tr></thead>
       <tbody className="bg-white divide-y divide-gray-200">
         {sorted.map((d: any) => {
@@ -578,13 +624,13 @@ export function HtCycleTable({ experimentId }: { experimentId: string }) {
             <tr key={d.id} className={isEditing ? 'bg-blue-50/20' : ''}>
               <td className={`sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm ${htColors[htFirst.field] || 'text-gray-900'} font-medium`}>{String(d[htFirst.field] ?? '')}</td>
               {renderCells(htRest, d, htColors, isEditing, editForm, handleChange)}
-              <td className="sticky right-0 z-10 bg-white px-4 py-2 whitespace-nowrap">
-                <RowActions row={d} type="htcycle" onRefresh={refresh}
+              <td className="sticky right-0 z-10 bg-white px-3 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">
+                {staticData ? null : <RowActions row={d} type="htcycle" onRefresh={refresh}
                   editing={isEditing}
                   onStartEdit={() => startEditing(d)}
                   onSave={() => handleSave(d.id, refresh)}
                   onCancel={cancelEditing}
-                  saving={saving} />
+                  saving={saving} />}
               </td>
             </tr>
           );

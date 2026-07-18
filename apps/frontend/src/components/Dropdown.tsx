@@ -70,7 +70,7 @@ export function Dropdown({ trigger, children, align = "right", position = "down"
           ref={portalRef}
           style={style}
           className={cn(
-            "bg-white rounded-xl shadow-lg border border-gray-200/60 py-1 overflow-hidden",
+            "bg-white rounded-md shadow border border-gray-100 py-1 overflow-hidden",
             className,
           )}
         >

@@ -7,6 +7,7 @@ import { ProjectsModule } from '../projects/projects.module';
 import { DataController } from './data.controller';
 import { DataService } from './data.service';
 import { ParserRegistry } from './parsers/parser.registry';
+import { WorkflowModule } from '../workflow/workflow.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ParserRegistry } from './parsers/parser.registry';
     }),
     GroupsModule,
     ProjectsModule,
+    WorkflowModule,
   ],
   controllers: [DataController],
   providers: [DataService, ParserRegistry],

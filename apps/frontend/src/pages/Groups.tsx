@@ -209,8 +209,8 @@ export function Groups() {
         title={editingGroup ? t("edit_group") : t("add_group")}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("cancel")}</Button>
-            <Button type="submit" form="modal-groups-form" loading={saving}>{t("save")}</Button>
+            <Button size="sm" variant="secondary" onClick={() => setModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" type="submit" form="modal-groups-form" loading={saving}>{t("save")}</Button>
           </>
         }
       >

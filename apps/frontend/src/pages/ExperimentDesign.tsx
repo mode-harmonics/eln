@@ -134,6 +134,12 @@ export function ExperimentDesign() {
   // ── Design: submit ──
   const handleSubmitDesign = async () => {
     if (!projectId) return;
+
+    if (rows.some(r => !r.moleculeName?.trim())) {
+      toast.error(t("molecule_name_required", "分子名称不可为空"));
+      return;
+    }
+
     setSavingDesign(true);
     try {
       const nonRedundancy = rows.filter((r) => !r.isRedundancy);
@@ -147,6 +153,7 @@ export function ExperimentDesign() {
           designPrinciple: r.designPrinciple || undefined,
         })),
       });
+
       toast.success(t("design_submit_success"));
       setDesignSubmitted(true);
       setEditingIndex(null);
@@ -166,6 +173,12 @@ export function ExperimentDesign() {
   const handleChange = (field: keyof DesignRow, value: string) => { if (!editForm) return; setEditForm({ ...editForm, [field]: value }); };
   const handleSaveRow = () => {
     if (editingIndex === null || !editForm) return;
+    
+    if (!editForm.moleculeName?.trim()) {
+      toast.error(t("molecule_name_required", "分子名称不可为空"));
+      return;
+    }
+
     const updated = [...rows];
     updated[editingIndex] = { ...editForm };
     setRows(updated);
@@ -236,24 +249,20 @@ export function ExperimentDesign() {
       <div className="border-b border-gray-200">
         <nav className="-mb-px flex space-x-1">
           <button onClick={() => setSearchParams({ tab: "design" })}
-            className={cn("px-6 py-2 border-b-[3px] text-xs font-medium transition-colors -mb-[1px]",
-              step === "design" ? "border-[#1d74f5] text-[#1d74f5]" : "border-transparent text-gray-400",
+            className={cn("px-2 py-3 border-b-2 text-[13px] font-medium transition-colors mx-3 first:ml-1",
+              step === "design" ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200",
             )}
           >
-            <span className="px-3 py-1 rounded-md transition-colors hover:bg-gray-100">
-              1. {t("experiment_design")} {designSubmitted && <CheckCircle2 className="w-3 h-3 inline text-green-500 ml-1" />}
-            </span>
+            1. {t("experiment_design")} {designSubmitted && <CheckCircle2 className="w-3.5 h-3.5 inline text-green-500 ml-1" />}
           </button>
           <button onClick={() => setSearchParams({ tab: "procurement" })}
-            className={cn("px-6 py-2 border-b-[3px] text-xs font-medium transition-colors -mb-[1px]",
-              step === "procurement" ? "border-[#1d74f5] text-[#1d74f5]" : "border-transparent text-gray-400",
+            className={cn("px-2 py-3 border-b-2 text-[13px] font-medium transition-colors mx-3 first:ml-1",
+              step === "procurement" ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200",
               !designSubmitted ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
             )}
             disabled={!designSubmitted}
           >
-            <span className="px-3 py-1 rounded-md transition-colors hover:bg-gray-100">
-              2. {t("reagent_procurement")} {procSubmitted && <CheckCircle2 className="w-3 h-3 inline text-green-500 ml-1" />}
-            </span>
+            2. {t("reagent_procurement")} {procSubmitted && <CheckCircle2 className="w-3.5 h-3.5 inline text-green-500 ml-1" />}
           </button>
         </nav>
       </div>
@@ -263,9 +272,9 @@ export function ExperimentDesign() {
         <div className="space-y-4">
           {/* Actions bar */}
           <div className="flex items-center justify-between">
-            <div className="flex gap-3 text-xs">
-              <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md">{t("design_default_count", { count: rows.filter((r) => !r.isRedundancy).length })}</span>
-              <span className="px-2.5 py-1 bg-amber-50 text-amber-700 rounded-md">{t("design_redundancy_count")}: {rows.filter((r) => r.isRedundancy).length}</span>
+            <div className="flex gap-4 text-[13px] font-medium text-gray-700">
+              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{t("design_default_count", { count: rows.filter((r) => !r.isRedundancy).length })}</span>
+              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>{t("design_redundancy_count")}: {rows.filter((r) => r.isRedundancy).length}</span>
             </div>
             <div className="flex items-center gap-2">
               {designSubmitted ? (
@@ -281,19 +290,19 @@ export function ExperimentDesign() {
 
           {/* Design Table */}
           <TableWrapper className="max-h-[500px] overflow-y-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-10">
+            <Table className="table-fixed w-full">
+              <TableHeader className="sticky top-0 z-20">
                 <TableRow>
-                  <TableHead>#</TableHead>
-                  <TableHead>{t("design_group")}</TableHead>
-                  <TableHead>{t("design_molecule_name")}</TableHead>
-                  <TableHead>{t("design_chinese_name")}</TableHead>
-                  <TableHead>{t("design_molecular_structure")}</TableHead>
-                  <TableHead>{t("design_cas")}</TableHead>
-                  <TableHead>{t("design_principle")}</TableHead>
-                  <TableHead>{t("design_internal_code")}</TableHead>
-                  <TableHead>{t("design_redundancy")}</TableHead>
-                  <TableHead className="w-[70px]">{t("actions")}</TableHead>
+                  <TableHead className="w-[4%]">#</TableHead>
+                  <TableHead className="w-[8%]">{t("design_group")}</TableHead>
+                  <TableHead className="w-[15%]"><span className="text-red-500 mr-1">*</span>{t("design_molecule_name")}</TableHead>
+                  <TableHead className="w-[15%]">{t("design_chinese_name")}</TableHead>
+                  <TableHead className="w-[10%]">{t("design_molecular_structure")}</TableHead>
+                  <TableHead className="w-[10%]">{t("design_cas")}</TableHead>
+                  <TableHead className="w-[15%]">{t("design_principle")}</TableHead>
+                  <TableHead className="w-[8%]">{t("design_internal_code")}</TableHead>
+                  <TableHead className="w-[8%]">{t("design_redundancy")}</TableHead>
+                  <TableHead className="w-[7%] sticky right-0 z-20 bg-white shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -318,20 +327,20 @@ export function ExperimentDesign() {
                       <TableCell><CellText value={row.designPrinciple} editing={editing} editValue={editForm?.designPrinciple ?? ''} onEdit={(v) => handleChange("designPrinciple", v)} onClick={() => startEditing(i)} locked={designSubmitted} className="line-clamp-1 max-w-[120px]" /></TableCell>
                       <TableCell><code className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">{row.internalCode || "—"}</code></TableCell>
                       <TableCell>{row.isRedundancy ? <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">{t("design_redundancy")}</span> : <span className="text-xs text-gray-400">—</span>}</TableCell>
-                      <TableCell>
+                      <TableCell className={cn("sticky right-0 z-10 shadow-[-4px_0_12px_rgba(0,0,0,0.05)]", row.isRedundancy ? "bg-amber-50 group-hover:bg-amber-100" : "bg-white group-hover:bg-gray-50")}>
                         {designSubmitted ? (
                           <Lock className="w-3.5 h-3.5 text-gray-300" />
                         ) : editing ? (
                           <div className="flex gap-0.5">
-                            <button onClick={handleSaveRow} className="p-1 text-emerald-500 hover:bg-emerald-50 rounded-md"><Check className="w-3.5 h-3.5" /></button>
-                            <button onClick={cancelEditing} className="p-1 text-gray-400 hover:bg-gray-100 rounded-md"><X className="w-3.5 h-3.5" /></button>
+                            <Button variant="text" size="sm" onClick={handleSaveRow} className="!p-1 hover:!text-emerald-600 hover:bg-emerald-50"><Check className="w-3.5 h-3.5" /></Button>
+                            <Button variant="text" size="sm" onClick={cancelEditing} className="!p-1 hover:bg-gray-100"><X className="w-3.5 h-3.5" /></Button>
                           </div>
                         ) : (
                           <div className="flex gap-0.5">
-                            <button onClick={() => startEditing(i)} className="p-1 text-gray-400 hover:text-[#1d74f5] hover:bg-blue-50 rounded-md"><Edit3 className="w-3.5 h-3.5" /></button>
+                            <Button variant="text" size="sm" onClick={() => startEditing(i)} className="!p-1 hover:!text-blue-600 hover:bg-blue-50"><Edit3 className="w-3.5 h-3.5" /></Button>
                             {row.isRedundancy && (
                               <Popconfirm title={t("design_delete_confirm")} onConfirm={() => handleDelete(i)} placement="top">
-                                <button className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <Button variant="text" size="sm" className="!p-1 hover:!text-red-500 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></Button>
                               </Popconfirm>
                             )}
                           </div>
@@ -350,9 +359,9 @@ export function ExperimentDesign() {
       {step === "procurement" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex gap-3 text-xs">
-              <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-md">{t("procurement_is_valid")}: {procRecords.filter((r) => r.isValid).length}</span>
-              <span className="px-2.5 py-1 bg-red-50 text-red-700 rounded-md">{t("procurement_invalid")}: {procRecords.filter((r) => !r.isValid).length}</span>
+            <div className="flex gap-4 text-[13px] font-medium text-gray-700">
+              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>{t("procurement_is_valid")}: {procRecords.filter((r) => r.isValid).length}</span>
+              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>{t("procurement_invalid")}: {procRecords.filter((r) => !r.isValid).length}</span>
             </div>
             <div className="flex items-center gap-2">
               {procSubmitted ? (
@@ -364,20 +373,20 @@ export function ExperimentDesign() {
           </div>
 
           <TableWrapper className="max-h-[500px] overflow-y-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-10">
+            <Table className="table-fixed w-full">
+              <TableHeader className="sticky top-0 z-20">
                 <TableRow>
-                  <TableHead>#</TableHead>
-                  <TableHead>{t("design_group")}</TableHead>
-                  <TableHead>{t("design_molecule_name")}</TableHead>
-                  <TableHead>{t("design_internal_code")}</TableHead>
-                  <TableHead>{t("procurement_supplier")}</TableHead>
-                  <TableHead>{t("procurement_batch_no")}</TableHead>
-                  <TableHead>{t("procurement_purity")}</TableHead>
-                  <TableHead>{t("procurement_quantity")}</TableHead>
-                  <TableHead>{t("procurement_is_valid")}</TableHead>
-                  <TableHead>{t("procurement_remark")}</TableHead>
-                  <TableHead className="w-[70px]">{t("actions")}</TableHead>
+                  <TableHead className="w-[4%]">#</TableHead>
+                  <TableHead className="w-[8%]">{t("design_group")}</TableHead>
+                  <TableHead className="w-[12%]">{t("design_molecule_name")}</TableHead>
+                  <TableHead className="w-[10%]">{t("design_internal_code")}</TableHead>
+                  <TableHead className="w-[12%]">{t("procurement_supplier")}</TableHead>
+                  <TableHead className="w-[10%]">{t("procurement_batch_no")}</TableHead>
+                  <TableHead className="w-[8%]">{t("procurement_purity")}</TableHead>
+                  <TableHead className="w-[8%]">{t("procurement_quantity")}</TableHead>
+                  <TableHead className="w-[8%]">{t("procurement_is_valid")}</TableHead>
+                  <TableHead className="w-[12%]">{t("procurement_remark")}</TableHead>
+                  <TableHead className="w-[8%] sticky right-0 z-20 bg-white shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t("actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -398,15 +407,15 @@ export function ExperimentDesign() {
                         <Switch checked={record.isValid} onChange={() => toggleValid(record)} size="sm" disabled={procSubmitted} />
                       </TableCell>
                       <TableCell><ProcCell value={record.remark || ""} onSave={(v) => updateProcField(record, "remark", v)} saving={procSavingId === record.id} locked={procSubmitted} editing={procEditId === record.id} /></TableCell>
-                      <TableCell>
+                      <TableCell className={cn("sticky right-0 z-10 shadow-[-4px_0_12px_rgba(0,0,0,0.05)]", record.isRedundancy ? "bg-amber-50 group-hover:bg-amber-100" : "bg-white group-hover:bg-gray-50")}>
                         <div className="flex items-center gap-1 justify-center">
                           {procSubmitted ? <Lock className="w-3.5 h-3.5 text-gray-300" /> : procEditId === record.id ? (
                             <>
-                              <button onClick={() => { setProcEditId(null); toast.success(t("procurement_updated")); }} className="p-1.5 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"><Check className="w-4 h-4" /></button>
-                              <button onClick={() => setProcEditId(null)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"><X className="w-4 h-4" /></button>
+                              <Button variant="text" size="sm" onClick={() => { setProcEditId(null); toast.success(t("procurement_updated")); }} className="!p-1 hover:!text-emerald-600 hover:bg-emerald-50"><Check className="w-4 h-4" /></Button>
+                              <Button variant="text" size="sm" onClick={() => setProcEditId(null)} className="!p-1 hover:bg-gray-100"><X className="w-4 h-4" /></Button>
                             </>
                           ) : (
-                            <button onClick={() => setProcEditId(record.id)} className="p-1.5 text-gray-400 hover:text-[#1d74f5] hover:bg-blue-50 rounded-md transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
+                            <Button variant="text" size="sm" onClick={() => setProcEditId(record.id)} className="!p-1 hover:!text-blue-600 hover:bg-blue-50"><Edit3 className="w-3.5 h-3.5" /></Button>
                           )}
                         </div>
                       </TableCell>
@@ -421,7 +430,7 @@ export function ExperimentDesign() {
 
       {/* Image Preview Modal */}
       <Modal open={imageModalOpen} onClose={() => setImageModalOpen(false)} title={t("design_molecular_structure")} maxWidth="xl"
-        footer={<Button variant="ghost" onClick={() => setImageModalOpen(false)}>{t("close", "Close")}</Button>}
+        footer={<Button size="sm" variant="ghost" onClick={() => setImageModalOpen(false)}>{t("close", "Close")}</Button>}
       >
         {imageUrl ? <img src={imageUrl} alt="Molecular structure" className="max-w-full h-auto mx-auto rounded-lg" onError={(e) => { (e.target as HTMLImageElement).src = ""; }} /> : <p className="text-gray-500 text-center py-8">{t("no_data_available", { type: "" })}</p>}
       </Modal>

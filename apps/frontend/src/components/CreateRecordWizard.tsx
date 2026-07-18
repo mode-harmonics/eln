@@ -324,7 +324,7 @@ export function CreateRecordWizard({
       footer={
         <div className="flex items-center justify-between w-full">
           {step === 2 ? (
-            <Button variant="ghost" onClick={() => setStep(1)} disabled={submitting}>
+            <Button size="sm" variant="ghost" onClick={() => setStep(1)} disabled={submitting}>
               <ArrowLeft className="w-4 h-4 mr-1" /> 返回上一步
             </Button>
           ) : (
@@ -332,11 +332,11 @@ export function CreateRecordWizard({
           )}
           
           <div className="flex items-center gap-3">
-            <Button variant="secondary" onClick={handleClose} disabled={submitting}>
+            <Button size="sm" variant="secondary" onClick={handleClose} disabled={submitting}>
               {t("cancel", "Cancel")}
             </Button>
             {step === 2 && (
-              <Button type="submit" form="wizard-upload-form" loading={submitting} disabled={submitting}>
+              <Button size="sm" type="submit" form="wizard-upload-form" loading={submitting} disabled={submitting}>
                 {submitting ? "正在上传..." : "创建并上传"}
               </Button>
             )}

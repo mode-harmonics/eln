@@ -46,13 +46,8 @@ export function Pagination({
       <div className="hidden sm:flex sm:items-center sm:gap-4">
         {totalItems > 0 ? (
           <>
-            <p className="text-sm text-gray-500 whitespace-nowrap">
-              <span className="font-medium text-gray-900">{fromIndex}</span>
-              {" — "}
-              <span className="font-medium text-gray-900">{toIndex}</span>
-              {" / "}
-              <span className="font-medium text-gray-900">{totalItems}</span>
-              {t("pagination_item_unit")}
+            <p className="text-[13px] text-gray-500 whitespace-nowrap">
+              {fromIndex} — {toIndex} / {totalItems} {t("pagination_item_unit", "items")}
             </p>
             {onPageSizeChange && (
               <div className="flex items-center gap-1.5">
@@ -60,7 +55,7 @@ export function Pagination({
                 <select
                   value={pageSize}
                   onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                  className="rounded-lg border-0 bg-gray-100 px-2 py-1 text-xs text-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-300 cursor-pointer transition-colors"
+                  className="bg-transparent border-0 px-2 py-1 text-[13px] font-medium text-gray-600 focus:outline-none focus:ring-0 cursor-pointer transition-colors hover:text-gray-900"
                 >
                   {[5, 10, 20, 50].map((size) => (
                     <option key={size} value={size}>
@@ -82,24 +77,24 @@ export function Pagination({
           {/* First */}
           <span
             onClick={() => currentPage > 1 && onPageChange?.(1)}
-            className={cn("cursor-pointer select-none px-1 text-sm leading-8 transition-colors", currentPage <= 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+            className={cn("cursor-pointer select-none px-1.5 h-8 flex items-center justify-center text-sm transition-colors", currentPage <= 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
           >
             <ChevronsLeft className="inline h-4 w-4" />
           </span>
           {/* Prev */}
           <span
             onClick={() => currentPage > 1 && onPageChange?.(currentPage - 1)}
-            className={cn("cursor-pointer select-none px-1 text-sm leading-8 transition-colors", currentPage <= 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+            className={cn("cursor-pointer select-none px-1.5 h-8 flex items-center justify-center text-sm transition-colors", currentPage <= 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
           >
             <ChevronLeft className="inline h-4 w-4" />
           </span>
 
           {/* Page numbers */}
-          <span className="mx-1">
+          <span className="mx-1 flex items-center gap-0.5">
             {getPageNumbers().map((page, idx) => {
               if (page === "ellipsis") {
                 return (
-                  <span key={`e-${idx}`} className="px-2 text-sm text-gray-400 select-none">
+                  <span key={`e-${idx}`} className="px-2 h-8 flex items-center justify-center text-sm text-gray-400 select-none">
                     ...
                   </span>
                 );
@@ -110,10 +105,10 @@ export function Pagination({
                   key={page}
                   onClick={() => onPageChange?.(page)}
                   className={cn(
-                    "cursor-pointer select-none px-2.5 text-sm leading-8 transition-colors rounded-md",
+                    "cursor-pointer select-none px-2.5 h-8 flex items-center justify-center text-[13px] transition-colors rounded-md",
                     isCurrent
-                      ? "bg-gray-100 text-gray-900 font-medium"
-                      : "text-gray-500 hover:text-gray-900",
+                      ? "text-gray-900 font-semibold"
+                      : "text-gray-500 hover:text-gray-900 hover:bg-gray-50",
                   )}
                 >
                   {page}
@@ -125,14 +120,14 @@ export function Pagination({
           {/* Next */}
           <span
             onClick={() => currentPage < totalPages && onPageChange?.(currentPage + 1)}
-            className={cn("cursor-pointer select-none px-1 text-sm leading-8 transition-colors", currentPage >= totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+            className={cn("cursor-pointer select-none px-1.5 h-8 flex items-center justify-center text-sm transition-colors", currentPage >= totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
           >
             <ChevronRight className="inline h-4 w-4" />
           </span>
           {/* Last */}
           <span
             onClick={() => currentPage < totalPages && onPageChange?.(totalPages)}
-            className={cn("cursor-pointer select-none px-1 text-sm leading-8 transition-colors", currentPage >= totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+            className={cn("cursor-pointer select-none px-1.5 h-8 flex items-center justify-center text-sm transition-colors", currentPage >= totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
           >
             <ChevronsRight className="inline h-4 w-4" />
           </span>

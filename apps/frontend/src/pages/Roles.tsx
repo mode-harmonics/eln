@@ -349,7 +349,7 @@ export function Roles() {
               <TableRow>
                 <TableHead>{t("role_name")}</TableHead>
                 <TableHead>{t("permissions")}</TableHead>
-                {hasPermission("roles:write") && <TableHead className="text-right">{t("actions")}</TableHead>}
+                {hasPermission("roles:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">{t("actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -371,7 +371,7 @@ export function Roles() {
                     </div>
                   </TableCell>
                   {hasPermission("roles:write") && (
-                    <TableCell className="text-right">
+                    <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                       <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-[#1d74f5]!">
                         <Edit3 className="w-4 h-4" />
                       </Button>
@@ -426,8 +426,8 @@ export function Roles() {
       <Modal open={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title={t("create_new_role")}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsCreateModalOpen(false)}>{t("cancel")}</Button>
-            <Button type="submit" form="modal-create-role-form" loading={saving} disabled={saving}>{t("save_role")}</Button>
+            <Button size="sm" variant="secondary" onClick={() => setIsCreateModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" type="submit" form="modal-create-role-form" loading={saving} disabled={saving}>{t("save_role")}</Button>
           </>
         }>
         <form id="modal-create-role-form" onSubmit={handleCreateRole} className="space-y-5">
@@ -455,8 +455,8 @@ export function Roles() {
       <Modal open={isEditModalOpen && !!editingRole} onClose={() => setIsEditModalOpen(false)} title={`${t("edit_permissions")}`} maxWidth="2xl"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
-            <Button type="submit" form="modal-role-form" loading={saving} disabled={saving || editingRole?.name === "Owner"}>{t("save")}</Button>
+            <Button size="sm" variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" type="submit" form="modal-role-form" loading={saving} disabled={saving || editingRole?.name === "Owner"}>{t("save")}</Button>
           </>
         }>
         <form id="modal-role-form" onSubmit={handleUpdateRole} className="space-y-5">
@@ -490,9 +490,12 @@ export function Roles() {
               <TableBody>
                 {permRow("projects", t("projects"))}
                 {permRow("experiments", t("experiments"))}
-                {specialActionRow("experiments", "approve", "Approve (审批)")}
-                {specialActionRow("experiments", "archive", "Archive (归档)")}
+                {specialActionRow("experiments", "approve", "审批 (Approve)")}
+                {specialActionRow("experiments", "archive", "归档 (Archive)")}
                 {dataGroup()}
+                {permRow("workflow", "工作流")}
+                {specialActionRow("workflow", "transition", "提交步骤 (Transition)")}
+                {specialActionRow("workflow", "force_complete", "强制完成 (Force Complete)")}
                 {permRow("users", t("user_management"))}
                 {permRow("roles", t("role_management"))}
               </TableBody>

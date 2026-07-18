@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, CheckCircle2, AlertCircle, Info } from "lucide-react";
+import { X, CheckCircle2, Ban, Info } from "lucide-react";
 import { cn } from "../lib/utils";
 
 type ToastType = "success" | "error" | "info";
@@ -12,15 +12,15 @@ interface ToastItem {
 }
 
 const icons: Record<ToastType, React.ReactNode> = {
-  success: <CheckCircle2 className="w-4 h-4 text-green-500" />,
-  error: <AlertCircle className="w-4 h-4 text-red-500" />,
-  info: <Info className="w-4 h-4 text-blue-500" />,
+  success: <CheckCircle2 className="w-[18px] h-[18px] text-green-600" />,
+  error: <Ban className="w-[18px] h-[18px] text-red-600" />,
+  info: <Info className="w-[18px] h-[18px] text-blue-600" />,
 };
 
 const bgColors: Record<ToastType, string> = {
-  success: "bg-green-50 border-green-200",
-  error: "bg-red-50 border-red-200",
-  info: "bg-blue-50 border-blue-200",
+  success: "bg-white border-x border-b border-gray-100 border-t-2 border-t-green-600",
+  error: "bg-white border-x border-b border-gray-100 border-t-2 border-t-red-700",
+  info: "bg-white border-x border-b border-gray-100 border-t-2 border-t-blue-600",
 };
 
 let toastId = 0;
@@ -74,21 +74,32 @@ export function ToastContainer() {
 
   return createPortal(
     <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+      <style>{`
+        @keyframes toast-progress-anim {
+          0% { width: 0%; }
+          100% { width: 100%; }
+        }
+      `}</style>
       {items.map((item) => (
         <div
           key={item.id}
           className={cn(
-            "pointer-events-auto flex items-start gap-2.5 px-4 py-3 rounded-lg border shadow-lg",
+            "pointer-events-auto relative overflow-hidden flex items-start gap-2.5 px-4 py-3 rounded-md shadow-sm border",
             "animate-in slide-in-from-right-2 fade-in duration-200",
             bgColors[item.type],
           )}
           style={{ minWidth: 280, maxWidth: 420 }}
         >
           {icons[item.type]}
-          <p className="text-sm text-gray-800 flex-1 leading-5">{item.message}</p>
-          <button onClick={() => remove(item.id)} className="text-gray-400 hover:text-gray-600 transition-colors shrink-0">
-            <X className="w-3.5 h-3.5" />
+          <p className="text-[13px] font-medium text-gray-700 flex-1 leading-5 pt-0.5">{item.message}</p>
+          <button onClick={() => remove(item.id)} className="text-gray-400 hover:text-gray-900 transition-colors shrink-0 p-1">
+            <X className="w-4 h-4 stroke-[2]" />
           </button>
+          
+          <div 
+            className="absolute bottom-0 left-0 h-[3px] bg-gray-200/80"
+            style={{ animation: "toast-progress-anim 3500ms linear forwards" }}
+          />
         </div>
       ))}
     </div>,

@@ -117,8 +117,7 @@ export function StepActionPanel({
 function ActionIcon({ stepName }: { stepName: string }) {
   const iconMap: Record<string, React.ReactNode> = {
     experiment_design: <Beaker className="w-5 h-5 text-blue-500" />,
-    drying: <FlaskConical className="w-5 h-5 text-orange-500" />,
-    liquid_injection: <TestTube className="w-5 h-5 text-purple-500" />,
+    drying_injection: <FlaskConical className="w-5 h-5 text-orange-500" />,
     formation: <FlaskConical className="w-5 h-5 text-red-500" />,
     second_sealing: <FlaskConical className="w-5 h-5 text-teal-500" />,
     capacity_grading: <FlaskConical className="w-5 h-5 text-green-500" />,
@@ -131,8 +130,7 @@ function ActionIcon({ stepName }: { stepName: string }) {
 function stepLabel(stepName: string): string {
   const map: Record<string, string> = {
     experiment_design: "Experiment Design",
-    drying: "Drying",
-    liquid_injection: "Liquid Injection",
+    drying_injection: "Drying & Injection",
     formation: "Formation",
     second_sealing: "Second Sealing",
     capacity_grading: "Capacity Grading",
@@ -178,8 +176,7 @@ function stepActionButton(
           Mark Complete
         </Button>
       );
-    case "drying":
-    case "liquid_injection":
+    case "drying_injection":
     case "formation":
     case "second_sealing":
     case "capacity_grading":

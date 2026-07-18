@@ -30,7 +30,8 @@ export class ProcessDataParser implements DataParser<Partial<ProcessData>> {
     const hasCellId = normalized.some((h) => h === 'cellid' || h === 'batteryid' || h === 'cellname');
     const hasFormationFields = normalized.some((h) => h === 'fu0' || h === 'fq1');
     const hasGradingFields = normalized.some((h) => h === 'gu0' || h === 'gqc1');
-    return hasCellId && (hasFormationFields || hasGradingFields);
+    const hasDryingFields = normalized.some((h) => h === 'm0' || h === 'm1' || h === 'm2');
+    return hasCellId && (hasFormationFields || hasGradingFields || hasDryingFields);
   }
 
   parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<ProcessData>[] {

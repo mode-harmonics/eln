@@ -1,6 +1,7 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -8,6 +9,8 @@ import { v4 as uuid } from 'uuid';
 import { ExperimentDesign } from '../entities/experiment-design.entity';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
 import { Project } from '../entities/project.entity';
+import { WorkflowService } from '../workflow/workflow.service';
+import { GroupsService } from '../groups/groups.service';
 
 @Injectable()
 export class ExperimentDesignService {
@@ -18,6 +21,8 @@ export class ExperimentDesignService {
     private readonly procurementRepo: Repository<ReagentProcurement>,
     @InjectRepository(Project)
     private readonly projectRepo: Repository<Project>,
+    private readonly workflowService: WorkflowService,
+    private readonly groupsService: GroupsService,
   ) {}
 
   async findByProject(projectId: string): Promise<ExperimentDesign[]> {
@@ -45,8 +50,17 @@ export class ExperimentDesignService {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');
 
-    // Delete existing designs for this project
-    await this.designRepo.delete({ projectId });
+    await this.workflowService.assertStepNotCompleted(projectId, 'experiment_design');
+
+    // Block duplicate submission of experiment design
+    const existingCount = await this.designRepo.count({ where: { projectId } });
+    if (existingCount > 0) {
+      throw new BadRequestException('实验设计已提交，不可重复提交整个表单。如需修改请使用行内编辑。');
+    }
+
+    if (dto.rows.some(r => !r.moleculeName || !r.moleculeName.trim())) {
+      throw new BadRequestException('分子名称不可为空');
+    }
 
     const designs: ExperimentDesign[] = [];
     let globalIndex = 0;
@@ -104,6 +118,36 @@ export class ExperimentDesignService {
     // Auto-generate procurement records from designs
     await this.generateProcurement(projectId, saved);
 
+    // Auto-generate cell groups and battery IDs based EXACTLY on ExperimentDesign rows (1-to-1)
+    const existingGroups = await this.groupsService.findByProject(projectId);
+    if (existingGroups.length === 0) {
+      let sortOrder = 0;
+      
+      // We will track the current cell sequence for each group to handle multiple rows with the same group
+      const groupSeq: Record<string, number> = {};
+
+      for (const design of saved) {
+        if (!design.group) continue;
+        const groupName = design.group;
+        
+        // Ensure group exists
+        let group = await this.groupsService.findByProject(projectId).then(gs => gs.find(g => g.name === groupName));
+        if (!group) {
+          group = await this.groupsService.create(projectId, {
+            name: groupName,
+            matchMode: 'prefix',
+            matchValue: groupName,
+            sortOrder: sortOrder++,
+          });
+        }
+
+        // Generate exactly 1 cell for this design row
+        groupSeq[groupName] = (groupSeq[groupName] || 0) + 1;
+        const cellId = `${groupName}${String(groupSeq[groupName]).padStart(3, '0')}`;
+        await this.groupsService.assignCellToGroup(group.id, cellId);
+      }
+    }
+
     return saved;
   }
 
@@ -119,6 +163,12 @@ export class ExperimentDesignService {
       designPrinciple: string;
     }>,
   ): Promise<ExperimentDesign> {
+    await this.workflowService.assertStepNotCompleted(projectId, 'experiment_design');
+
+    if (dto.moleculeName !== undefined && (!dto.moleculeName || !dto.moleculeName.trim())) {
+      throw new BadRequestException('分子名称不可为空');
+    }
+
     const design = await this.designRepo.findOne({
       where: { id, projectId },
     });

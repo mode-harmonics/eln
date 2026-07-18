@@ -172,7 +172,7 @@ export function Inventory() {
                   <TableHead>Location</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Used</TableHead>
-                  {hasPermission("data:write") && <TableHead className="text-right">Actions</TableHead>}
+                  {hasPermission("data:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -208,7 +208,7 @@ export function Inventory() {
                       {item.lastUsedAt ? format(new Date(item.lastUsedAt), "MMM d, yyyy") : "Never"}
                     </TableCell>
                     {hasPermission("data:write") && (
-                      <TableCell className="text-right space-x-3">
+                      <TableCell className="text-right space-x-3 sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                         <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                           Edit
                         </Button>
@@ -300,8 +300,8 @@ export function Inventory() {
       <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add Inventory Item"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button type="submit" form="modal-inventory-form">Add Item</Button>
+            <Button size="sm" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
+            <Button size="sm" type="submit" form="modal-inventory-form">Add Item</Button>
           </>
         }>
         <form id="modal-inventory-form" onSubmit={handleAddItem} className="space-y-5">
@@ -354,8 +354,8 @@ export function Inventory() {
       <Modal open={isEditModalOpen && !!editingItem} onClose={() => setIsEditModalOpen(false)} title="Edit Inventory Item"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
-            <Button type="submit" form="modal-inventory-edit-form">Save Changes</Button>
+            <Button size="sm" variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button size="sm" type="submit" form="modal-inventory-edit-form">Save Changes</Button>
           </>
         }>
         <form id="modal-inventory-edit-form" onSubmit={handleUpdateItem} className="space-y-5">

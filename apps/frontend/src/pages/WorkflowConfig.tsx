@@ -65,49 +65,32 @@ interface StepNodeData {
 
 function StepNode({ data: rawData, selected }: NodeProps) {
   const data = rawData as unknown as StepNodeData;
-  // Style depends on edge topology (set during layout/build)
-  const nodeStyle = data.nodeStyle || "serial";
-
-  const borderColor =
-    nodeStyle === "parallel-parent" ? "border-amber-400 bg-amber-50" :
-    nodeStyle === "parallel-child" ? "border-blue-300 bg-blue-50" :
-    "border-blue-500 bg-white";
-
-  const borderStyle = nodeStyle === "parallel-parent" ? "border-dashed" : "border-2";
 
   return (
     <div
-      className={`px-5 py-3 ${borderStyle} ${borderColor} rounded-xl shadow-md min-w-[150px] text-center relative ${
-        selected ? "ring-2 ring-blue-400" : ""
+      className={`px-4 py-3 bg-white border border-gray-200 border-l-4 border-l-blue-500 rounded-lg shadow-sm min-w-[160px] text-left relative ${
+        selected ? "ring-2 ring-blue-500/30" : ""
       }`}
     >
       {/* Target handle (top) */}
       <Handle
         type="target"
         position={Position.Top}
-        className="w-3! h-3! border-2! border-blue-400! bg-white!"
+        className="w-2.5! h-2.5! border! border-gray-300! bg-gray-50!"
       />
 
-      <div className="text-[10px] font-bold uppercase tracking-wide text-gray-500 mb-1">
-        {nodeStyle === "parallel-parent" ? (
-          <span className="flex items-center justify-center gap-1 text-amber-600">
-            <Layers className="w-3 h-3" /> PARALLEL
-          </span>
-        ) : nodeStyle === "parallel-child" ? (
-          <span className="text-blue-500">SUB</span>
-        ) : (
-          <span className="text-gray-400">STEP</span>
+      <div className="flex flex-col">
+        <span className="text-[13px] font-bold text-gray-800">{data.label}</span>
+        {data.builtInStep && (
+          <span className="text-[10px] text-gray-400 font-mono mt-1">{data.builtInStep}</span>
         )}
       </div>
-
-      <div className="text-sm font-semibold text-gray-800">{data.label}</div>
-      <div className="text-[10px] text-gray-400 mt-0.5 font-mono">{data.builtInStep || ""}</div>
 
       {/* Source handle (bottom) */}
       <Handle
         type="source"
         position={Position.Bottom}
-        className="w-3! h-3! border-2! border-blue-400! bg-white!"
+        className="w-2.5! h-2.5! border! border-gray-300! bg-gray-50!"
       />
     </div>
   );
@@ -119,12 +102,11 @@ const nodeTypes: NodeTypes = {
 
 // ─── Layout Helpers ─────────────────────────────────────────────
 
-const NODE_W = 170;
-const NODE_H_GAP = 100;
-const NODE_V_GAP = 80;
+const NODE_W = 200;
+const NODE_H_GAP = 120;
+const CHILD_Y = 140;
+const CHILD_GAP = 30;
 const PARENT_Y = 0;
-const CHILD_Y = 120;
-const CHILD_GAP = 20;
 
 interface LayoutNode {
   id: string;
@@ -151,11 +133,18 @@ function buildLayout(steps: StepDef[]): { nodes: LayoutNode[]; edges: Partial<Ed
     const id = `step-${step.name}`;
 
     if (step.isParallel && step.parallelChildren && step.parallelChildren.length > 0) {
+      // Calculate block width to prevent overlapping
+      const childrenW = step.parallelChildren.length * NODE_W + (step.parallelChildren.length - 1) * CHILD_GAP;
+      const blockW = Math.max(NODE_W, childrenW);
+      
+      const parentX = x + (blockW - NODE_W) / 2;
+      const startX = x + (blockW - childrenW) / 2;
+
       // ── Parallel parent node ──
       nodes.push({
         id,
         type: "step",
-        position: { x, y: PARENT_Y },
+        position: { x: parentX, y: PARENT_Y },
         data: {
           label: step.label,
           builtInStep: step.builtInStep || step.name,
@@ -175,9 +164,6 @@ function buildLayout(steps: StepDef[]): { nodes: LayoutNode[]; edges: Partial<Ed
       }
 
       // ── Parallel children below ──
-      const totalW = step.parallelChildren.length * NODE_W + (step.parallelChildren.length - 1) * CHILD_GAP;
-      const startX = x + (NODE_W - totalW) / 2;
-
       step.parallelChildren.forEach((childName, ci) => {
         const childId = `step-${childName}`;
         nodes.push({
@@ -202,7 +188,7 @@ function buildLayout(steps: StepDef[]): { nodes: LayoutNode[]; edges: Partial<Ed
       });
 
       prevSerialId = id;
-      x += NODE_W + NODE_H_GAP;
+      x += blockW + NODE_H_GAP;
     } else {
       // ── Serial step ──
       nodes.push({
@@ -542,18 +528,7 @@ function WorkflowConfig() {
     }
   };
 
-  // ── Keyboard: Delete key → remove selected ──
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Delete" || e.key === "Backspace") {
-        // Only if not typing in an input
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-        handleDeleteSelected();
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [handleDeleteSelected]);
+  // Keyboard delete listener disabled for read-only mode
 
   if (loading) {
     return (
@@ -565,12 +540,22 @@ function WorkflowConfig() {
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-gray-900">{t("workflow_config")}</h1>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+            <Layers className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t("workflow_config")}</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              {t("workflow_config_desc", "View workflow templates")}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
           <FormSelect
             value={activeTemplateId ?? ""}
             onChange={(e) => setActiveTemplateId(e.target.value || null)}
-            className="w-auto! min-w-[200px]!"
+            className="w-auto! min-w-[250px]!"
           >
             <option value="">{t("select_template", "Select template...")}</option>
             {templates.map((tpl) => (
@@ -579,26 +564,7 @@ function WorkflowConfig() {
               </option>
             ))}
           </FormSelect>
-        </div>
-        <div className="flex items-center gap-2">
-          {nodes.some((n) => n.selected || edges.some((e) => e.selected)) && (
-            <Button variant="danger" size="sm" onClick={handleDeleteSelected}>
-              <Trash2 className="w-4 h-4" />
-              {t("delete_selected", "Delete")}
-            </Button>
-          )}
-          <Button variant="secondary" size="sm" onClick={handleAddNode}>
-            <Plus className="w-4 h-4" />
-            {t("add_step", "Add Step")}
-          </Button>
-          <Button variant="secondary" size="sm" onClick={handleNewTemplate}>
-            <Plus className="w-4 h-4" />
-            {t("new_template")}
-          </Button>
-          <Button onClick={handleSave} loading={saving} size="sm">
-            <Save className="w-4 h-4" />
-            {t("save")}
-          </Button>
+          {/* Editing disabled temporarily per user request */}
         </div>
       </div>
 
@@ -610,16 +576,15 @@ function WorkflowConfig() {
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={onNodeClick}
-            onEdgeClick={onEdgeClick}
             nodeTypes={nodeTypes}
             fitView
+            nodesDraggable={false}
+            nodesConnectable={false}
+            elementsSelectable={false}
             attributionPosition="bottom-left"
             proOptions={{ hideAttribution: true }}
             minZoom={0.3}
             maxZoom={2}
-            deleteKeyCode={["Delete", "Backspace"]}
             connectionLineStyle={{ stroke: "#1d74f5", strokeWidth: 2 }}
             defaultEdgeOptions={{
               type: "smoothstep",
@@ -637,9 +602,7 @@ function WorkflowConfig() {
               position="top-right"
             />
             <Panel position="bottom-left" className="text-[11px] text-gray-400 bg-white/80 rounded-lg px-3 py-2 shadow-sm border border-gray-100 leading-relaxed mb-2 ml-2">
-              <div>🖱 {t("flow_hint_connect", "Drag between handles to create edges")}</div>
-              <div>🗑 {t("flow_hint_delete", "Click an edge to delete it")}</div>
-              <div>📝 {t("flow_hint_click", "Click a node to edit its label")}</div>
+              <div>ℹ️ {t("flow_hint_readonly", "流程配置当前为只读模式")}</div>
             </Panel>
           </ReactFlow>
         ) : (
@@ -657,10 +620,10 @@ function WorkflowConfig() {
         maxWidth="md"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setPropModalOpen(false)}>
+            <Button size="sm" variant="ghost" onClick={() => setPropModalOpen(false)}>
               {t("cancel")}
             </Button>
-            <Button onClick={handleSaveProps}>
+            <Button size="sm" onClick={handleSaveProps}>
               <Save className="w-4 h-4" />
               {t("save")}
             </Button>
@@ -688,22 +651,7 @@ function WorkflowConfig() {
               onChange={(e) => setEditLabel(e.target.value)}
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t("step_type")}
-            </label>
-            <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500"
-              value={
-                nodes.find((n) => n.id === editingNodeId)?.data?.nodeStyle === "parallel-parent"
-                  ? t("parallel_group")
-                  : nodes.find((n) => n.id === editingNodeId)?.data?.nodeStyle === "parallel-child"
-                    ? t("parallel_child")
-                    : t("serial_step")
-              }
-              disabled
-            />
-          </div>
+
         </div>
       </Modal>
     </div>

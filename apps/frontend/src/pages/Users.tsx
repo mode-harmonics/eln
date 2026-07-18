@@ -191,7 +191,7 @@ export function Users() {
                   <TableHead>{t("email")}</TableHead>
                   <TableHead>{t("role")}</TableHead>
                   <TableHead>{t("status")}</TableHead>
-                  {hasPermission("users:write") && <TableHead className="text-right">{t("actions")}</TableHead>}
+                  {hasPermission("users:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">{t("actions")}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -228,7 +228,7 @@ export function Users() {
                         </span>
                       </TableCell>
                       {hasPermission("users:write") && (
-                        <TableCell className="text-right text-sm font-medium">
+                        <TableCell className="text-right text-sm font-medium sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                           <div className="inline-flex items-center gap-3">
                             <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
                               <Edit3 className="w-4 h-4" />
@@ -311,8 +311,8 @@ export function Users() {
       <Modal open={isEditModalOpen && !!editingUser} onClose={() => setIsEditModalOpen(false)} title={t("edit_user")} maxWidth="md"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
-            <Button type="submit" form="modal-user-edit-form">{t("save_changes")}</Button>
+            <Button size="sm" variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" type="submit" form="modal-user-edit-form">{t("save_changes")}</Button>
           </>
         }>
         <form id="modal-user-edit-form" onSubmit={handleUpdateUser} className="space-y-5">
@@ -356,8 +356,8 @@ export function Users() {
       <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("add_user")} maxWidth="md"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
-            <Button type="submit" form="modal-user-form">{t("create")}</Button>
+            <Button size="sm" variant="secondary" onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" type="submit" form="modal-user-form">{t("create")}</Button>
           </>
         }>
         <form id="modal-user-form" onSubmit={handleCreateUser} className="space-y-5">

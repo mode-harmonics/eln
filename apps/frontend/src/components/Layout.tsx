@@ -3,7 +3,7 @@ import {
   Database,
   LayoutDashboard,
   Menu,
-  Grid,
+  Folder,
   LogOut,
   Users,
   Shield,
@@ -26,9 +26,9 @@ import { NotificationBell } from "./NotificationBell";
 import { TempUploadDrawer } from "./TempUploadDrawer";
 
 const NAVIGATION = [
-  { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "projects:read" },
-  { nameKey: "projects", href: "/projects", icon: Grid, requiredPermission: "projects:read" },
-  { nameKey: "inventory", href: "/inventory", icon: Database, requiredPermission: "data:read" },
+  // { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "projects:read" },
+  { nameKey: "projects", href: "/projects", icon: Folder, requiredPermission: "projects:read" },
+  // { nameKey: "inventory", href: "/inventory", icon: Database, requiredPermission: "data:read" },
 ];
 
 const SYSTEM_NAVIGATION = [
@@ -161,10 +161,10 @@ export function Layout() {
                   to={item.href}
                   onClick={() => setSidebarOpen(false)}
                   className={cn(
-                    isActive
-                      ? "bg-[#e1e5e8] text-gray-900"
-                      : "text-gray-500 hover:bg-black/5 hover:text-gray-900",
                     "group flex items-center gap-3 px-6 py-2.5 text-[15px] font-medium transition-colors",
+                    isActive
+                      ? "bg-[#e2e8f0] text-gray-900 shadow-[inset_3px_0_0_0_#dc2626]"
+                      : "text-gray-500 hover:bg-black/5 hover:text-gray-900",
                   )}
                 >
                   <item.icon
@@ -195,10 +195,10 @@ export function Layout() {
                       to={item.href}
                       onClick={() => setSidebarOpen(false)}
                       className={cn(
-                        isActive
-                          ? "bg-[#e1e5e8] text-gray-900"
-                          : "text-gray-500 hover:bg-black/5 hover:text-gray-900",
                         "group flex items-center gap-3 px-6 py-2.5 text-[15px] font-medium transition-colors",
+                        isActive
+                          ? "bg-[#e2e8f0] text-gray-900 shadow-[inset_3px_0_0_0_#dc2626]"
+                          : "text-gray-500 hover:bg-black/5 hover:text-gray-900",
                       )}
                     >
                       <item.icon
@@ -217,15 +217,19 @@ export function Layout() {
             )}
           </nav>
 
-          {/* Temp Upload button — bottom of sidebar */}
-          <div className="px-4 pb-4 mt-auto">
+          {/* Temp Upload button & Footer links */}
+          <div className="px-4 pb-4 mt-auto space-y-4">
             <button
               onClick={() => setTempUploadOpen(true)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-black/5 hover:text-gray-900 transition-colors group"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-black/5 hover:text-gray-900 transition-colors group"
             >
-              <Upload className="w-[18px] h-[18px] shrink-0 stroke-[2] text-gray-400 group-hover:text-gray-600" />
+              <Upload className="w-4 h-4 shrink-0 stroke-[2] text-gray-400 group-hover:text-gray-600" />
               临时文件
             </button>
+            <div className="px-3 space-y-3 border-t border-gray-200/60 pt-4">
+              <a href="#" className="block text-[11px] text-gray-400 hover:text-gray-600 transition-colors">Terms and conditions</a>
+              <a href="#" className="block text-[11px] text-gray-400 hover:text-gray-600 transition-colors">Privacy policy</a>
+            </div>
           </div>
         </div>
       </div>
@@ -242,15 +246,14 @@ export function Layout() {
 
         <main className="flex-1 overflow-y-auto">
           {/* Breadcrumb: wider, full-width */}
-          <div className="w-full px-6 md:px-10 pt-6 md:pt-10 pb-4">
+          <div className="w-full px-6 md:px-10 pt-5 pb-2">
             <div className="max-w-screen-xl mx-auto">
               <Breadcrumb />
             </div>
           </div>
-            {/* Content: original width */}
-            <div className="max-w-6xl mx-auto p-6 md:p-10">
-              <Outlet />
-            </div>
+          <div className="w-full max-w-screen-xl mx-auto px-6 md:px-10 pb-12 pt-2">
+            <Outlet />
+          </div>
         </main>
       </div>
 

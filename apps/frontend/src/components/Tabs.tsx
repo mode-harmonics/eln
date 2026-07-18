@@ -22,15 +22,13 @@ export function Tabs({ items, activeKey, onChange, className }: TabsProps) {
             key={item.key}
             onClick={() => onChange(item.key)}
             className={cn(
-              "px-6 py-2 border-b-[3px] text-xs font-medium transition-colors -mb-[1px]",
+              "px-2 py-3 border-b-2 text-[13px] font-medium transition-colors mx-3 first:ml-1",
               activeKey === item.key
-                ? "border-[#1d74f5] text-[#1d74f5]"
-                : "border-transparent text-gray-400",
+                ? "border-gray-900 text-gray-900"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200",
             )}
           >
-            <span className="px-3 py-1 rounded-md transition-colors hover:bg-gray-100">
-              {item.label}
-            </span>
+            {item.label}
           </button>
         ))}
       </nav>

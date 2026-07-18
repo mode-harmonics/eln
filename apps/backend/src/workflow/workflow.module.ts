@@ -8,6 +8,7 @@ import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.ent
 import { Project } from '../entities/project.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { GroupsModule } from '../groups/groups.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
       Experiment,
     ]),
     NotificationsModule,
+    GroupsModule,
   ],
   controllers: [WorkflowController],
   providers: [WorkflowService],

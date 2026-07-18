@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -13,6 +14,10 @@ import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.ent
 import { Project } from '../entities/project.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { GroupsService } from '../groups/groups.service';
+import { ProcessData } from '../entities/process-data.entity';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import type { WorkflowStepDefinition } from '@eln/shared';
 
 @Injectable()
@@ -31,12 +36,13 @@ export class WorkflowService {
     @InjectRepository(Experiment)
     private readonly experimentRepo: Repository<Experiment>,
     private readonly notificationsService: NotificationsService,
+    private readonly groupsService: GroupsService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   // Step name → assayType mapping for auto-creating experiments
   private readonly STEP_ASSAY_MAP: Record<string, string> = {
-    drying: 'ProcessData',
-    liquid_injection: 'ProcessData',
+    drying_injection: 'ProcessData',
     formation: 'ProcessData',
     second_sealing: 'ProcessData',
     capacity_grading: 'ProcessData',
@@ -240,6 +246,23 @@ export class WorkflowService {
     return steps;
   }
 
+  /**
+   * Throws ForbiddenException if the given stepName is completed in the workflow.
+   */
+  async assertStepNotCompleted(projectId: string, stepName: string): Promise<void> {
+    const { instance, steps } = await this.findByProject(projectId);
+    if (!instance) return; // No workflow instance, allow bypass
+
+    if (instance.status === 'Completed') {
+      throw new ForbiddenException('整个流程已结束，不可修改数据');
+    }
+
+    const step = steps.find((s) => s.stepName === stepName);
+    if (step && step.status === 'completed') {
+      throw new ForbiddenException('该步骤已提交，不可再修改数据');
+    }
+  }
+
   // ════════════════════════════════════════════════════════════════
   //  STATE MACHINE — TRANSITION
   // ════════════════════════════════════════════════════════════════
@@ -433,8 +456,28 @@ export class WorkflowService {
       versionNo: 1,
       createdBy: project.createdBy,
     });
-    await this.experimentRepo.save(exp);
+    const saved = await this.experimentRepo.save(exp);
     this.logger.log(`Auto-created experiment "${exp.title}" for step "${stepName}"`);
+
+    // If it's a process step, pre-fill ProcessData with all cell IDs from groups
+    if (assayType === 'ProcessData') {
+      const groups = await this.groupsService.findByProject(projectId);
+      const cellIds: string[] = [];
+      for (const g of groups) {
+        const members = await this.groupsService.getMembers(g.id);
+        cellIds.push(...members.map(m => m.cellIdentifier));
+      }
+
+      if (cellIds.length > 0) {
+        const processRepo = this.dataSource.getRepository(ProcessData);
+        const rows = cellIds.map(cellId => processRepo.create({
+          id: uuid(),
+          experimentId: saved.id,
+          cellId,
+        }));
+        await processRepo.save(rows);
+      }
+    }
   }
 
   // ════════════════════════════════════════════════════════════════

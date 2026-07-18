@@ -30,6 +30,7 @@ import { CellGroupMember } from '../entities/cell-group-member.entity';
 import { ProjectsService } from '../projects/projects.service';
 import { pickBatteries } from '../battery-picker/pick-batteries';
 import { getColumnHeaders, RAW_STEP_COLUMNS } from './export-columns';
+import { WorkflowService } from '../workflow/workflow.service';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
@@ -70,6 +71,7 @@ export class DataService {
     private readonly parserRegistry: ParserRegistry,
     private readonly groupsService: GroupsService,
     private readonly projectsService: ProjectsService,
+    private readonly workflowService: WorkflowService,
   ) { }
 
   async getExperiment(id: string): Promise<Experiment | null> {
@@ -89,7 +91,12 @@ export class DataService {
     mode?: 'overwrite' | 'merge',
   ): Promise<UploadSummary> {
     const experiment = await this.getExperiment(experimentId);
-    const assayType = experiment?.metadata?.assayType as string | undefined;
+    if (!experiment) throw new NotFoundException('Experiment not found');
+    const assayType = experiment.metadata?.assayType as string | undefined;
+
+    if (experiment.workflowStepName) {
+      await this.workflowService.assertStepNotCompleted(experiment.projectId, experiment.workflowStepName);
+    }
 
     // Step 2a: Duplicate detection — check if any business data exists for this experiment
     const businessRepos = [
@@ -626,6 +633,14 @@ export class DataService {
     const row = await repo.findOne({ where: { id } as Record<string, unknown> });
     if (!row) {
       throw new NotFoundException(`Data row not found (type=${type}, id=${id}).`);
+    }
+
+    const experimentId = (row as any).experimentId;
+    if (experimentId) {
+      const experiment = await this.getExperiment(experimentId);
+      if (experiment && experiment.workflowStepName) {
+        await this.workflowService.assertStepNotCompleted(experiment.projectId, experiment.workflowStepName);
+      }
     }
 
     // Exclude internal/system fields from being overwritten
