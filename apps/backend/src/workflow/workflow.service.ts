@@ -127,6 +127,7 @@ export class WorkflowService {
       assignedUserId: string;
       canViewOtherSteps?: boolean;
       canViewInternalCode?: boolean;
+      visibleToUserIds?: string[];
     }>;
   }): Promise<WorkflowInstance> {
     const template = dto.templateId
@@ -146,6 +147,7 @@ export class WorkflowService {
         assignedUserId: expDesign.assignedUserId,
         canViewOtherSteps: expDesign.canViewOtherSteps,
         canViewInternalCode: expDesign.canViewInternalCode,
+        visibleToUserIds: expDesign.visibleToUserIds,
       });
     }
 
@@ -203,7 +205,7 @@ export class WorkflowService {
     instanceId: string,
     stepIndex: number,
     stepName: string,
-    assign: { assignedUserId: string; canViewOtherSteps?: boolean; canViewInternalCode?: boolean } | undefined,
+    assign: { assignedUserId: string; canViewOtherSteps?: boolean; canViewInternalCode?: boolean; visibleToUserIds?: string[] } | undefined,
     isParallelGroup: boolean,
     parentStepName: string | null,
   ): WorkflowStepAssignment {
@@ -216,6 +218,7 @@ export class WorkflowService {
       status: 'pending',
       canViewOtherSteps: assign?.canViewOtherSteps ?? false,
       canViewInternalCode: assign?.canViewInternalCode ?? false,
+      visibleToUserIds: assign?.visibleToUserIds ?? null,
       isParallelGroup,
       parentStepName,
       completedAt: null,
@@ -567,6 +570,7 @@ export class WorkflowService {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     const isCreator = project?.createdBy === userId;
     const userAssignment = steps.find((s) => s.assignedUserId === userId);
+    const visibleSteps = steps.filter((s) => s.assignedUserId === userId || (s.visibleToUserIds && s.visibleToUserIds.includes(userId)));
 
     if (isCreator || userAssignment?.canViewOtherSteps) {
       return {
@@ -578,7 +582,7 @@ export class WorkflowService {
 
     return {
       canViewInternalCode: userAssignment?.canViewInternalCode ?? false,
-      visibleStepNames: userAssignment ? [userAssignment.stepName] : [],
+      visibleStepNames: visibleSteps.map((s) => s.stepName),
       currentStepName: null,
     };
   }

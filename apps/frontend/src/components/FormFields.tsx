@@ -88,6 +88,8 @@ export function Select({
     if (!open) return;
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        const portal = document.getElementById("select-portal");
+        if (portal && portal.contains(e.target as Node)) return;
         setOpen(false);
       }
     };
@@ -158,7 +160,7 @@ export function Select({
       {label ? <Field label={label} error={error}>{trigger}</Field> : trigger}
 
       {open && createPortal(
-        <div style={dropdownStyle} className="bg-white rounded-lg shadow-lg border border-gray-200 py-0.5 max-h-[240px] overflow-y-auto z-[9999] animate-in fade-in zoom-in-95 duration-150">
+        <div id="select-portal" style={dropdownStyle} className="bg-white rounded-lg shadow-lg border border-gray-200 py-0.5 max-h-[240px] overflow-y-auto z-[9999] animate-in fade-in zoom-in-95 duration-150">
           {options.length === 0 ? (
             <div className="px-3 py-3 text-xs text-gray-400 text-center">No options</div>
           ) : (
@@ -179,6 +181,166 @@ export function Select({
                 <span className="truncate">{opt.label}</span>
               </div>
             ))
+          )}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+// ─── MultiSelect (custom dropdown) ─────────────────────────────
+
+interface MultiSelectProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
+  label?: string;
+  value?: string[];
+  onChange?: (value: string[]) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  className?: string;
+  error?: string;
+}
+
+export function MultiSelect({
+  label,
+  value = [],
+  onChange,
+  options,
+  placeholder = "Select...",
+  className,
+  error,
+  ...props
+}: MultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+
+  const selectedOptions = options.filter((o) => value.includes(o.value));
+  const displayLabel = selectedOptions.length > 0 
+    ? selectedOptions.map(o => o.label).join(", ")
+    : placeholder;
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        const portal = document.getElementById("multiselect-portal");
+        if (portal && portal.contains(e.target as Node)) return;
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  // Position the dropdown
+  const measure = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setDropdownStyle({
+      position: "fixed",
+      top: rect.bottom + 4,
+      left: rect.left,
+      width: rect.width,
+      zIndex: 9999,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      measure();
+      window.addEventListener("scroll", measure, true);
+      window.addEventListener("resize", measure);
+      return () => {
+        window.removeEventListener("scroll", measure, true);
+        window.removeEventListener("resize", measure);
+      };
+    }
+  }, [open, measure]);
+
+  const handleToggle = () => {
+    if (!open) measure();
+    setOpen((p) => !p);
+  };
+
+  const handleSelect = (val: string) => {
+    if (!onChange) return;
+    const isSelected = value.includes(val);
+    if (isSelected) {
+      onChange(value.filter(v => v !== val));
+    } else {
+      onChange([...value, val]);
+    }
+  };
+
+  const trigger = (
+    <div
+      ref={containerRef}
+      onClick={handleToggle}
+      className={cn(
+        "relative flex items-center justify-between w-full rounded-md border px-2.5 py-1.5 text-xs cursor-pointer select-none transition-colors",
+        "bg-white hover:border-gray-400",
+        open ? "border-[#1d74f5] ring-1 ring-[#1d74f5]" : "border-gray-300",
+        error && "border-red-400 ring-1 ring-red-400",
+        className,
+      )}
+      {...props}
+    >
+      <span className={cn("truncate", selectedOptions.length === 0 && "text-gray-400")}>
+        {displayLabel}
+      </span>
+      <ChevronDown
+        className={cn(
+          "w-3.5 h-3.5 text-gray-500 shrink-0 transition-transform",
+          open && "rotate-180",
+        )}
+      />
+    </div>
+  );
+
+  return (
+    <>
+      {label ? <Field label={label} error={error}>{trigger}</Field> : trigger}
+
+      {open && createPortal(
+        <div id="multiselect-portal" style={dropdownStyle} className="bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-[240px] overflow-y-auto z-[9999] animate-in fade-in zoom-in-95 duration-150">
+          {options.length === 0 ? (
+            <div className="px-3 py-3 text-xs text-gray-400 text-center">No options</div>
+          ) : (
+            options.map((opt) => {
+              const isSelected = value.includes(opt.value);
+              return (
+                <div
+                  key={opt.value}
+                  onClick={() => handleSelect(opt.value)}
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors",
+                    isSelected
+                      ? "bg-[#1d74f5]/10 text-[#1d74f5] font-medium"
+                      : "text-gray-700 hover:bg-gray-50",
+                  )}
+                >
+                  <div className={cn(
+                    "w-3.5 h-3.5 rounded flex items-center justify-center border shrink-0 transition-colors",
+                    isSelected ? "bg-[#1d74f5] border-[#1d74f5]" : "border-gray-300 bg-white"
+                  )}>
+                    {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
+                  </div>
+                  <span className="truncate">{opt.label}</span>
+                </div>
+              );
+            })
           )}
         </div>,
         document.body,

@@ -20,9 +20,8 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
 import { Pagination } from "../components/Pagination";
-import { TextInput, Textarea, FormSelect } from "../components/FormFields";
+import { TextInput, Textarea, FormSelect, MultiSelect, Select } from "../components/FormFields";
 import { PageLoader } from "../components/PageLoader";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "../components/Card";
 import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { cn } from "../lib/utils";
 
@@ -36,12 +35,12 @@ function projectStatusBadge(project: any) {
   const wf = project.workflowStatus;
   const cls = wf === "Completed" ? "bg-green-50 text-green-700"
     : wf === "Active" ? "bg-blue-50 text-blue-700"
-    : wf === "Paused" ? "bg-amber-50 text-amber-700"
-    : "bg-gray-100 text-gray-400";
+      : wf === "Paused" ? "bg-amber-50 text-amber-700"
+        : "bg-gray-100 text-gray-400";
   const label = wf === "Completed" ? "已完成"
     : wf === "Active" ? "进行中"
-    : wf === "Paused" ? "已暂停"
-    : "未配置";
+      : wf === "Paused" ? "已暂停"
+        : "未配置";
   return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }
 
@@ -89,14 +88,16 @@ export function Projects() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [stepAssignments, setStepAssignments] = useState<Record<string, string>>({});
-  const [users, setUsers] = useState<any[]>([]);
+  const [stepVisibleTo, setStepVisibleTo] = useState<Record<string, string[]>>({});
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
+
+  const [users, setUsers] = useState<any[]>([]);
 
   // Fetch templates & users for workflow assignment
   useEffect(() => {
     if (!isModalOpen) { setCreateStep(1); setAssignmentError(null); return; }
-    api.get<Template[]>("/api/v1/workflow/templates").then((d) => setTemplates(Array.isArray(d) ? d : [])).catch(() => {});
-    api.get<any[]>("/api/v1/users/assignable").then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => {});
+    api.get<Template[]>("/api/v1/workflow/templates").then((d) => setTemplates(Array.isArray(d) ? d : [])).catch(() => { });
+    api.get<any[]>("/api/v1/users/assignable").then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => { });
   }, [isModalOpen]);
 
   // Resolve selected template steps
@@ -167,6 +168,7 @@ export function Projects() {
             assignedUserId: stepAssignments[s.name],
             canViewOtherSteps: true,
             canViewInternalCode: true,
+            visibleToUserIds: stepVisibleTo[s.name] || [],
           }));
 
         // For parallel children, also assign if specified
@@ -179,6 +181,7 @@ export function Projects() {
                   assignedUserId: stepAssignments[child],
                   canViewOtherSteps: false,
                   canViewInternalCode: false,
+                  visibleToUserIds: stepVisibleTo[child] || [],
                 });
               }
             }
@@ -198,6 +201,7 @@ export function Projects() {
       setNewProjectName("");
       setNewProjectDesc("");
       setStepAssignments({});
+      setStepVisibleTo({});
       setSelectedTemplateId(null);
       setCreateStep(1);
       setSearchQuery("");
@@ -278,62 +282,62 @@ export function Projects() {
         </div>
 
         <TableWrapper>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("project_name")}</TableHead>
-                  <TableHead>{t("pi")}</TableHead>
-                  <TableHead>{t("status")}</TableHead>
-                  <TableHead>{t("created")}</TableHead>
-                  {hasPermission("projects:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">{t("actions")}</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {projects.map((project) => (
-                  <TableRow key={project.id} className="cursor-pointer" onClick={() => navigate(`/projects/${project.id}`)}>
-                    <TableCell>
-                      <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">{project.name}</div>
-                      <div className="text-[13px] text-gray-500 truncate max-w-sm mt-1">{project.description}</div>
-                    </TableCell>
-                    <TableCell>{project.creator?.fullName || project.createdBy}</TableCell>
-                    <TableCell>
-                      {projectStatusBadge(project)}
-                    </TableCell>
-                    <TableCell>{format(new Date(project.createdAt), "MMM d, yyyy")}</TableCell>
-                    {hasPermission("projects:write") && (
-                      <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
-                        <div className="inline-flex items-center gap-3">
-                          <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]"><Edit3 className="w-4 h-4" /></Button>
-                          <Popconfirm
-                            title={t("delete_project_confirm", { name: project.name })}
-                            onConfirm={() => handleDeleteProject(project)}
-                            placement="top"
-                          >
-                            <Button variant="text" onClick={(e) => { e.stopPropagation(); }} className="!text-gray-400 hover:!text-red-600">
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </Popconfirm>
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-                {projects.length === 0 && (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={5} className="py-24">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
-                          <FileText className="w-5 h-5 text-gray-500" />
-                        </div>
-                        <h3 className="text-[15px] font-semibold text-gray-900 mb-1">{t("no_projects")}</h3>
-                        <p className="text-[13px] text-gray-500">Projects will appear here once created.</p>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("project_name")}</TableHead>
+                <TableHead>{t("pi")}</TableHead>
+                <TableHead>{t("status")}</TableHead>
+                <TableHead>{t("created")}</TableHead>
+                {hasPermission("projects:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">{t("actions")}</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {projects.map((project) => (
+                <TableRow key={project.id} className="cursor-pointer" onClick={() => navigate(`/projects/${project.id}`)}>
+                  <TableCell>
+                    <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">{project.name}</div>
+                    <div className="text-[13px] text-gray-500 truncate max-w-sm mt-1">{project.description || '\u00A0'}</div>
+                  </TableCell>
+                  <TableCell>{project.creator?.fullName || project.createdBy}</TableCell>
+                  <TableCell>
+                    {projectStatusBadge(project)}
+                  </TableCell>
+                  <TableCell>{format(new Date(project.createdAt), "MMM d, yyyy")}</TableCell>
+                  {hasPermission("projects:write") && (
+                    <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
+                      <div className="flex items-center justify-end gap-3">
+                        <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]"><Edit3 className="w-4 h-4" /></Button>
+                        <Popconfirm
+                          title={t("delete_project_confirm", { name: project.name })}
+                          onConfirm={() => handleDeleteProject(project)}
+                          placement="top"
+                        >
+                          <Button variant="text" onClick={(e) => { e.stopPropagation(); }} className="!text-gray-400 hover:!text-red-600">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </Popconfirm>
                       </div>
                     </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableWrapper>
+                  )}
+                </TableRow>
+              ))}
+              {projects.length === 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={5} className="py-24">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                        <FileText className="w-5 h-5 text-gray-500" />
+                      </div>
+                      <h3 className="text-[15px] font-semibold text-gray-900 mb-1">{t("no_projects")}</h3>
+                      <p className="text-[13px] text-gray-500">Projects will appear here once created.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableWrapper>
       </div>
 
       {totalItems > limit && (
@@ -424,8 +428,8 @@ export function Projects() {
                   <TableRow>
                     <TableHead className="w-10">#</TableHead>
                     <TableHead>{t("step", "Step")}</TableHead>
-                    <TableHead>{t("description")}</TableHead>
-                    <TableHead className="w-[200px]">{t("assignee", "Assignee")} <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="w-[180px]">{t("assignee", "Assignee")} <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="w-[180px]">{t("visible_to", "可见人员")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -444,19 +448,22 @@ export function Projects() {
                             <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
                             <TableCell className="font-medium text-gray-800">{step.label}</TableCell>
                             <TableCell>
-                              <span className="text-xs text-gray-400">{step.name}</span>
+                              <Select
+                                value={stepAssignments[step.name] || ""}
+                                onChange={(val) => setStepAssignments((prev) => ({ ...prev, [step.name]: val }))}
+                                options={users.map((u: any) => ({ value: u.id, label: u.fullName || u.username }))}
+                                placeholder={t("select_user", "Select user...")}
+                                className="min-w-[130px]!"
+                              />
                             </TableCell>
                             <TableCell>
-                              <FormSelect
-                                value={stepAssignments[step.name] || ""}
-                                onChange={(e) => setStepAssignments((prev) => ({ ...prev, [step.name]: e.target.value }))}
-                                className="min-w-[150px]!"
-                              >
-                                <option value="">{t("select_user", "Select user...")}</option>
-                                {users.map((u: any) => (
-                                  <option key={u.id} value={u.id}>{u.fullName || u.username}</option>
-                                ))}
-                              </FormSelect>
+                              <MultiSelect
+                                value={stepVisibleTo[step.name] || []}
+                                onChange={(values) => setStepVisibleTo((prev) => ({ ...prev, [step.name]: values }))}
+                                options={users.map((u: any) => ({ value: u.id, label: u.fullName || u.username }))}
+                                placeholder={t("select_user", "Select user...")}
+                                className="min-w-[130px]!"
+                              />
                             </TableCell>
                           </TableRow>
                         )];
@@ -467,11 +474,8 @@ export function Projects() {
                         <TableRow key={step.name} className="bg-amber-50/60">
                           <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
                           <TableCell className="font-medium text-amber-800">{step.label}</TableCell>
-                          <TableCell>
+                          <TableCell colSpan={2} className="text-center">
                             <span className="text-xs text-amber-600 font-medium">{t("parallel_group")}</span>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-xs text-gray-400">—</span>
                           </TableCell>
                         </TableRow>,
                         ...step.parallelChildren.map((child, ci) => (
@@ -481,19 +485,22 @@ export function Projects() {
                               {childLabel(child)}
                             </TableCell>
                             <TableCell>
-                              <span className="text-xs text-gray-400">{child}</span>
+                              <Select
+                                value={stepAssignments[child] || ""}
+                                onChange={(val) => setStepAssignments((prev) => ({ ...prev, [child]: val }))}
+                                options={users.map((u: any) => ({ value: u.id, label: u.fullName || u.username }))}
+                                placeholder={t("select_user", "Select user...")}
+                                className="min-w-[130px]!"
+                              />
                             </TableCell>
                             <TableCell>
-                              <FormSelect
-                                value={stepAssignments[child] || ""}
-                                onChange={(e) => setStepAssignments((prev) => ({ ...prev, [child]: e.target.value }))}
-                                className="min-w-[150px]!"
-                              >
-                                <option value="">{t("select_user")}</option>
-                                {users.map((u: any) => (
-                                  <option key={u.id} value={u.id}>{u.fullName || u.username}</option>
-                                ))}
-                              </FormSelect>
+                              <MultiSelect
+                                value={stepVisibleTo[child] || []}
+                                onChange={(values) => setStepVisibleTo((prev) => ({ ...prev, [child]: values }))}
+                                options={users.map((u: any) => ({ value: u.id, label: u.fullName || u.username }))}
+                                placeholder={t("select_user", "Select user...")}
+                                className="min-w-[130px]!"
+                              />
                             </TableCell>
                           </TableRow>
                         )),

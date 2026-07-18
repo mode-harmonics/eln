@@ -39,6 +39,9 @@ export class WorkflowStepAssignment {
   @Column({ name: 'canViewInternalCode', type: 'boolean', default: false, comment: '能否查看内部代码' })
   canViewInternalCode!: boolean;
 
+  @Column({ name: 'visibleToUserIds', type: 'jsonb', nullable: true, comment: '允许查看该步骤的其他人员ID列表' })
+  visibleToUserIds!: string[] | null;
+
   @Column({ name: 'isParallelGroup', type: 'boolean', default: false, comment: '是否为并行组节点(如testing)' })
   isParallelGroup!: boolean;
 

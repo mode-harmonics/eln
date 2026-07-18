@@ -3,7 +3,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import * as ExcelJS from 'exceljs';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { Attachment } from '../entities/attachment.entity';
 import { CalendarLife } from '../entities/calendar-life.entity';
@@ -218,10 +218,36 @@ export class DataService {
     // Also load existing DB rows when mode='merge' (separate upload calls).
     const processRows = rowsByTable['processData'];
     if (processRows && processRows.length > 0) {
-      // Load existing DB rows for cross-upload merge (先传化成→再传定容 scenario)
+      // 1. Fetch ALL ProcessData rows for this project so we can compute cross-step fields (mHold, etc.)
+      let allProjectProcessRows: Record<string, unknown>[] = [];
+      const exp = await this.dataSource.getRepository(Experiment).findOne({ where: { id: experimentId } });
+      if (exp) {
+        const projectExps = await this.dataSource.getRepository(Experiment).find({ where: { projectId: exp.projectId } });
+        const processExpIds = projectExps.filter(e => (e.metadata as any)?.assayType === 'ProcessData').map(e => e.id);
+        if (processExpIds.length > 0) {
+          allProjectProcessRows = await this.dataSource.getRepository(ProcessData).find({
+            where: { experimentId: In(processExpIds) }
+          }) as any;
+        }
+      }
+
+      // Build a map of aggregated project rows to help with derived calculation
+      const projectDataByCell = new Map<string, Record<string, unknown>>();
+      for (const row of allProjectProcessRows) {
+        const cellId = row['cellId'] as string;
+        if (!cellId) continue;
+        const existing = projectDataByCell.get(cellId) || {};
+        for (const [key, val] of Object.entries(row)) {
+          if (val != null && val !== '') existing[key] = val;
+        }
+        projectDataByCell.set(cellId, existing);
+      }
+
+      // 2. Load existing DB rows for the CURRENT experiment (for merge within this step)
       const existingProcessRows = mode === 'merge'
-        ? await this.dataSource.getRepository(ProcessData).find({ where: { experimentId } })
+        ? await this.dataSource.getRepository(ProcessData).find({ where: { experimentId } }) as any[]
         : [];
+
       const allRows = [...existingProcessRows, ...processRows];
 
       const merged = new Map<string, Record<string, unknown>>();
@@ -240,43 +266,49 @@ export class DataService {
           }
         }
       }
-      rowsByTable['processData'] = Array.from(merged.values());
 
-      // If we loaded existing DB rows, mark them for deletion in the transaction
-      // to avoid duplicate rows after saving the merged result.
       if (existingProcessRows.length > 0) {
         (rowsByTable as any)['__deleteProcessData'] = true;
       }
 
-      // Re-compute derived fields after merge (some now have both formation & grading data)
-      const n = (v: unknown): number | null => (v == null || v === '' ? null : Number(v));
-      for (const row of rowsByTable['processData']) {
-        const m0 = n(row.m0), m1 = n(row.m1), m2 = n(row.m2), m4 = n(row.m4);
-        const v0 = n(row.v0), v1 = n(row.v1);
-        const fq1 = n(row.fq1), fq2 = n(row.fq2);
-        const fu1 = n(row.fu1), fu2 = n(row.fu2);
-        const gqc1 = n(row.gqc1), gqd1 = n(row.gqd1);
+      // Re-compute derived fields for the merged rows using context from ALL project steps
+      const parseNum = (v: any) => (v == null || v === '') ? null : Number(v);
+      for (const p of merged.values()) {
+        const cellId = p['cellId'] as string;
+        const ctx = projectDataByCell.get(cellId) || {};
 
-        const mIn    = m1 != null && m0 != null ? m1 - m0 : null;
-        const mLoss  = m1 != null && m2 != null ? m1 - m2 : null;
-        const mHold  = m4 != null && m0 != null ? m4 - m0 : null;
-        const fq     = fq1 != null && fq2 != null ? fq1 + fq2 : null;
+        // Prefer value from current merged row, fallback to other steps in project
+        const getVal = (key: string) => p[key] != null && p[key] !== '' ? p[key] : ctx[key];
+
+        const m0 = parseNum(getVal('m0')), m1 = parseNum(getVal('m1')), m2 = parseNum(getVal('m2')), m4 = parseNum(getVal('m4'));
+        const v0 = parseNum(getVal('v0')), v1 = parseNum(getVal('v1'));
+        const fq1 = parseNum(getVal('fq1')), fq2 = parseNum(getVal('fq2'));
+        const fu1 = parseNum(getVal('fu1')), fu2 = parseNum(getVal('fu2'));
+        const gqc1 = parseNum(getVal('gqc1')), gqd1 = parseNum(getVal('gqd1'));
+
+        const mIn = m1 !== null && m0 !== null ? m1 - m0 : null;
+        const mLoss = m1 !== null && m2 !== null ? m1 - m2 : null;
+        const mHold = m4 !== null && m0 !== null ? m4 - m0 : null;
+        const fq = fq1 !== null && fq2 !== null ? fq1 + fq2 : null;
         const qdFirst = gqd1;
-        const fvg    = v1 != null && v0 != null && qdFirst != null && qdFirst !== 0 ? (v1 - v0) / qdFirst : null;
-        const ku     = fu1 != null && fu2 != null ? fu1 - fu2 : null;
-        const qcFirst = fq != null && gqc1 != null ? fq + gqc1 : null;
-        const ceFirst = qdFirst != null && qcFirst != null && qcFirst !== 0 ? (qdFirst / qcFirst) * 100 : null;
+        const fvg = v1 !== null && v0 !== null && qdFirst ? (v1 - v0) / qdFirst : null;
+        const ku = fu1 !== null && fu2 !== null ? fu1 - fu2 : null;
+        const qcFirst = fq !== null && gqc1 !== null ? fq + gqc1 : null;
+        const ceFirst = qdFirst !== null && qcFirst ? (qdFirst / qcFirst) * 100 : null;
 
-        row.mIn    = mIn    != null ? mIn.toFixed(6)    : null;
-        row.mLoss  = mLoss  != null ? mLoss.toFixed(6)  : null;
-        row.mHold  = mHold  != null ? mHold.toFixed(6)  : null;
-        row.fq     = fq     != null ? fq.toFixed(6)     : null;
-        row.qdFirst = qdFirst != null ? String(qdFirst) : null;
-        row.fvg    = fvg    != null ? fvg.toFixed(6)    : null;
-        row.ku     = ku     != null ? ku.toFixed(6)     : null;
-        row.qcFirst = qcFirst != null ? qcFirst.toFixed(6) : null;
-        row.ceFirst = ceFirst != null ? ceFirst.toFixed(6) : null;
+        p.mIn = mIn !== null ? String(mIn.toFixed(6)) : null;
+        p.mLoss = mLoss !== null ? String(mLoss.toFixed(6)) : null;
+        p.mHold = mHold !== null ? String(mHold.toFixed(6)) : null;
+        p.fq = fq !== null ? String(fq.toFixed(6)) : null;
+        p.qdFirst = qdFirst !== null ? String(qdFirst) : null;
+        p.fvg = fvg !== null ? String(fvg.toFixed(6)) : null;
+        p.ku = ku !== null ? String(ku.toFixed(6)) : null;
+        p.qcFirst = qcFirst !== null ? String(qcFirst.toFixed(6)) : null;
+        p.ceFirst = ceFirst !== null ? String(ceFirst.toFixed(6)) : null;
       }
+
+      // Deprecated block: calculations are now done in the merge loop above.
+      // This is kept empty to avoid git conflicts but the original logic was moved.
     }
 
     const rowsInsertedByTable: Record<string, number> = {};
@@ -348,27 +380,35 @@ export class DataService {
    * 5. Auto-assign groups by prefix matching
    */
   async autoPickCells(projectId: string, topN?: number): Promise<PickedCell[]> {
-    // Resolve the project's ProcessData experiment
     const exps = await this.dataSource.getRepository(Experiment).find({ where: { projectId } });
-    const processExp = exps.find((e) => (e.metadata as any)?.assayType === 'ProcessData') ?? null;
+    const processExpIds = exps.filter((e) => (e.metadata as any)?.assayType === 'ProcessData').map(e => e.id);
 
-    if (!processExp) {
+    if (processExpIds.length === 0) {
       throw new BadRequestException('No ProcessData experiment found for this project. Please import process data first.');
     }
 
     const processRows = await this.dataSource.getRepository(ProcessData).find({
-      where: { experimentId: processExp.id },
+      where: { experimentId: In(processExpIds) },
     });
 
+    // Merge them by cellId
+    const mergedRows = new Map<string, Record<string, unknown>>();
+    for (const row of processRows) {
+      if (!row.cellId) continue;
+      const existing = mergedRows.get(row.cellId) || {};
+      for (const [k, v] of Object.entries(row)) {
+        if (v != null && v !== '') existing[k] = v;
+      }
+      mergedRows.set(row.cellId, existing);
+    }
+
     // Build records from cells that have all four metrics
-    // QD1st = gqd1 (分容放电容量1), GR1 = gr1 (分容后电阻)
-    // FVG = (v1 - v0) / qdFirst (化成产气量), KU = fu1 - fu2 (老化电压降)
-    // If stored computed values are null, compute them on the fly from raw fields
     const records: { id: string; QD1st: number; GR1: number; FVG: number; KU: number }[] = [];
-    for (const r of processRows) {
+    for (const r of mergedRows.values()) {
       const qd1st = r.gqd1 != null ? Number(r.gqd1) : null;
       const gr1 = r.gr1 != null ? Number(r.gr1) : null;
-      if (qd1st == null || gr1 == null || !r.cellId) continue;
+      const cellId = r.cellId as string;
+      if (qd1st == null || gr1 == null || !cellId) continue;
 
       // FVG: use stored computed value, or compute from raw fields
       const fvg = r.fvg != null
@@ -381,7 +421,7 @@ export class DataService {
         : (r.fu1 != null && r.fu2 != null ? Number(r.fu1) - Number(r.fu2) : null);
 
       if (fvg != null && ku != null) {
-        records.push({ id: r.cellId, QD1st: qd1st, GR1: gr1, FVG: fvg, KU: ku });
+        records.push({ id: cellId, QD1st: qd1st, GR1: gr1, FVG: fvg, KU: ku });
       }
     }
 
@@ -508,8 +548,8 @@ export class DataService {
       for (const cellId of cellIds) {
         const extra: Record<string, unknown> =
           name === 'calendarLife' ? { dayCount: 0 } :
-          name === 'storageSwelling' ? { dayCount: 0 } :
-          name === 'htCycle' ? { cycle: 1 } : {};
+            name === 'storageSwelling' ? { dayCount: 0 } :
+              name === 'htCycle' ? { cycle: 1 } : {};
         await repo.save(
           repo.create({
             id: uuid(),
@@ -585,7 +625,7 @@ export class DataService {
     return this.dataSource.getRepository(Attachment).save(attachment);
   }
 
-  /** GET /data/:type/:expId �?returns all rows for the given table + experiment. */
+  /** GET /data/:type/:expId returns all rows for the given table + experiment. */
   async findByType(type: string, experimentId: string): Promise<unknown[]> {
     const EntityClass = TYPE_PARAM_TO_ENTITY[type];
     if (!EntityClass) {
@@ -595,7 +635,35 @@ export class DataService {
     }
 
     const repo = this.dataSource.getRepository(EntityClass);
-    return repo.find({ where: { experimentId } as Record<string, unknown> });
+
+    // Determine dynamic sort order to maintain row stability
+    const columns = repo.metadata.columns.map((c) => c.propertyName);
+    const order: Record<string, 'ASC' | 'DESC'> = {};
+
+    if (columns.includes('cellId')) {
+      order.cellId = 'ASC';
+    } else if (columns.includes('cellName')) {
+      order.cellName = 'ASC';
+    }
+
+    if (columns.includes('dayCount')) {
+      order.dayCount = 'ASC';
+    } else if (columns.includes('cycle')) {
+      order.cycle = 'ASC';
+    }
+
+    if (Object.keys(order).length === 0) {
+      if (columns.includes('createdAt')) {
+        order.createdAt = 'ASC';
+      } else {
+        order.id = 'ASC';
+      }
+    }
+
+    return repo.find({
+      where: { experimentId } as Record<string, unknown>,
+      order
+    });
   }
 
   /**
@@ -620,7 +688,7 @@ export class DataService {
     return { rows, groupMap };
   }
 
-  /** PUT /data/:type/:id �?update a single data row. */
+  /** PUT /data/:type/:id update a single data row. */
   async updateRow(type: string, id: string, body: Record<string, unknown>): Promise<unknown> {
     const EntityClass = TYPE_PARAM_TO_ENTITY[type];
     if (!EntityClass) {
@@ -654,6 +722,55 @@ export class DataService {
       }
     }
 
+    if (type === 'process') {
+      const p = row as any;
+      const cellId = p.cellId;
+
+      // Fetch all other ProcessData rows for this cellId in the project to compute derived fields
+      let ctx: Record<string, unknown> = {};
+      const exp = await this.dataSource.getRepository(Experiment).findOne({ where: { id: p.experimentId } });
+      if (exp) {
+        const projectExps = await this.dataSource.getRepository(Experiment).find({ where: { projectId: exp.projectId } });
+        const processExpIds = projectExps.filter(e => (e.metadata as any)?.assayType === 'ProcessData').map(e => e.id);
+        if (processExpIds.length > 0) {
+          const projectRows = await repo.find({ where: { cellId, experimentId: In(processExpIds) } as any });
+          for (const r of projectRows) {
+            for (const [k, v] of Object.entries(r)) {
+              if (v != null && v !== '') ctx[k] = v;
+            }
+          }
+        }
+      }
+
+      const getVal = (key: string) => p[key] != null && p[key] !== '' ? p[key] : ctx[key];
+      const n = (v: any) => (v == null || v === '') ? null : Number(v);
+      const m0 = n(getVal('m0')), m1 = n(getVal('m1')), m2 = n(getVal('m2')), m4 = n(getVal('m4'));
+      const v0 = n(getVal('v0')), v1 = n(getVal('v1'));
+      const fq1 = n(getVal('fq1')), fq2 = n(getVal('fq2'));
+      const fu1 = n(getVal('fu1')), fu2 = n(getVal('fu2'));
+      const gqc1 = n(getVal('gqc1')), gqd1 = n(getVal('gqd1'));
+
+      const mIn = m1 !== null && m0 !== null ? m1 - m0 : null;
+      const mLoss = m1 !== null && m2 !== null ? m1 - m2 : null;
+      const mHold = m4 !== null && m0 !== null ? m4 - m0 : null;
+      const fq = fq1 !== null && fq2 !== null ? fq1 + fq2 : null;
+      const qdFirst = gqd1;
+      const fvg = v1 !== null && v0 !== null && qdFirst ? (v1 - v0) / qdFirst : null;
+      const ku = fu1 !== null && fu2 !== null ? fu1 - fu2 : null;
+      const qcFirst = fq !== null && gqc1 !== null ? fq + gqc1 : null;
+      const ceFirst = qdFirst !== null && qcFirst ? (qdFirst / qcFirst) * 100 : null;
+
+      p.mIn = mIn !== null ? mIn.toFixed(6) : null;
+      p.mLoss = mLoss !== null ? mLoss.toFixed(6) : null;
+      p.mHold = mHold !== null ? mHold.toFixed(6) : null;
+      p.fq = fq !== null ? fq.toFixed(6) : null;
+      p.qdFirst = qdFirst !== null ? String(qdFirst) : null;
+      p.fvg = fvg !== null ? fvg.toFixed(6) : null;
+      p.ku = ku !== null ? ku.toFixed(6) : null;
+      p.qcFirst = qcFirst !== null ? qcFirst.toFixed(6) : null;
+      p.ceFirst = ceFirst !== null ? ceFirst.toFixed(6) : null;
+    }
+
     if (type === 'fastcharge' || type === 'fastCharge') {
       const fc = row as any;
       const c0 = parseFloat(fc.c0 || '3.0');
@@ -674,7 +791,7 @@ export class DataService {
     return repo.save(row);
   }
 
-  /** DELETE /data/:type/:id �?delete a single data row. */
+  /** DELETE /data/:type/:id delete a single data row. */
   async deleteRow(type: string, id: string): Promise<{ success: boolean }> {
     const EntityClass = TYPE_PARAM_TO_ENTITY[type];
     if (!EntityClass) {

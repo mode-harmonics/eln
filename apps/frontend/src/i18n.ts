@@ -799,7 +799,7 @@ const resources = {
       workflow_template: "流程模板",
       no_workflow: "此项目未配置工作流",
       current_task: "当前任务",
-      complete_step: "标记完成",
+      complete_step: "提交",
       step_completed: "步骤已完成！",
       step_pending: "待处理",
       step_in_progress: "进行中",

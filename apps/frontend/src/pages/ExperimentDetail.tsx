@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, useLoaderData } from "react-router-dom";
 import { format } from "date-fns";
-import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layers, AlertCircle, Plus, Paperclip, MessageSquare, Send, History, MoreHorizontal, UploadCloud, X } from "lucide-react";
+import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layers, AlertCircle, Plus, Paperclip, MessageSquare, Send, History, MoreHorizontal, UploadCloud, X, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   ProcessDataTable,
@@ -25,6 +25,7 @@ import remarkGfm from "remark-gfm";
 import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { cn } from "../lib/utils";
+
 import type { Experiment } from "../types";
 import { usePermissions } from "../hooks/usePermissions";
 import { Popconfirm } from "../components/Popconfirm";
@@ -36,6 +37,21 @@ interface ExperimentDetail extends Experiment {
 import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
 
 const ASSAY_TYPE_TO_PERMISSION = RECORD_TYPE_TO_API_TYPE;
+
+const STEP_NAME_MAP: Record<string, string> = {
+  experiment_design: "实验设计",
+  battery_selection: "电芯选取",
+  drying_injection: "干燥/注液",
+  formation: "化成",
+  second_sealing: "二封",
+  capacity_grading: "定容",
+  calendar_life: "日历寿命",
+  storage_swelling: "存储胀力",
+  energy_efficiency: "能量效率",
+  dcr_test: "DCR测试",
+  fast_charge: "快充测试",
+  ht_cycle: "高温循环"
+};
 
 export function ExperimentDetail() {
   const { t } = useTranslation();
@@ -217,6 +233,22 @@ export function ExperimentDetail() {
     }
   };
 
+  const [completingStep, setCompletingStep] = useState(false);
+
+  const handleCompleteStep = async () => {
+    if (!experiment?.projectId) return;
+    setCompletingStep(true);
+    try {
+      await api.put(`/api/v1/workflow/instances/${experiment.projectId}/transition`);
+      toast.success(t("step_completed_success", "当前工步已提交，进入下一步！"));
+      navigate(experiment.projectId ? `/projects/${experiment.projectId}?tab=experiments` : "/projects");
+    } catch (err: any) {
+      toast.error(err?.message ?? t("submit_failed", "提交失败"));
+    } finally {
+      setCompletingStep(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -244,8 +276,9 @@ export function ExperimentDetail() {
 
   // For ProcessData experiments, raw data has two sources: formation (化成) and grading (定容)
   const isProcessData = assayType === "ProcessData";
+  const showProcessRawToggles = isProcessData && (!experiment.workflowStepName || ["formation", "capacity_grading"].includes(experiment.workflowStepName));
   const isProcessRawData = isProcessData && ["formation", "capacity_grading"].includes(experiment.workflowStepName || "");
-  const [rawSource, setRawSource] = useState<"formation" | "grading">("formation");
+  const [rawSource, setRawSource] = useState<"formation" | "grading">(experiment.workflowStepName === "capacity_grading" ? "grading" : "formation");
   const [rawSteps, setRawSteps] = useState<any[]>([]);
   const [rawLoading, setRawLoading] = useState(false);
   const [rawLoaded, setRawLoaded] = useState<Record<string, boolean>>({});
@@ -258,7 +291,7 @@ export function ExperimentDetail() {
 
     let cancelled = false;
     setRawLoading(true);
-    const url = isProcessRawData
+    const url = (isProcessData && showProcessRawToggles)
       ? `/api/v1/data/raw/${experiment.id}?source=${rawSource}`
       : `/api/v1/data/raw/${experiment.id}`;
     api.get<any[]>(url)
@@ -274,6 +307,7 @@ export function ExperimentDetail() {
   }, [dataView, rawSource, rawLoaded, experiment, isProcessData]);
 
   // Upload Excel data entry
+  const [uploadDataType, setUploadDataType] = useState<'summary' | 'raw'>('summary');
   const [uploadDataOpen, setUploadDataOpen] = useState(false);
   const [uploadDataFiles, setUploadDataFiles] = useState<File[]>([]);
   const [uploadDataSubmitting, setUploadDataSubmitting] = useState(false);
@@ -283,11 +317,24 @@ export function ExperimentDetail() {
     if (!experiment || uploadDataFiles.length === 0) return;
     setUploadDataSubmitting(true);
     try {
-      const form = new FormData();
-      uploadDataFiles.forEach((file) => form.append("files", file));
-      form.append("experimentId", experiment.id);
-      form.append("mode", "merge");
-      await api.upload("/api/v1/data/upload", form);
+      if (uploadDataType === 'raw') {
+        await Promise.all(
+          uploadDataFiles.map(async (file) => {
+            const form = new FormData();
+            form.append("file", file);
+            await api.upload(`/api/v1/experiments/${experiment.id}/attachments`, form);
+          })
+        );
+        api.get<any[]>(`/api/v1/experiments/${experiment.id}/attachments`)
+          .then(res => setAttachments(Array.isArray(res) ? res : []))
+          .catch(() => {});
+      } else {
+        const form = new FormData();
+        uploadDataFiles.forEach((file) => form.append("files", file));
+        form.append("experimentId", experiment.id);
+        form.append("mode", "merge");
+        await api.upload("/api/v1/data/upload", form);
+      }
       toast(t("upload_success", "上传成功"), "success");
       setUploadDataOpen(false);
       setUploadDataFiles([]);
@@ -327,6 +374,7 @@ export function ExperimentDetail() {
             {assayType && (
               <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 shrink-0">
                 {t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
+                {experiment.workflowStepName && ` - ${t(`step_${experiment.workflowStepName}`, STEP_NAME_MAP[experiment.workflowStepName] || experiment.workflowStepName)}`}
               </span>
             )}
             <span className={cn(
@@ -347,6 +395,12 @@ export function ExperimentDetail() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {experiment.projectId && canWrite && (
+            <Button size="sm" variant="primary" onClick={handleCompleteStep} loading={completingStep} disabled={completingStep}>
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+              {t("complete_step", "提交")}
+            </Button>
+          )}
           {/* Quick drawer toggles */}
           <ButtonGroup
             items={[
@@ -446,7 +500,12 @@ export function ExperimentDetail() {
 
       {hasReadPermission ? (
         <div className="space-y-6">
-          <ExperimentChart assayType={assayType || "Unknown"} experimentId={experiment.id} projectId={experiment.projectId} />
+          <ExperimentChart 
+            assayType={assayType || "Unknown"} 
+            experimentId={experiment.id} 
+            projectId={experiment.projectId} 
+            title={experiment.workflowStepName ? `${t(RECORD_TYPE_TO_I18N_KEY[assayType || "Unknown"] || assayType)} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined} 
+          />
 
           {/* Data Section */}
           <div className="bg-white border border-gray-200 rounded-lg">
@@ -465,18 +524,22 @@ export function ExperimentDetail() {
                     <FileDigit className="w-3.5 h-3.5" />{t("tab_raw", "原始")}
                   </button>
                 </div>
-                {isProcessData && dataView === "raw" && (
+                {showProcessRawToggles && dataView === "raw" && (
                   <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 border border-gray-200/60 ml-2">
-                    <button onClick={() => { setRawSource("formation"); setRawLoaded({}); }}
-                      className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                        rawSource === "formation" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-                      {t("raw_formation", "化成数据")}
-                    </button>
-                    <button onClick={() => { setRawSource("grading"); setRawLoaded({}); }}
-                      className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                        rawSource === "grading" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-                      {t("raw_grading", "定容数据")}
-                    </button>
+                    {(!experiment.workflowStepName || experiment.workflowStepName === "formation") && (
+                      <button onClick={() => { setRawSource("formation"); setRawLoaded({}); }}
+                        className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                          rawSource === "formation" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
+                        {t("raw_formation", "化成数据")}
+                      </button>
+                    )}
+                    {(!experiment.workflowStepName || experiment.workflowStepName === "capacity_grading") && (
+                      <button onClick={() => { setRawSource("grading"); setRawLoaded({}); }}
+                        className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
+                          rawSource === "grading" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
+                        {t("raw_grading", "定容数据")}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -496,9 +559,16 @@ export function ExperimentDetail() {
                 <FileDigit className="w-8 h-8 mb-2 opacity-40" />
                 <p className="text-sm">
                   {isProcessData
-                    ? (rawSource === "formation" ? t("no_raw_data_formation", "暂无化成原始工步数据") : t("no_raw_data_grading", "暂无定容原始工步数据"))
+                    ? (experiment.workflowStepName === "drying_injection" 
+                        ? t("no_raw_data_drying", "暂无干燥/注液原始数据") 
+                        : experiment.workflowStepName === "second_sealing"
+                        ? t("no_raw_data_sealing", "暂无二封原始数据")
+                        : (rawSource === "formation" ? t("no_raw_data_formation", "暂无化成原始工步数据") : t("no_raw_data_grading", "暂无定容原始工步数据")))
                     : t("no_raw_data", "暂无原始工步数据")}
                 </p>
+                {(isProcessData && (experiment.workflowStepName === "drying_injection" || experiment.workflowStepName === "second_sealing")) && (
+                  <p className="text-xs text-gray-400 mt-2">{t("view_raw_data_attachments", "如果您上传了文件，请前往“附件”面板查看")}</p>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
@@ -604,15 +674,15 @@ export function ExperimentDetail() {
             onDrop={(e) => {
               e.preventDefault();
               if (e.dataTransfer.files) {
-                const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
+                const files = Array.from(e.dataTransfer.files).filter(f => uploadDataType === 'raw' || f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
                 if (files.length > 0) setUploadDataFiles((prev) => [...prev, ...files]);
               }
             }}
           >
             <UploadCloud className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-600 mb-1">{t("upload_drag_hint", "拖拽或点击选择 Excel 文件")}</p>
-            <p className="text-xs text-gray-400">{t("upload_supported_formats", "支持 .xlsx / .xls 格式，可同时选择多个文件")}</p>
-            <input type="file" accept=".xlsx,.xls" multiple className="hidden" ref={uploadInputRef}
+            <p className="text-sm font-medium text-gray-600 mb-1">{t("upload_drag_hint", "拖拽或点击选择文件")}</p>
+            <p className="text-xs text-gray-400">{uploadDataType === 'raw' ? t("upload_any", "支持任意格式的文件") : t("upload_supported_formats", "支持 .xlsx / .xls 格式，可同时选择多个文件")}</p>
+            <input type="file" accept={uploadDataType === 'raw' ? undefined : ".xlsx,.xls"} multiple className="hidden" ref={uploadInputRef}
               onChange={(e) => {
                 if (e.target.files && e.target.files.length > 0) {
                   const files = Array.from(e.target.files);

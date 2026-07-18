@@ -3,10 +3,8 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm'
 /**
  * pickedCell — 电池挑选记录表
  * Records which cells were selected (picked) for a project.
- * The picks are scoped to the project; only the project's
- * ProcessData experiment is used as the source for auto-pick.
- * After picking, syncCellsToTables creates placeholder rows in
- * all 6 non-ProcessData tables.
+ * Each picked cell is assigned to exactly one test type (testType).
+ * syncCellsToTables uses testType to route each cell to the correct table.
  */
 @Entity('pickedCell', { comment: '电池挑选记录表' })
 export class PickedCell {
@@ -24,6 +22,10 @@ export class PickedCell {
   /** 'auto' = system auto-pick, 'manual' = user manually selected */
   @Column({ type: 'varchar', length: 16, default: 'auto', comment: '挑选方式(auto/manual)' })
   pickedBy!: string;
+
+  /** Assigned test type for this cell (e.g. 'CalendarLife', 'FastCharge', etc.) */
+  @Column({ name: 'testType', type: 'varchar', length: 64, nullable: true, comment: '分配的测试类型' })
+  testType!: string | null;
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;

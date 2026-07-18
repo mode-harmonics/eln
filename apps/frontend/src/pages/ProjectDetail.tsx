@@ -104,12 +104,22 @@ export function ProjectDetail() {
   // Permission check for administrative "Force Complete" override
   const canForceComplete = hasPermission("workflow:force_complete") || hasPermission("workflow:*");
 
-  // ── User ID ──
+  const [users, setUsers] = useState<any[]>([]);
+
+  // ── User ID & Users ──
   useEffect(() => {
     const stored = localStorage.getItem("currentUserId");
-    if (stored) { setCurrentUserId(stored); return; }
-    api.get<any>("/api/v1/users/me").then((d) => { if (d?.id) { setCurrentUserId(d.id); localStorage.setItem("currentUserId", d.id); } }).catch(() => { });
+    if (stored) { setCurrentUserId(stored); }
+    else {
+      api.get<any>("/api/v1/users/me").then((d) => { if (d?.id) { setCurrentUserId(d.id); localStorage.setItem("currentUserId", d.id); } }).catch(() => { });
+    }
+    api.get<any[]>("/api/v1/users").then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
+
+  const getUserName = (userId: string) => {
+    const u = users.find((u) => u.id === userId);
+    return u ? (u.fullName || u.username) : `用户 #${userId.slice(0, 6)}`;
+  };
 
   const [isDesignSubmitted, setIsDesignSubmitted] = useState(false);
 
@@ -206,17 +216,44 @@ export function ProjectDetail() {
   useEffect(() => { if (!projectId) return; api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`).then((d) => setPickedCells((d || []).map((p: any) => p.cellId))).catch(() => { }); }, [projectId, refetchTrigger]);
   useEffect(() => { if (!projectId) return; api.get<CellGroup[]>(`/api/v1/projects/${projectId}/groups`).then(setGroups).catch(() => { }); }, [projectId]);
 
-  // Summary data fetch
+  // Summary / Raw data fetch — loads when either summary or raw_data tab is active
   useEffect(() => {
-    if (!projectId || activeTab !== "summary") return;
+    if (!projectId || (activeTab !== "summary" && activeTab !== "raw_data")) return;
     let cancelled = false;
     setDataLoading(true);
+    setLoadedTypes([]);
     api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`).then((allExps) => {
       if (cancelled || !Array.isArray(allExps)) return;
       const expIdsByType: Record<string, string[]> = {};
       for (const exp of allExps) { const at = exp.metadata?.assayType as string; if (at && RECORD_TYPE_TO_API_TYPE[at]) { if (!expIdsByType[at]) expIdsByType[at] = []; expIdsByType[at].push(exp.id); } }
       const setters: Record<string, any> = { ProcessData: ["process", setProcessData], CalendarLife: ["calendar", setCalendarLife], StorageSwelling: ["swelling", setStorageSwelling], EnergyEfficiency: ["efficiency", setEnergyEfficiency], DcrTest: ["dcr", setDcrTest], FastCharge: ["fastcharge", setFastCharge], HtCycle: ["htcycle", setHtCycle] };
-      const tasks = Object.entries(setters).map(([at, [apiType, setter]]) => { const ids = expIdsByType[at] || []; if (!ids.length) { setter([]); setLoadedTypes((p) => [...p, apiType]); return; } return Promise.all(ids.map((eid: string) => api.get<any[]>(`/api/v1/data/${apiType}/${eid}`).catch(() => []))).then((rs) => { if (!cancelled) { setter(rs.flat()); setLoadedTypes((p) => [...p, apiType]); } }); });
+      const tasks = Object.entries(setters).map(([at, [apiType, setter]]) => {
+        const ids = expIdsByType[at] || [];
+        if (!ids.length) { setter([]); setLoadedTypes((p) => [...p, apiType]); return; }
+        return Promise.all(ids.map((eid: string) => api.get<any[]>(`/api/v1/data/${apiType}/${eid}`).catch(() => []))).then((rs) => {
+          if (!cancelled) {
+            let rows = rs.flat();
+            // Deduplicate ProcessData by cellId (multiple experiments may share the same cellId)
+            if (at === "ProcessData") {
+              const seen = new Map<string, any>();
+              for (const row of rows) {
+                const key = row.cellId || row.id;
+                if (!seen.has(key)) seen.set(key, row);
+                else {
+                  // Merge non-null fields from later rows
+                  const existing = seen.get(key);
+                  for (const [k, v] of Object.entries(row)) {
+                    if (v != null && v !== '' && (existing[k] == null || existing[k] === '')) existing[k] = v;
+                  }
+                }
+              }
+              rows = Array.from(seen.values());
+            }
+            setter(rows);
+            setLoadedTypes((p) => [...p, apiType]);
+          }
+        });
+      });
       Promise.all(tasks.filter(Boolean)).finally(() => { if (!cancelled) setDataLoading(false); });
     }).catch(() => { });
     return () => { cancelled = true; };
@@ -342,7 +379,7 @@ export function ProjectDetail() {
                           </div>
                           {step.assignedUserId && (
                             <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
-                              <User className="w-3 h-3 text-gray-400" /> 负责人: 用户 #{step.assignedUserId.slice(0, 6)}
+                              <User className="w-3 h-3 text-gray-400" /> 负责人: {getUserName(step.assignedUserId)}
                             </p>
                           )}
                         </div>
@@ -404,7 +441,7 @@ export function ProjectDetail() {
                                   </span>
                                   {child.assignedUserId && (
                                     <p className={cn("text-[11px] mt-0.5 flex items-center gap-1", isChildPending ? "text-gray-300" : "text-gray-400")}>
-                                      <User className="w-3 h-3" /> 负责人: 用户 #{child.assignedUserId.slice(0, 6)}
+                                      <User className="w-3 h-3" /> 负责人: {getUserName(child.assignedUserId)}
                                     </p>
                                   )}
                                 </div>

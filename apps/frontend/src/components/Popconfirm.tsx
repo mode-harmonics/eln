@@ -130,7 +130,7 @@ export function Popconfirm({
   });
 
   return (
-    <div className="relative inline-block" ref={containerRef}>
+    <div className="relative inline-flex items-center" ref={containerRef}>
       {trigger}
       {open && createPortal(
         <div

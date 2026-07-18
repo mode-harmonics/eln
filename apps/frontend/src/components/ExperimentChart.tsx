@@ -27,6 +27,7 @@ interface ExperimentChartProps {
   assayType: string;
   experimentId?: string;
   projectId?: string;
+  title?: string;
   groupMap?: Record<string, GroupAssignment>;
 }
 
@@ -377,7 +378,7 @@ function EmptyChart() {
 
 /* ── main component ───────────────────────────────────── */
 
-export function ExperimentChart({ assayType, experimentId, projectId, groupMap: groupMapProp }: ExperimentChartProps) {
+export function ExperimentChart({ assayType, experimentId, projectId, title, groupMap: groupMapProp }: ExperimentChartProps) {
   const [data, setData] = useState<any[]>([]);
   const [groupMap, setGroupMap] = useState<Record<string, GroupAssignment> | undefined>(groupMapProp);
 
@@ -434,10 +435,10 @@ export function ExperimentChart({ assayType, experimentId, projectId, groupMap: 
 
   const { t } = useTranslation();
 
-  const displayName = t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType);
+  const displayName = title || t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType);
 
   return (
-    <div className="bg-white border border-gray-200 rounded shadow-sm p-5 h-72 w-full">
+    <div className="bg-white border border-gray-200 rounded p-5 h-72 w-full">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-900">
           {displayName}
