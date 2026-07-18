@@ -950,7 +950,7 @@ export class DataService {
       const cellId = p.cellId;
 
       // Fetch all other ProcessData rows for this cellId in the project to compute derived fields
-      let ctx: Record<string, unknown> = {};
+      const ctx: Record<string, unknown> = {};
       const projectRows = await this.getProjectRows(p.experimentId, 'ProcessData', ProcessData, { cellId });
       for (const r of projectRows) {
         for (const [k, v] of Object.entries(r)) {

@@ -339,7 +339,7 @@ export function ExperimentDetail() {
 
   const renderTable = () => {
     switch (assayType) {
-      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName} />;
+      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} />;
       case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} />;
       case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} />;
       case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} />;

@@ -434,7 +434,7 @@ export function ProjectDetail() {
                                   child.status === "completed" ? "bg-green-100/50 text-green-600" :
                                     child.status === "in_progress" ? "bg-blue-100/50 text-blue-600" : "bg-white text-gray-400 border border-gray-200"
                                 )}>
-                                  {React.isValidElement(cm.icon) ? React.cloneElement(cm.icon as React.ReactElement, { className: "w-3 h-3" }) : cm.icon}
+                                  {React.isValidElement(cm.icon) ? React.cloneElement(cm.icon as React.ReactElement<{ className?: string }>, { className: "w-3 h-3" }) : cm.icon}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <span className={cn("text-[13px] block", child.status === "completed" ? "text-gray-900" : child.status === "in_progress" ? "text-blue-600 font-medium" : "text-gray-600")}>
@@ -518,7 +518,6 @@ export function ProjectDetail() {
                       <div className="pt-2">
                         <Popconfirm
                           title="确定要强制标记此步骤为完成吗？"
-                          description="此特权操作不可撤销。"
                           onConfirm={handleTransition}
                           placement="top"
                         >
