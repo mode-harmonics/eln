@@ -188,6 +188,7 @@ export function Users() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t("name")}</TableHead>
+                  <TableHead>{t("username")}</TableHead>
                   <TableHead>{t("email")}</TableHead>
                   <TableHead>{t("role")}</TableHead>
                   <TableHead>{t("status")}</TableHead>
@@ -196,17 +197,22 @@ export function Users() {
               </TableHeader>
               <TableBody>
                 {users.map((user) => {
-                  const initials = user.fullName ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase() : "U";
+                  const initial = user.fullName ? user.fullName.charAt(0).toUpperCase() : "U";
                   return (
                     <TableRow key={user.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold border border-blue-200">
-                            {initials}
+                            {initial}
                           </div>
                           <div className="text-[13px] font-medium text-gray-900">
                             {user.fullName}
                           </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-[13px] text-gray-700 font-mono">
+                          {user.username}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -253,7 +259,7 @@ export function Users() {
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {users.map((user) => {
-              const initials = user.fullName ? user.fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase() : "U";
+              const initial = user.fullName ? user.fullName.charAt(0).toUpperCase() : "U";
               return (
                 <Card key={user.id} className="flex flex-col items-center text-center relative group p-6 border-gray-200 hover:border-gray-300">
                   {hasPermission("users:write") && (
@@ -273,12 +279,15 @@ export function Users() {
                     </div>
                   )}
                   <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold border border-blue-200">
-                    {initials}
+                    {initial}
                   </div>
                   <h3 className="font-semibold text-[17px] text-gray-900">
                     {user.fullName}
                   </h3>
-                  <p className="text-[13px] text-gray-500 mt-1 mb-4">
+                  <p className="text-[12px] text-gray-400 font-mono mt-0.5">
+                    @{user.username}
+                  </p>
+                  <p className="text-[13px] text-gray-500 mt-2 mb-4">
                     {user.email}
                   </p>
 

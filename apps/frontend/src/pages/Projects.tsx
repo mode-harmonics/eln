@@ -16,6 +16,20 @@ function childLabel(name: string): string {
   return map[name] || name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Maps step names to i18n keys for template step labels
+function stepLabelKey(stepName: string): string {
+  const map: Record<string, string> = {
+    experiment_design: "step_experiment_design",
+    drying_injection: "step_drying_injection",
+    formation: "step_formation",
+    second_sealing: "step_second_sealing",
+    capacity_grading: "step_capacity_grading",
+    battery_selection: "step_battery_selection",
+    testing: "step_testing",
+  };
+  return map[stepName] || `step_${stepName}`;
+}
+
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
@@ -139,7 +153,7 @@ export function Projects() {
     for (const step of selectedTemplateSteps) {
       if (step.isParallel && step.parallelChildren?.length) {
         for (const child of step.parallelChildren) {
-          if (!stepAssignments[child]) missing.push(childLabel(child));
+          if (!stepAssignments[child]) missing.push(t(child, childLabel(child)));
         }
       } else {
         if (!stepAssignments[step.name]) missing.push(step.label);
@@ -446,7 +460,7 @@ export function Projects() {
                         return [(
                           <TableRow key={step.name}>
                             <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
-                            <TableCell className="font-medium text-gray-800">{step.label}</TableCell>
+                            <TableCell className="font-medium text-gray-800">{t(stepLabelKey(step.name), step.label)}</TableCell>
                             <TableCell>
                               <Select
                                 value={stepAssignments[step.name] || ""}
@@ -473,7 +487,7 @@ export function Projects() {
                       return [
                         <TableRow key={step.name} className="bg-amber-50/60">
                           <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
-                          <TableCell className="font-medium text-amber-800">{step.label}</TableCell>
+                          <TableCell className="font-medium text-amber-800">{t(stepLabelKey(step.name), step.label)}</TableCell>
                           <TableCell colSpan={2} className="text-center">
                             <span className="text-xs text-amber-600 font-medium">{t("parallel_group")}</span>
                           </TableCell>
@@ -482,7 +496,7 @@ export function Projects() {
                           <TableRow key={child} className="bg-amber-50/30">
                             <TableCell className="text-gray-300 text-xs">{i + 1}.{ci + 1}</TableCell>
                             <TableCell className="text-sm text-gray-700 pl-8">
-                              {childLabel(child)}
+                              {t(child, childLabel(child))}
                             </TableCell>
                             <TableCell>
                               <Select
