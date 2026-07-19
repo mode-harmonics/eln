@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
@@ -7,6 +7,8 @@ import { ExperimentCollaborator } from '../entities/experiment-collaborator.enti
 import { Project } from '../entities/project.entity';
 import { Attachment } from '../entities/attachment.entity';
 import { PickedCell } from '../entities/picked-cell.entity';
+import { WorkflowInstance } from '../entities/workflow-instance.entity';
+import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 import { CreateExperimentDto } from '../experiments/dto';
 import { GroupsService } from '../groups/groups.service';
@@ -29,18 +31,25 @@ export class ProjectsService {
     limit?: number,
     search?: string,
   ): Promise<{ items: Project[]; total?: number } | Project[]> {
+    // Sub-query: experiments where user is a collaborator
+    const collabSubQuery = this.projectsRepo.manager
+      .createQueryBuilder(Experiment, 'experiment')
+      .select('experiment.projectId')
+      .innerJoin(ExperimentCollaborator, 'collaborator', 'collaborator.experimentId = experiment.id')
+      .where('collaborator.userId = :userId');
+
+    // Sub-query: workflow instances where user is assigned a step
+    const wfSubQuery = this.projectsRepo.manager
+      .createQueryBuilder(WorkflowInstance, 'wi')
+      .select('wi.projectId')
+      .innerJoin(WorkflowStepAssignment, 'wsa', 'wsa.workflowInstanceId = wi.id')
+      .where('wsa.assignedUserId = :userId');
+
     const query = this.projectsRepo
       .createQueryBuilder('project')
       .leftJoinAndSelect('project.creator', 'creator')
       .where(
-        '(project.createdBy = :userId OR project.id IN (' +
-          this.projectsRepo.manager
-            .createQueryBuilder(Experiment, 'experiment')
-            .select('experiment.projectId')
-            .innerJoin(ExperimentCollaborator, 'collaborator', 'collaborator.experimentId = experiment.id')
-            .where('collaborator.userId = :userId')
-            .getQuery() +
-        '))',
+        '(project.createdBy = :userId OR project.id IN (' + collabSubQuery.getQuery() + ') OR project.id IN (' + wfSubQuery.getQuery() + '))',
         { userId },
       );
 
@@ -65,13 +74,52 @@ export class ProjectsService {
     return items;
   }
 
-  async findOne(id: string): Promise<Project> {
+  async findOne(id: string, userId?: string): Promise<Project> {
     const project = await this.projectsRepo.findOne({
       where: { id },
       relations: ['creator'],
     });
     if (!project) throw new NotFoundException('Project not found.');
+    // If a userId is provided, check visibility
+    if (userId && !(await this.isVisibleToUser(id, userId))) {
+      throw new ForbiddenException('You do not have access to this project.');
+    }
     return project;
+  }
+
+  /**
+   * Checks whether a user can see a project (creator, collaborator, or workflow assignee).
+   */
+  private async isVisibleToUser(projectId: string, userId: string): Promise<boolean> {
+    // Creator can always see
+    const project = await this.projectsRepo.findOne({ where: { id: projectId } });
+    if (!project) return false;
+    if (project.createdBy === userId) return true;
+
+    // Check experiment collaborator
+    const collabCount = await this.collaboratorsRepo.count({
+      where: { userId } as any,
+    });
+    if (collabCount > 0) {
+      const expWithCollab = await this.projectsRepo.manager
+        .createQueryBuilder(Experiment, 'experiment')
+        .innerJoin(ExperimentCollaborator, 'collaborator', 'collaborator.experimentId = experiment.id')
+        .where('experiment.projectId = :projectId', { projectId })
+        .andWhere('collaborator.userId = :userId', { userId })
+        .getCount();
+      if (expWithCollab > 0) return true;
+    }
+
+    // Check workflow step assignment
+    const wfCount = await this.projectsRepo.manager
+      .createQueryBuilder(WorkflowInstance, 'wi')
+      .innerJoin(WorkflowStepAssignment, 'wsa', 'wsa.workflowInstanceId = wi.id')
+      .where('wi.projectId = :projectId', { projectId })
+      .andWhere('wsa.assignedUserId = :userId', { userId })
+      .getCount();
+    if (wfCount > 0) return true;
+
+    return false;
   }
 
   async findExperiments(

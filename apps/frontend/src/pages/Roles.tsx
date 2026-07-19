@@ -495,7 +495,6 @@ export function Roles() {
                 {dataGroup()}
                 {permRow("workflow", "工作流")}
                 {specialActionRow("workflow", "transition", "提交步骤 (Transition)")}
-                {specialActionRow("workflow", "force_complete", "强制完成 (Force Complete)")}
                 {permRow("users", t("user_management"))}
                 {permRow("roles", t("role_management"))}
               </TableBody>

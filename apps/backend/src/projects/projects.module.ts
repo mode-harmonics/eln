@@ -5,12 +5,14 @@ import { ExperimentCollaborator } from '../entities/experiment-collaborator.enti
 import { Project } from '../entities/project.entity';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
+import { WorkflowInstance } from '../entities/workflow-instance.entity';
+import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
 
 import { GroupsModule } from '../groups/groups.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Project, Experiment, ExperimentCollaborator]),
+    TypeOrmModule.forFeature([Project, Experiment, ExperimentCollaborator, WorkflowInstance, WorkflowStepAssignment]),
     GroupsModule,
   ],
   controllers: [ProjectsController],

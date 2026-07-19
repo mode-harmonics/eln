@@ -72,21 +72,21 @@ export class WorkflowController {
   }
 
   @Get('workflow/instances/:projectId')
-  @RequirePermission('workflow:read')
-  @ApiOperation({ summary: 'Get workflow instance + all steps for a project' })
-  async getInstance(@Param('projectId') projectId: string) {
-    return { success: true, data: await this.workflowService.findByProject(projectId) };
+  @RequirePermission('projects:read')
+  @ApiOperation({ summary: 'Get workflow instance + steps visible to current user for a project' })
+  async getInstance(@Param('projectId') projectId: string, @CurrentUser('id') userId: string) {
+    return { success: true, data: await this.workflowService.findByProject(projectId, userId) };
   }
 
   @Get('workflow/instances/:projectId/steps')
-  @RequirePermission('workflow:read')
+  @RequirePermission('projects:read')
   @ApiOperation({ summary: 'Get all step assignments for a project' })
   async getSteps(@Param('projectId') projectId: string) {
     return { success: true, data: await this.workflowService.getSteps(projectId) };
   }
 
   @Put('workflow/instances/:projectId/transition')
-  @RequirePermission('workflow:write')
+  @RequirePermission('workflow:transition')
   @ApiOperation({
     summary: 'Complete current step and advance workflow to next step(s)',
     description: 'The current user must be assigned to the current step. For parallel groups, all children must complete before advancing past the group.',

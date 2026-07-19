@@ -32,8 +32,8 @@ export class ProjectsController {
   @Get(':id')
   @RequirePermission('projects:read')
   @ApiOperation({ summary: 'Get a single project by ID.' })
-  async findOne(@Param('id') id: string) {
-    return this.projectsService.findOne(id);
+  async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.projectsService.findOne(id, user.id);
   }
 
   @Get(':id/experiments')

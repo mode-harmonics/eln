@@ -101,9 +101,6 @@ export function ProjectDetail() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [cellPickerOpen, setCellPickerOpen] = useState(false);
 
-  // Permission check for administrative "Force Complete" override
-  const canForceComplete = hasPermission("workflow:force_complete") || hasPermission("workflow:*");
-
   const [users, setUsers] = useState<any[]>([]);
 
   // ── User ID & Users ──
@@ -511,22 +508,6 @@ export function ProjectDetail() {
                         <Layers className="w-4 h-4" />
                         挑选实验电芯 ({pickedCells.length})
                       </Button>
-                    )}
-
-                    {/* Force complete button (Admin / Owner privilege only) */}
-                    {canForceComplete && (
-                      <div className="pt-2">
-                        <Popconfirm
-                          title="确定要强制标记此步骤为完成吗？"
-                          onConfirm={handleTransition}
-                          placement="top"
-                        >
-                          <Button variant="danger" size="sm" loading={transitioning} className="w-full justify-center text-xs">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            管理员: 强制完成
-                          </Button>
-                        </Popconfirm>
-                      </div>
                     )}
                   </div>
                 </div>

@@ -21,14 +21,14 @@ const ROLE_DEFS: Array<{ name: string; permissionList: string[] }> = [
     name: 'Owner',
     permissionList: [
       'projects:*', 'experiments:*', 'data:*', 'users:*', 'roles:*',
-      'workflow:*', 'workflow:force_complete', 'workflow_template:*', 'experiment_design:*', 'procurement:*',
+      'workflow:*', 'workflow_template:*', 'experiment_design:*', 'procurement:*',
     ],
   },
   {
     name: 'Admin',
     permissionList: [
       'projects:read', 'projects:write', 'experiments:*', 'data:*', 'users:read',
-      'workflow:*', 'workflow:force_complete', 'experiment_design:*', 'procurement:*',
+      'workflow:*', 'experiment_design:*', 'procurement:*',
     ],
   },
   {
@@ -36,7 +36,7 @@ const ROLE_DEFS: Array<{ name: string; permissionList: string[] }> = [
     permissionList: [
       'projects:read', 'experiments:read', 'experiments:write',
       'data:read', 'data:write',
-      'workflow:transition',
+      'workflow:read', 'workflow:transition',
       'experiment_design:read', 'experiment_design:write',
       'procurement:read', 'procurement:write',
     ],
@@ -111,6 +111,42 @@ async function seed(): Promise<void> {
       }),
     );
     console.log('Created demo user: editor / Password123!');
+  }
+
+  // Admin user
+  const adminPasswordHash = await bcrypt.hash('Password123!', 10);
+  const existingAdmin = await usersRepo.findOne({ where: { email: 'admin@eln.local' } });
+  if (!existingAdmin) {
+    await usersRepo.save(
+      usersRepo.create({
+        id: uuid(),
+        username: 'admin',
+        email: 'admin@eln.local',
+        passwordHash: adminPasswordHash,
+        fullName: 'Carol Wang (Admin)',
+        roleId: roleByName.get('Admin')!.id,
+        isActive: true,
+      }),
+    );
+    console.log('Created demo user: admin / Password123!');
+  }
+
+  // Viewer user
+  const viewerPasswordHash = await bcrypt.hash('Password123!', 10);
+  const existingViewer = await usersRepo.findOne({ where: { email: 'viewer@eln.local' } });
+  if (!existingViewer) {
+    await usersRepo.save(
+      usersRepo.create({
+        id: uuid(),
+        username: 'viewer',
+        email: 'viewer@eln.local',
+        passwordHash: viewerPasswordHash,
+        fullName: 'David Lee (Viewer)',
+        roleId: roleByName.get('Viewer')!.id,
+        isActive: true,
+      }),
+    );
+    console.log('Created demo user: viewer / Password123!');
   }
 
   // --- 3. Sample project ---

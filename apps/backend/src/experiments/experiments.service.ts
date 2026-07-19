@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
@@ -9,6 +9,9 @@ import { ExperimentCollaborator } from '../entities/experiment-collaborator.enti
 import { Experiment } from '../entities/experiment.entity';
 import { VersionHistory } from '../entities/version-history.entity';
 import { ExperimentComment } from '../entities/experiment-comment.entity';
+import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
+import { WorkflowInstance } from '../entities/workflow-instance.entity';
+import { Project } from '../entities/project.entity';
 import { ProcessData } from '../entities/process-data.entity';
 import { CalendarLife } from '../entities/calendar-life.entity';
 import { StorageSwelling } from '../entities/storage-swelling.entity';
@@ -36,14 +39,23 @@ export class ExperimentsService {
     private readonly versionHistoryRepo: Repository<VersionHistory>,
     @InjectRepository(ExperimentComment)
     private readonly commentsRepo: Repository<ExperimentComment>,
+    @InjectRepository(WorkflowStepAssignment)
+    private readonly assignmentRepo: Repository<WorkflowStepAssignment>,
+    @InjectRepository(WorkflowInstance)
+    private readonly instanceRepo: Repository<WorkflowInstance>,
     private readonly notificationsService: NotificationsService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
-  async findDetail(id: string): Promise<ExperimentDetail> {
+  async findDetail(id: string, userId?: string): Promise<ExperimentDetail> {
     const experiment = await this.experimentsRepo.findOne({ where: { id } });
     if (!experiment) {
       throw new NotFoundException('Experiment not found.');
+    }
+
+    // If experiment is linked to a workflow step, check user has access
+    if (userId && experiment.workflowStepName) {
+      await this.assertCanAccessStep(experiment.projectId, experiment.workflowStepName, userId);
     }
 
     const [attachments, collaborators] = await Promise.all([
@@ -52,6 +64,36 @@ export class ExperimentsService {
     ]);
 
     return { ...experiment, attachments, collaborators };
+  }
+
+  /**
+   * Check if a user can view a specific workflow step's experiment.
+   * Creator + assigned user + users in visibleToUserIds can access.
+   */
+  private async assertCanAccessStep(projectId: string, stepName: string, userId: string): Promise<void> {
+    // Project creator can always access
+    const project = await this.dataSource.getRepository(Project).findOne({ where: { id: projectId } });
+    if (project && project.createdBy === userId) return;
+
+    // Check workflow step assignment
+    const instance = await this.instanceRepo.findOne({ where: { projectId } });
+    if (!instance) return; // No workflow — allow
+
+    const assignment = await this.assignmentRepo.findOne({
+      where: { workflowInstanceId: instance.id, stepName },
+    });
+
+    if (!assignment) return; // No assignment record — allow
+
+    // User is assigned, or has canViewOtherSteps, or is in visibleToUserIds
+    const canAccess =
+      assignment.assignedUserId === userId ||
+      (assignment.visibleToUserIds && assignment.visibleToUserIds.includes(userId));
+    // Only check for the step being specifically assigned; canViewOtherSteps is handled at the workflow level
+
+    if (!canAccess) {
+      throw new ForbiddenException('您没有权限查看此实验');
+    }
   }
 
   /**

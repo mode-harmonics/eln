@@ -6,20 +6,28 @@ import { api, ApiError } from "../lib/api";
 
 export function Login() {
   const navigate = useNavigate();
-  const [username, setUsername] = useState("pi");
-  const [password, setPassword] = useState("Password123!");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!username.trim() || !password.trim()) {
+      setError("请输入用户名和密码");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const data = await api.post<{ accessToken: string }>("/api/v1/auth/login", { username, password });
+      const data = await api.post<any>("/api/v1/auth/login", { username, password });
       localStorage.setItem("token", data.accessToken);
       localStorage.setItem("auth", "true");
-      localStorage.removeItem("permissionList");
+      if (data.permissionList) {
+        localStorage.setItem("permissionList", JSON.stringify(data.permissionList));
+      } else {
+        localStorage.removeItem("permissionList");
+      }
       window.dispatchEvent(new Event("permissionsChanged"));
       navigate("/projects");
     } catch (err) {

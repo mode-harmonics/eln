@@ -19,8 +19,8 @@ export class ExperimentsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get experiment detail including attachments and collaborators.' })
-  async findOne(@Param('id') id: string) {
-    return this.experimentsService.findDetail(id);
+  async findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.experimentsService.findDetail(id, userId);
   }
 
   @Put(':id')

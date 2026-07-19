@@ -9,6 +9,7 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 
 export interface LoginResult {
   accessToken: string;
+  permissionList: string[];
   user: {
     id: string;
     username: string;
@@ -61,6 +62,7 @@ export class AuthService {
 
     return {
       accessToken: this.jwtService.sign(payload),
+      permissionList: role?.permissionList ?? [],
       user: {
         id: user.id,
         username: user.username,

@@ -230,16 +230,46 @@ export class WorkflowService {
   //  QUERIES
   // ════════════════════════════════════════════════════════════════
 
-  async findByProject(projectId: string): Promise<{
+  async findByProject(projectId: string, userId?: string): Promise<{
     instance: WorkflowInstance | null;
     steps: WorkflowStepAssignment[];
   }> {
     const instance = await this.instanceRepo.findOne({ where: { projectId } });
     if (!instance) return { instance: null, steps: [] };
-    const steps = await this.assignmentRepo.find({
+    let steps = await this.assignmentRepo.find({
       where: { workflowInstanceId: instance.id },
       order: { stepIndex: 'ASC' },
     });
+
+    // Filter by user visibility if userId is provided
+    if (userId) {
+      const project = await this.projectRepo.findOne({ where: { id: projectId } });
+      const isCreator = project?.createdBy === userId;
+
+      if (!isCreator) {
+        // Get user's assignments
+        const userAssignmentNames = new Set(
+          steps.filter((s) => s.assignedUserId === userId).map((s) => s.stepName),
+        );
+        // Get user's visible steps
+        const visibleByPerm = steps.filter(
+          (s) => s.visibleToUserIds && s.visibleToUserIds.includes(userId),
+        ).map((s) => s.stepName);
+        const canSeeAll = steps.some(
+          (s) => s.assignedUserId === userId && s.canViewOtherSteps,
+        );
+
+        if (canSeeAll) {
+          // User can see all steps (e.g. PI/Admin role assigned)
+          return { instance, steps };
+        }
+
+        // Filter: only steps user is assigned to OR explicitly granted visibility
+        const allowed = new Set([...userAssignmentNames, ...visibleByPerm]);
+        steps = steps.filter((s) => allowed.has(s.stepName) || s.isParallelGroup);
+      }
+    }
+
     return { instance, steps };
   }
 
