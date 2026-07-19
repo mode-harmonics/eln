@@ -17,11 +17,12 @@ import { CellPicker } from "../components/CellPicker";
 import { Popconfirm } from "../components/Popconfirm";
 import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
+import { STEP_ASSAY_MAP, getChildStepLabel } from "@eln/shared";
+import { RECORD_TYPE_TO_API_TYPE } from "../utils/recordTypes";
 import type {
   Project, Experiment, ProcessData, CalendarLife, StorageSwelling,
   EnergyEfficiency, DcrTest, FastCharge, HtCycle, CellGroup,
 } from "../types";
-import { RECORD_TYPE_TO_API_TYPE } from "../utils/recordTypes";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -39,15 +40,13 @@ interface WfData {
   steps: WfStep[];
 }
 
-// ─── Step icon & label config ───────────────────────────────────
+// ─── Step icon & label config (icons stay frontend-only) ────────────
 
 const STEP_META: Record<string, { label: string; icon: React.ReactNode; dataType?: string }> = {
   experiment_design: { label: "实验设计", icon: <FileText className="w-4 h-4" /> },
   design_sub: { label: "1. 实验设计", icon: <FileText className="w-3.5 h-3.5" /> },
   procurement_sub: { label: "2. 试剂采购", icon: <Layers className="w-3.5 h-3.5" /> },
   drying_injection: { label: "干燥/注液", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
-  drying: { label: "干燥", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
-  liquid_injection: { label: "注液", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
   formation: { label: "化成", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
   second_sealing: { label: "二封", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
   capacity_grading: { label: "定容", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
@@ -80,7 +79,7 @@ export function ProjectDetail() {
   const [wf, setWf] = useState<WfData>({ instance: null, steps: [] });
   const [wfLoading, setWfLoading] = useState(true);
   const [transitioning, setTransitioning] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => localStorage.getItem("currentUserId"));
   const [perms, setPerms] = useState<{ canViewInternalCode: boolean; visibleStepNames: string[]; currentStepName: string | null }>({ canViewInternalCode: false, visibleStepNames: [], currentStepName: null });
 
 
@@ -101,22 +100,14 @@ export function ProjectDetail() {
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [cellPickerOpen, setCellPickerOpen] = useState(false);
 
-  const [users, setUsers] = useState<any[]>([]);
-
-  // ── User ID & Users ──
+  // ── User ID ──
   useEffect(() => {
     const stored = localStorage.getItem("currentUserId");
     if (stored) { setCurrentUserId(stored); }
     else {
       api.get<any>("/api/v1/users/me").then((d) => { if (d?.id) { setCurrentUserId(d.id); localStorage.setItem("currentUserId", d.id); } }).catch(() => { });
     }
-    api.get<any[]>("/api/v1/users").then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => {});
   }, []);
-
-  const getUserName = (userId: string) => {
-    const u = users.find((u) => u.id === userId);
-    return u ? (u.fullName || u.username) : `用户 #${userId.slice(0, 6)}`;
-  };
 
   const [isDesignSubmitted, setIsDesignSubmitted] = useState(false);
 
@@ -142,13 +133,6 @@ export function ProjectDetail() {
           (s) => s.status !== 'pending' && !s.parentStepName && !existingStepNames.has(s.stepName) && !['experiment_design', 'battery_selection', 'testing'].includes(s.stepName),
         );
         if (stepsNeedingExps.length > 0) {
-          const STEP_ASSAY_MAP: Record<string, string> = {
-            drying_injection: 'ProcessData',
-            formation: 'ProcessData', second_sealing: 'ProcessData', capacity_grading: 'ProcessData',
-            calendar_life: 'CalendarLife', storage_swelling: 'StorageSwelling',
-            energy_efficiency: 'EnergyEfficiency', dcr_test: 'DcrTest',
-            fast_charge: 'FastCharge', ht_cycle: 'HtCycle',
-          };
           await Promise.allSettled(
             stepsNeedingExps.map((step) =>
               api.post(`/api/v1/projects/${projectId}/experiments`, {
@@ -325,8 +309,10 @@ export function ProjectDetail() {
       <Tabs
         items={[
           { key: "workflow", label: t("workflow", "工作流程进度") },
-          { key: "summary", label: t("data_summary", "数据对比与统计") },
-          { key: "raw_data", label: "数据汇总" },
+          ...(isCreator ? [
+            { key: "summary", label: t("data_summary", "数据对比与统计") },
+            { key: "raw_data", label: "数据汇总" },
+          ] : []),
         ]}
         activeKey={activeTab}
         onChange={(key) => setSearchParams({ tab: key })}
@@ -381,7 +367,7 @@ export function ProjectDetail() {
                           </div>
                           {step.assignedUserId && (
                             <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
-                              <User className="w-3 h-3 text-gray-400" /> 负责人: {getUserName(step.assignedUserId)}
+                              <User className="w-3 h-3 text-gray-400" /> 负责人: {(step as any).assignedUserName || `用户 #${(step.assignedUserId || '').slice(0, 6)}`}
                             </p>
                           )}
                         </div>
@@ -439,7 +425,7 @@ export function ProjectDetail() {
                                   </span>
                                   {child.assignedUserId && (
                                     <p className={cn("text-[11px] mt-0.5 flex items-center gap-1", isChildPending ? "text-gray-300" : "text-gray-400")}>
-                                      <User className="w-3 h-3" /> 负责人: {getUserName(child.assignedUserId)}
+                                      <User className="w-3 h-3" /> 负责人: {(child as any).assignedUserName || `用户 #${(child.assignedUserId || '').slice(0, 6)}`}
                                     </p>
                                   )}
                                 </div>

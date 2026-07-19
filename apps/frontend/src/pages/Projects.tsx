@@ -5,30 +5,15 @@ import { useTranslation } from "react-i18next";
 import { Search, Loader2, Edit3, Trash2, Plus, FileText } from "lucide-react";
 
 function childLabel(name: string): string {
-  const map: Record<string, string> = {
-    calendar_life: "Calendar Life",
-    storage_swelling: "Storage Swelling",
-    energy_efficiency: "Energy Efficiency",
-    dcr_test: "DCR Test",
-    fast_charge: "Fast Charge",
-    ht_cycle: "HT Cycle",
-  };
-  return map[name] || name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return getChildStepLabel(name);
 }
 
 // Maps step names to i18n keys for template step labels
 function stepLabelKey(stepName: string): string {
-  const map: Record<string, string> = {
-    experiment_design: "step_experiment_design",
-    drying_injection: "step_drying_injection",
-    formation: "step_formation",
-    second_sealing: "step_second_sealing",
-    capacity_grading: "step_capacity_grading",
-    battery_selection: "step_battery_selection",
-    testing: "step_testing",
-  };
-  return map[stepName] || `step_${stepName}`;
+  return getStepLabelKey(stepName);
 }
+
+import { getStepLabelKey, getChildStepLabel } from "@eln/shared";
 
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";

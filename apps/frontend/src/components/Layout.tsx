@@ -52,6 +52,9 @@ export function Layout() {
       .then((data) => {
         if (cancelled) return;
         setCurrentUser(data);
+        if (data?.id) {
+          localStorage.setItem("currentUserId", data.id);
+        }
         if (data?.permissionList) {
           localStorage.setItem("permissionList", JSON.stringify(data.permissionList));
           window.dispatchEvent(new Event("permissionsChanged"));
@@ -65,6 +68,7 @@ export function Layout() {
     localStorage.removeItem("token");
     localStorage.removeItem("auth");
     localStorage.removeItem("permissionList");
+    localStorage.removeItem("currentUserId");
     window.dispatchEvent(new Event("permissionsChanged"));
     navigate("/login");
   };

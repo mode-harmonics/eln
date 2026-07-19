@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Tabs } from "./Tabs";
 import {
@@ -11,12 +11,36 @@ import {
   HtCycleTable,
 } from "./ExperimentTables";
 import { SummaryDataProps } from "../utils/dataSummary";
-import { Database, Download } from "lucide-react";
+import { Database, Download, UploadCloud } from "lucide-react";
 import { Button } from "./Button";
+import { toast } from "./Toast";
+import { api, ApiError } from "../lib/api";
 
 export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]; projectId: string }) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("process");
+
+  // Upload state
+  const [uploading, setUploading] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      for (let i = 0; i < files.length; i++) form.append("files", files[i]);
+      form.append("mode", "merge");
+      await api.upload(`/api/v1/data/upload-project/${props.projectId}`, form);
+      toast.success("导入成功，请刷新页面查看数据");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "导入失败");
+    } finally {
+      setUploading(false);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
+  };
 
   const tabs = [
     { key: "process", label: t("tab_process", "制程数据") },
@@ -62,10 +86,24 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
             项目全量数据汇总
           </h2>
         </div>
-        <Button variant="secondary" size="sm" onClick={handleExport}>
-          <Download className="w-4 h-4" />
-          导出全部明细
-        </Button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            multiple
+            className="hidden"
+            onChange={handleImport}
+          />
+          <Button variant="secondary" size="sm" onClick={() => uploadInputRef.current?.click()} loading={uploading}>
+            <UploadCloud className="w-4 h-4" />
+            导入全量数据
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleExport}>
+            <Download className="w-4 h-4" />
+            导出全量数据
+          </Button>
+        </div>
       </div>
       <Tabs
         items={tabs}

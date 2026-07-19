@@ -48,6 +48,12 @@ export class UsersController {
     return this.usersService.update(id, dto);
   }
 
+  @Put('me/password')
+  @ApiOperation({ summary: 'Authenticated user changes their own password.' })
+  async changePassword(@CurrentUser() user: RequestUser, @Body() dto: { oldPassword: string; newPassword: string }) {
+    return this.usersService.changePassword(user.id, dto.oldPassword, dto.newPassword);
+  }
+
   @Delete(':id')
   @RequirePermission('users:write')
   @ApiOperation({ summary: 'Delete a user.' })

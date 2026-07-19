@@ -134,6 +134,10 @@ export class DataService {
     return this.dataSource.getRepository(Experiment).findOne({ where: { id } });
   }
 
+  async getProjectExperiments(projectId: string): Promise<Experiment[]> {
+    return this.dataSource.getRepository(Experiment).find({ where: { projectId } as any });
+  }
+
   /**
    * Loads the uploaded workbook with ExcelJS, runs every sheet through the
    * ParserRegistry, and bulk-inserts the parsed rows for all 7 tables in a

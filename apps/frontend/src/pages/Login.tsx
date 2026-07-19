@@ -30,6 +30,9 @@ export function Login() {
       } else {
         localStorage.removeItem("permissionList");
       }
+      if (data.user?.id) {
+        localStorage.setItem("currentUserId", data.user.id);
+      }
       window.dispatchEvent(new Event("permissionsChanged"));
       navigate("/projects");
     } catch (err) {

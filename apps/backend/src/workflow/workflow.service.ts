@@ -16,6 +16,7 @@ import { Experiment } from '../entities/experiment.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GroupsService } from '../groups/groups.service';
 import { ProcessData } from '../entities/process-data.entity';
+import { User } from '../entities/user.entity';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import type { WorkflowStepDefinition } from '@eln/shared';
@@ -35,6 +36,8 @@ export class WorkflowService {
     private readonly projectRepo: Repository<Project>,
     @InjectRepository(Experiment)
     private readonly experimentRepo: Repository<Experiment>,
+    @InjectRepository(User)
+    private readonly usersRepo: Repository<User>,
     private readonly notificationsService: NotificationsService,
     private readonly groupsService: GroupsService,
     @InjectDataSource() private readonly dataSource: DataSource,
@@ -261,7 +264,9 @@ export class WorkflowService {
 
         if (canSeeAll) {
           // User can see all steps (e.g. PI/Admin role assigned)
-          return { instance, steps };
+          // Enrich before early return
+          const enriched = await this.enrichSteps(steps);
+          return { instance, steps: enriched };
         }
 
         // Filter: only steps user is assigned to OR explicitly granted visibility
@@ -270,7 +275,34 @@ export class WorkflowService {
       }
     }
 
+    // Enrich steps with user display names
+    steps = await this.enrichSteps(steps);
+
     return { instance, steps };
+  }
+
+  /**
+   * Enrich step assignments with user display names so the frontend
+   * doesn't need to fetch the full users list.
+   */
+  private async enrichSteps(steps: WorkflowStepAssignment[]): Promise<any[]> {
+    const userIds = new Set<string>();
+    for (const s of steps) {
+      if (s.assignedUserId) userIds.add(s.assignedUserId);
+      if (s.completedBy) userIds.add(s.completedBy);
+    }
+    if (userIds.size === 0) return steps.map((s) => ({ ...s, assignedUserName: null, completedByName: null }));
+
+    const users = await this.usersRepo.find({
+      where: { id: In([...userIds]) },
+    });
+    const nameMap = new Map(users.map((u) => [u.id, u.fullName || u.username]));
+
+    return steps.map((s) => ({
+      ...s,
+      assignedUserName: s.assignedUserId ? (nameMap.get(s.assignedUserId) ?? null) : null,
+      completedByName: s.completedBy ? (nameMap.get(s.completedBy) ?? null) : null,
+    }));
   }
 
   async getSteps(projectId: string): Promise<WorkflowStepAssignment[]> {

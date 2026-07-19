@@ -34,24 +34,10 @@ interface ExperimentDetail extends Experiment {
   attachments?: any[];
 }
 
+import { STEP_NAME_MAP } from "@eln/shared";
 import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
 
 const ASSAY_TYPE_TO_PERMISSION = RECORD_TYPE_TO_API_TYPE;
-
-const STEP_NAME_MAP: Record<string, string> = {
-  experiment_design: "实验设计",
-  battery_selection: "电芯选取",
-  drying_injection: "干燥/注液",
-  formation: "化成",
-  second_sealing: "二封",
-  capacity_grading: "定容",
-  calendar_life: "日历寿命",
-  storage_swelling: "存储胀力",
-  energy_efficiency: "能量效率",
-  dcr_test: "DCR测试",
-  fast_charge: "快充测试",
-  ht_cycle: "高温循环"
-};
 
 export function ExperimentDetail() {
   const { t } = useTranslation();
@@ -305,8 +291,7 @@ export function ExperimentDetail() {
     return () => { cancelled = true; };
   }, [dataView, rawSource, rawLoaded, experiment, isProcessData]);
 
-  // Upload Excel data entry
-  const [uploadDataType, setUploadDataType] = useState<'summary' | 'raw'>('summary');
+  // Upload raw data
   const [uploadDataOpen, setUploadDataOpen] = useState(false);
   const [uploadDataFiles, setUploadDataFiles] = useState<File[]>([]);
   const [uploadDataSubmitting, setUploadDataSubmitting] = useState(false);
@@ -316,16 +301,11 @@ export function ExperimentDetail() {
     if (!experiment || uploadDataFiles.length === 0) return;
     setUploadDataSubmitting(true);
     try {
-      if (uploadDataType === 'raw' || uploadDataType === 'summary') {
-        const form = new FormData();
-        uploadDataFiles.forEach((file) => form.append("files", file));
-        form.append("experimentId", experiment.id);
-        form.append("mode", "merge");
-        await api.upload("/api/v1/data/upload", form);
-      }
-      api.get<any[]>(`/api/v1/experiments/${experiment.id}/attachments`)
-        .then(res => setAttachments(Array.isArray(res) ? res : []))
-        .catch(() => {});
+      const form = new FormData();
+      uploadDataFiles.forEach((file) => form.append("files", file));
+      form.append("experimentId", experiment.id);
+      form.append("mode", "merge");
+      await api.upload("/api/v1/data/upload", form);
       toast(t("upload_success", "上传成功"), "success");
       setUploadDataOpen(false);
       setUploadDataFiles([]);
@@ -430,28 +410,14 @@ export function ExperimentDetail() {
             ]}
           />
 
-          {/* Import / Export Group */}
+          {/* Import / Export */}
           <ButtonGroup
             items={[
-              ...(assayType !== "StorageSwelling" && canWrite ? [{
+              ...(hasRawData && canWrite ? [{
                 id: "import",
-                label: t("import_data", "导入"),
+                label: t("import_raw", "导入原始数据"),
                 icon: <UploadCloud className="w-3.5 h-3.5" />,
-                badge: <ChevronDown className="w-3 h-3 opacity-50 ml-0.5" />,
-                dropdownContent: (
-                  <>
-                    <button onClick={() => { setUploadDataType('summary'); setUploadDataOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors text-left">
-                      <Table2 className="w-3.5 h-3.5 text-gray-400" />
-                      {t("import_summary", "导入汇总数据")}
-                    </button>
-                    {hasRawData && (
-                      <button onClick={() => { setUploadDataType('raw'); setUploadDataOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors text-left">
-                        <FileDigit className="w-3.5 h-3.5 text-gray-400" />
-                        {t("import_raw", "导入原始数据")}
-                      </button>
-                    )}
-                  </>
-                )
+                onClick: () => setUploadDataOpen(true),
               }] : []),
               {
                 id: "export",
@@ -646,13 +612,13 @@ export function ExperimentDetail() {
       </Modal>
 
 
-      {/* Upload Data Modal */}
-      <Modal open={uploadDataOpen} onClose={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} title={t("import_data", "导入数据")}
+      {/* Upload Raw Data Modal */}
+      <Modal open={uploadDataOpen} onClose={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} title={t("import_raw", "导入原始数据")}
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} disabled={uploadDataSubmitting}>{t("cancel")}</Button>
             <Button variant="primary" size="sm" onClick={handleDataUpload} loading={uploadDataSubmitting} disabled={uploadDataSubmitting || uploadDataFiles.length === 0}>
-              {uploadDataSubmitting ? t("uploading", "上传中...") : t("import_data", "导入数据")}
+              {uploadDataSubmitting ? t("uploading", "上传中...") : t("import_raw", "导入原始数据")}
             </Button>
           </div>
         }>
@@ -660,24 +626,13 @@ export function ExperimentDetail() {
           <div
             className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#1d74f5] hover:bg-blue-50/20 transition-all"
             onClick={() => uploadInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); e.currentTarget.className = e.currentTarget.className.replace('border-gray-200', 'border-[#1d74f5]').replace('hover:bg-blue-50/20', 'bg-blue-50/40'); }}
-            onDragLeave={(e) => { e.currentTarget.className = e.currentTarget.className.replace('border-[#1d74f5]', 'border-gray-200').replace('bg-blue-50/40', 'hover:bg-blue-50/20'); }}
-            onDrop={(e) => {
-              e.preventDefault();
-              if (e.dataTransfer.files) {
-                const files = Array.from(e.dataTransfer.files).filter(f => uploadDataType === 'raw' || f.name.endsWith('.xlsx') || f.name.endsWith('.xls'));
-                if (files.length > 0) setUploadDataFiles((prev) => [...prev, ...files]);
-              }
-            }}
           >
             <UploadCloud className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-600 mb-1">{t("upload_drag_hint", "拖拽或点击选择文件")}</p>
-            <p className="text-xs text-gray-400">{uploadDataType === 'raw' ? t("upload_any", "支持任意格式的文件") : t("upload_supported_formats", "支持 .xlsx / .xls 格式，可同时选择多个文件")}</p>
-            <input type="file" accept={uploadDataType === 'raw' ? undefined : ".xlsx,.xls"} multiple className="hidden" ref={uploadInputRef}
+            <p className="text-sm font-medium text-gray-600 mb-1">{t("select_file", "选择文件上传")}</p>
+            <input type="file" accept=".xlsx,.xls" multiple className="hidden" ref={uploadInputRef}
               onChange={(e) => {
                 if (e.target.files && e.target.files.length > 0) {
-                  const files = Array.from(e.target.files);
-                  setUploadDataFiles((prev) => [...prev, ...files]);
+                  setUploadDataFiles((prev) => [...prev, ...Array.from(e.target.files!)]);
                 }
                 if (uploadInputRef.current) uploadInputRef.current.value = "";
               }} />
@@ -691,11 +646,8 @@ export function ExperimentDetail() {
                     <span className="text-xs text-gray-700 truncate">{f.name}</span>
                     <span className="text-[10px] text-gray-400 shrink-0">({(f.size / 1024).toFixed(1)} KB)</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setUploadDataFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                    className="text-[11px] text-red-500 hover:text-red-700 font-medium shrink-0"
-                  >{t("remove", "移除")}</button>
+                  <button type="button" onClick={() => setUploadDataFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="text-[11px] text-red-500 hover:text-red-700 font-medium shrink-0">{t("remove", "移除")}</button>
                 </div>
               ))}
             </div>

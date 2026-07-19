@@ -5,6 +5,7 @@ export default defineConfig({
     "src/index.ts",
     "src/colors.ts",
     "src/enums.ts",
+    "src/workflow.ts",
   ],
   format: ["esm", "cjs"],
   dts: true,

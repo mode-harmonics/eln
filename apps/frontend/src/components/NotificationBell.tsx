@@ -84,16 +84,17 @@ export function NotificationBell() {
   };
 
   const renderNotificationType = (type: string) => {
-    const map: Record<string, { label: string; color: string }> = {
-      WORKFLOW_STEP_ASSIGNED: { label: "Step Assigned", color: "text-blue-600" },
-      WORKFLOW_STEP_COMPLETED: { label: "Step Completed", color: "text-green-600" },
-      WORKFLOW_COMPLETED: { label: "Project Completed", color: "text-green-700" },
-      REVIEW_SUBMITTED: { label: "Review Requested", color: "text-amber-600" },
-      REVIEW_APPROVED: { label: "Approved", color: "text-green-600" },
-      REVIEW_REJECTED: { label: "Rejected", color: "text-red-600" },
-      NEW_COMMENT: { label: "New Comment", color: "text-blue-600" },
+    const map: Record<string, { key: string; color: string }> = {
+      WORKFLOW_STEP_ASSIGNED: { key: "notif_step_assigned", color: "text-blue-600" },
+      WORKFLOW_STEP_COMPLETED: { key: "notif_step_completed", color: "text-green-600" },
+      WORKFLOW_COMPLETED: { key: "notif_project_completed", color: "text-green-700" },
+      REVIEW_SUBMITTED: { key: "notif_review_requested", color: "text-amber-600" },
+      REVIEW_APPROVED: { key: "notif_review_approved", color: "text-green-600" },
+      REVIEW_REJECTED: { key: "notif_review_rejected", color: "text-red-600" },
+      NEW_COMMENT: { key: "notif_new_comment", color: "text-blue-600" },
     };
-    return map[type] || { label: type.replace(/_/g, " "), color: "text-gray-600" };
+    const entry = map[type];
+    return entry ? { label: t(entry.key), color: entry.color } : { label: type.replace(/_/g, " "), color: "text-gray-600" };
   };
 
   const renderNotificationMessage = (notif: Notification) => {
@@ -110,17 +111,17 @@ export function NotificationBell() {
         </span>
         {stepName && (
           <p className="text-xs text-gray-700 mt-0.5">
-            Step: <span className="font-medium">{stepName}</span>
+            {t("notif_step")} <span className="font-medium">{stepName}</span>
           </p>
         )}
         {experimentTitle && (
           <p className="text-xs text-gray-500 truncate">{experimentTitle}</p>
         )}
         {projectName && !experimentTitle && (
-          <p className="text-xs text-gray-500">Project: {projectName}</p>
+          <p className="text-xs text-gray-500">{t("notif_project")} {projectName}</p>
         )}
         {remaining !== undefined && (
-          <p className="text-[11px] text-gray-400">{remaining} sub-step(s) remaining</p>
+          <p className="text-[11px] text-gray-400">{t("notif_remaining", { count: remaining })}</p>
         )}
       </div>
     );
@@ -148,14 +149,14 @@ export function NotificationBell() {
               onClick={handleMarkAllRead}
               className="text-xs text-[#1d74f5] hover:text-blue-700 font-medium flex items-center gap-1"
             >
-              <Check className="w-3 h-3" /> Mark all read
+              <Check className="w-3 h-3" /> {t("notif_mark_all_read")}
             </button>
           )}
         </div>
         <div className="flex-1 overflow-y-auto">
           {notifications.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-gray-500">
-              No notifications yet.
+              {t("notif_no_notifications")}
             </div>
           ) : (
             <ul className="divide-y divide-gray-100">

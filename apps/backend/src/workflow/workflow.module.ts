@@ -7,6 +7,7 @@ import { WorkflowInstance } from '../entities/workflow-instance.entity';
 import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
 import { Project } from '../entities/project.entity';
 import { Experiment } from '../entities/experiment.entity';
+import { User } from '../entities/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { GroupsModule } from '../groups/groups.module';
 
@@ -18,6 +19,7 @@ import { GroupsModule } from '../groups/groups.module';
       WorkflowStepAssignment,
       Project,
       Experiment,
+      User,
     ]),
     NotificationsModule,
     GroupsModule,

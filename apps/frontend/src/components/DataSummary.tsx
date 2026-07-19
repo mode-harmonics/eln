@@ -221,7 +221,11 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
   const [baseGroup, setBaseGroup] = useState<string>("");
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set([
+    "qc_1st", "qd_1st", "ce_1st", "cal_retention", "cal_recovery",
+    "cal_ddcr_pct", "cal_cdcr_pct", "gas_volume", "energy_eff",
+    "dcr_discharge", "dcr_charge", "fc_time", "cycle_retention", "iron_ppm",
+  ]));
 
   const allCellNames = useMemo(() => {
     const names = new Set<string>();
@@ -404,7 +408,9 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     return Array.from(groupsSet).sort();
   }, [props.groups, metrics.groups, allCellNames]);
 
-  const activeBaseGroup = baseGroup || (groupsToUse.length > 0 ? groupsToUse[0] : "");
+  // Fallback group when no groups exist — ensures table is always visible
+  const displayGroups = groupsToUse.length > 0 ? groupsToUse : ["All"];
+  const displayBaseGroup = baseGroup || displayGroups[0];
 
   const metricDefs = [
     { key: "qc_1st", label: t("metric_qc_1st"), isPositiveGood: true },
@@ -426,8 +432,6 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     return hasPermission("experiments:read") || hasPermission("data:read") || hasPermission(`data_${type}:read`);
   });
 
-  if (groupsToUse.length === 0) return null;
-
   return (
     <div className="bg-white border border-gray-200 rounded shadow-sm mb-8 overflow-hidden">
       <div className="px-6 py-4 border-b border-gray-100 flex flex-col xl:flex-row justify-between xl:items-center gap-4 bg-gray-50">
@@ -443,10 +447,10 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
             </label>
             <select
               className="text-xs border-none bg-transparent font-medium text-[#1d74f5] focus:ring-0 cursor-pointer p-0 pr-4"
-              value={activeBaseGroup}
+              value={displayBaseGroup}
               onChange={(e) => setBaseGroup(e.target.value)}
             >
-              {groupsToUse.map((g) => (
+              {displayGroups.map((g) => (
                 <option key={g} value={g}>
                   {g}
                 </option>
@@ -464,10 +468,10 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
                 {t("metric_name")}
               </th>
               <th className="px-6 py-3 text-center text-[10px] font-bold text-[#1d74f5] uppercase tracking-wider border-r border-gray-100 bg-[#f0f7ff]/50">
-                {activeBaseGroup} ({t("baseline")})
+                {displayBaseGroup} ({t("baseline")})
               </th>
-              {groupsToUse
-                .filter((g) => g !== activeBaseGroup)
+              {displayGroups
+                .filter((g) => g !== displayBaseGroup)
                 .map((g) => (
                   <th
                     key={g}
@@ -480,7 +484,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {metricDefs.map((def) => {
-              const baseStat = metrics.computedMetrics[def.key]?.[activeBaseGroup];
+              const baseStat = metrics.computedMetrics[def.key]?.[displayBaseGroup];
               const dataType = METRIC_TO_TYPE[def.key];
               const isRowLoading = props.loadedTypes ? !props.loadedTypes.includes(dataType) : false;
               const hasAnyData = Object.keys(metrics.computedMetrics[def.key] || {}).length > 0;
@@ -513,8 +517,8 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
                         "-"
                       )}
                     </td>
-                    {groupsToUse
-                      .filter((g) => g !== activeBaseGroup)
+                    {displayGroups
+                      .filter((g) => g !== displayBaseGroup)
                       .map((g) => {
                         if (isRowLoading) {
                           return (
@@ -532,9 +536,9 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
                   </tr>
                   {isExpanded && (
                     <tr>
-                      <td colSpan={groupsToUse.length + 2} className="p-0 border-b border-gray-200">
+                      <td colSpan={displayGroups.length + 2} className="p-0 border-b border-gray-200">
                         <ExpandedRowDetails
-                          groups={groupsToUse}
+                          groups={displayGroups}
                           computedMetrics={metrics.computedMetrics[def.key] || {}}
                         />
                       </td>

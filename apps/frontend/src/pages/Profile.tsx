@@ -1,14 +1,23 @@
 import React, { useEffect, useState } from "react";
-import { User, Mail, Shield, Key, Loader2 } from "lucide-react";
+import { User, Mail, Shield, Key, Loader2, Eye, EyeOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../components/Button";
 import { api, ApiError } from "../lib/api";
+import { toast } from "../components/Toast";
 
 export function Profile() {
   const { t } = useTranslation();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Password change state
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changing, setChanging] = useState(false);
+  const [showOld, setShowOld] = useState(false);
+  const [showNew, setShowNew] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -18,6 +27,34 @@ export function Profile() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      toast.error("请填写所有密码字段");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("两次输入的新密码不一致");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("新密码至少 6 位");
+      return;
+    }
+    setChanging(true);
+    try {
+      await api.put("/api/v1/users/me/password", { oldPassword, newPassword });
+      toast.success("密码修改成功");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "密码修改失败");
+    } finally {
+      setChanging(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -72,14 +109,57 @@ export function Profile() {
               </div>
             </div>
 
+            {/* Change Password */}
             <div className="pt-6 border-t border-gray-100">
               <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Key className="w-4 h-4" />
-                {t("settings")}
+                修改密码
               </h3>
-              <Button disabled variant="secondary">
-                Change Password (Controlled by Identity Service)
-              </Button>
+              <form onSubmit={handleChangePassword} className="max-w-sm space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">当前密码</label>
+                  <div className="relative">
+                    <input
+                      type={showOld ? "text" : "password"}
+                      value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)}
+                      className="block w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 focus:border-[#1d74f5] focus:outline-none"
+                      placeholder="输入当前密码"
+                    />
+                    <button type="button" onClick={() => setShowOld(!showOld)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">新密码</label>
+                  <div className="relative">
+                    <input
+                      type={showNew ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="block w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 focus:border-[#1d74f5] focus:outline-none"
+                      placeholder="至少 6 位"
+                    />
+                    <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                      {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">确认新密码</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="block w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-[#1d74f5] focus:outline-none"
+                    placeholder="再次输入新密码"
+                  />
+                </div>
+                <Button type="submit" loading={changing} size="sm">
+                  修改密码
+                </Button>
+              </form>
             </div>
           </div>
         </div>

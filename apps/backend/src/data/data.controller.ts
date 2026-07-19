@@ -22,6 +22,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard, hasPermission } from '../common/guards/permissions.guard';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { DataService } from './data.service';
+import { RECORD_TYPE_TO_API_TYPE as RECORD_TYPE_TO_PERMISSION } from '@eln/shared';
 import { UploadDataDto } from './dto/upload-data.dto';
 import { PickCellsDto } from '../experiments/dto/pick-cells.dto';
 
@@ -31,16 +32,6 @@ interface UploadedFile {
   mimetype: string;
   size: number;
 }
-
-const RECORD_TYPE_TO_PERMISSION: Record<string, string> = {
-  ProcessData: 'process',
-  CalendarLife: 'calendar',
-  StorageSwelling: 'swelling',
-  EnergyEfficiency: 'efficiency',
-  DcrTest: 'dcr',
-  FastCharge: 'fastcharge',
-  HtCycle: 'htcycle',
-};
 
 @ApiTags('data')
 @ApiBearerAuth()
@@ -86,6 +77,57 @@ export class DataController {
       mimetype: f.mimetype,
     }));
     return this.dataService.uploadWorkbooks(workbooks, dto.experimentId, user.id, dto.mode);
+  }
+
+  @Post('upload-project/:projectId')
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload Excel workbooks to a project. Auto-routes data to the correct experiments by matching assayType.',
+  })
+  @UseInterceptors(FilesInterceptor('files', 20, { limits: { fileSize: 50 * 1024 * 1024 } }))
+  async uploadToProject(
+    @UploadedFiles() files: UploadedFile[],
+    @Param('projectId') projectId: string,
+    @Body() dto: { mode?: 'overwrite' | 'merge' },
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files uploaded. Expected multipart field "files".');
+    }
+
+    const experiments = await this.dataService.getProjectExperiments(projectId);
+    if (!experiments || experiments.length === 0) {
+      throw new BadRequestException('No experiments found for this project.');
+    }
+
+    const workbooks = files.map(f => ({
+      buffer: f.buffer,
+      originalname: f.originalname,
+      mimetype: f.mimetype,
+    }));
+
+    const results: { experimentId: string; assayType: string; sheetsProcessed: number; sheetsSkipped: string[]; rowsInsertedByTable: Record<string, number> }[] = [];
+
+    for (const exp of experiments) {
+      const assayType = (exp.metadata as any)?.assayType as string;
+      if (!assayType) continue;
+      const typeKey = RECORD_TYPE_TO_PERMISSION[assayType];
+      if (!typeKey) continue;
+
+      try {
+        const result = await this.dataService.uploadWorkbooks(workbooks, exp.id, user.id, dto.mode ?? 'merge');
+        results.push({ experimentId: exp.id, assayType, ...result });
+      } catch (err: any) {
+        if (err.status === 400 || err.status === 422) continue;
+        throw err;
+      }
+    }
+
+    if (results.length === 0) {
+      throw new BadRequestException('No data could be imported. The uploaded file may not match any experiment type.');
+    }
+
+    return results;
   }
 
   @Get('export/summary/:expId')
