@@ -298,14 +298,20 @@ export function Users() {
             })}
           </div>
         )}
-        <Pagination
-          currentPage={currentPage}
-          totalItems={totalItems}
-          pageSize={pageSize}
-          onPageChange={setCurrentPage}
-          onPageSizeChange={setPageSize}
-          className={viewMode === "list" ? "border-t border-gray-200 bg-white" : ""}
-        />
+        {totalItems > pageSize && (
+        <div className="flex justify-end pt-4 border-t border-gray-100">
+          <Pagination
+            currentPage={currentPage}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+          />
+        </div>
+        )}
       </div>
 
       <Modal open={isEditModalOpen && !!editingUser} onClose={() => setIsEditModalOpen(false)} title={t("edit_user")} maxWidth="md"

@@ -4,6 +4,13 @@ import { Button } from "../components/Button";
 import { Logo } from "../components/Logo";
 import { api, ApiError } from "../lib/api";
 
+const DEV_ACCOUNTS = [
+  { username: "pi", label: "Owner (PI)", color: "bg-purple-500" },
+  { username: "admin", label: "Admin", color: "bg-blue-500" },
+  { username: "editor", label: "Editor", color: "bg-emerald-500" },
+  { username: "viewer", label: "Viewer", color: "bg-gray-500" },
+];
+
 export function Login() {
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
@@ -11,16 +18,11 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setError("请输入用户名和密码");
-      return;
-    }
+  const doLogin = async (user: string, pass: string) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.post<any>("/api/v1/auth/login", { username, password });
+      const data = await api.post<any>("/api/v1/auth/login", { username: user, password: pass });
       localStorage.setItem("token", data.accessToken);
       localStorage.setItem("auth", "true");
       if (data.permissionList) {
@@ -39,6 +41,21 @@ export function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) {
+      setError("请输入用户名和密码");
+      return;
+    }
+    await doLogin(username, password);
+  };
+
+  const handleDevLogin = (user: string) => {
+    setUsername(user);
+    setPassword("Password123!");
+    doLogin(user, "Password123!");
   };
 
   return (
@@ -92,6 +109,27 @@ export function Login() {
             </Button>
           </div>
         </form>
+
+        {/* Dev quick login */}
+        <div className="mt-8 pt-6 border-t border-gray-100">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 text-center">
+            Dev — Quick Login (Password123!)
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {DEV_ACCOUNTS.map((acc) => (
+              <button
+                key={acc.username}
+                type="button"
+                onClick={() => handleDevLogin(acc.username)}
+                disabled={loading}
+                className="flex items-center gap-2 px-3 py-2 rounded border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-50"
+              >
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${acc.color}`} />
+                {acc.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
