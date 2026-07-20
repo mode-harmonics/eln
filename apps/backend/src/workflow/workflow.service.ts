@@ -16,6 +16,7 @@ import { Experiment } from '../entities/experiment.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { GroupsService } from '../groups/groups.service';
 import { ProcessData } from '../entities/process-data.entity';
+import { PickedCell } from '../entities/picked-cell.entity';
 import { User } from '../entities/user.entity';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -454,7 +455,33 @@ export class WorkflowService {
       next.status = 'in_progress';
       await this.assignmentRepo.save(next);
 
-      const children = steps.filter((s) => s.parentStepName === next.stepName && s.status === 'pending');
+      // For the testing parallel group, only activate sub-steps that have picked cells assigned
+      let children = steps.filter((s) => s.parentStepName === next.stepName && s.status === 'pending');
+
+      if (next.stepName === 'testing') {
+        // Query which test types actually have assigned picked cells
+        const pickedCells = await this.dataSource.getRepository(PickedCell).find({
+          where: { projectId: instance.projectId } as any,
+        });
+
+        // Only filter if picked cells exist — if none, activate all steps
+        if (pickedCells.length > 0) {
+          const activeTestTypes = new Set(pickedCells.map((pc) => pc.testType).filter(Boolean));
+
+          for (const c of children) {
+            const assayType = this.STEP_ASSAY_MAP[c.stepName];
+            if (assayType && !activeTestTypes.has(assayType)) {
+              // No cells assigned to this test — skip this sub-step entirely
+              c.status = 'skipped';
+              this.logger.log(`Skipping testing sub-step "${c.stepName}": no picked cells for assayType "${assayType}"`);
+            }
+          }
+          await this.assignmentRepo.save(children);
+          // Re-filter: only keep non-skipped children for activation
+          children = children.filter((c) => c.status === 'pending');
+        }
+      }
+
       for (const c of children) c.status = 'in_progress';
       await this.assignmentRepo.save(children);
 

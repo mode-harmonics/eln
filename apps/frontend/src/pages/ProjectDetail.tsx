@@ -159,6 +159,7 @@ export function ProjectDetail() {
   // ── Derive visible steps ──
   const isCreator = project?.createdBy === currentUserId;
   const visibleSteps = wf.steps.filter((s) => {
+    if (s.status === "skipped") return false;
     if (isCreator) return true;
     if (s.isParallelGroup) return true;
     if (perms.visibleStepNames.includes(s.stepName)) return true;
