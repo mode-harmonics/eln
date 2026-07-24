@@ -1,8 +1,9 @@
 import * as React from "react"
 import { cn } from "../lib/utils"
+import { Surface } from "./Surface"
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("border border-gray-100 rounded-sm p-6 bg-transparent hover:border-gray-200 transition-colors", className)} {...props} />
+  <Surface ref={ref} variant="outlined" padding="lg" className={cn("transition-colors hover:border-border-strong", className)} {...props} />
 ))
 Card.displayName = "Card"
 

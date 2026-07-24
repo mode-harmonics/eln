@@ -1,42 +1,19 @@
-import { ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle } from '../types';
-import type { CellGroupDto } from '@eln/shared';
-
 export interface SummaryDataProps {
-  processData: ProcessData[];
-  calendarLife: CalendarLife[];
-  storageSwelling: StorageSwelling[];
-  energyEfficiency: EnergyEfficiency[];
-  dcrTest: DcrTest[];
-  fastCharge: FastCharge[];
-  htCycle: HtCycle[];
+  processData: any[];
+  calendarLife: any[];
+  storageSwelling: any[];
+  energyEfficiency: any[];
+  dcrTest: any[];
+  fastCharge: any[];
+  htCycle: any[];
   loadedTypes?: string[];
-  groups?: CellGroupDto[];
-}
-
-/**
- * Check if a cell name matches any group's prefix rule.
- * Returns the group name if matched, or null.
- */
-export function matchCellToGroup(cellName: string, groups?: CellGroupDto[]): string | null {
-  if (!groups) return null;
-  for (const g of groups) {
-    if (g.matchMode === 'prefix' && g.matchValue && cellName.startsWith(g.matchValue)) {
-      return g.name;
-    }
-  }
-  return null;
 }
 
 export function getGroupName(
   cellName: string,
   strategy: 'prefix' | 'none' | 'custom' = 'prefix',
   customMapping: Record<string, string> = {},
-  groups?: CellGroupDto[],
 ): string {
-  // Prefer server-defined groups via prefix matching
-  const matchedGroup = matchCellToGroup(cellName, groups);
-  if (matchedGroup) return matchedGroup;
-  // Fallback to existing logic
   if (strategy === 'custom') return customMapping[cellName] || cellName;
   if (strategy === 'none') return cellName;
   if (cellName.includes('-')) return cellName.split('-')[0];

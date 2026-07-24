@@ -1,4 +1,4 @@
-import { IsArray, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { IsArray, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CellAssignmentDto {
@@ -18,11 +18,6 @@ export class PickCellsDto {
   @IsOptional()
   @IsString()
   mode?: 'auto' | 'manual';
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  topN?: number;
 
   /** Per-cell test type assignments for manual mode */
   @IsOptional()

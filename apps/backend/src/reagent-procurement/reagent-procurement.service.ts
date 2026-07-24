@@ -4,11 +4,19 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { v4 as uuid } from 'uuid';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
 import { WorkflowService } from '../workflow/workflow.service';
 
 import { ExperimentDesign } from '../entities/experiment-design.entity';
+import { UpdateProcurementDto } from './dto/update-procurement.dto';
+
+type ProcurementWithDesign = ReagentProcurement & {
+  group: string;
+  internalCode: string;
+  isRedundancy: boolean;
+  chineseName: string | null;
+  cas: string;
+};
 
 @Injectable()
 export class ReagentProcurementService {
@@ -20,7 +28,7 @@ export class ReagentProcurementService {
     private readonly workflowService: WorkflowService,
   ) {}
 
-  async findByProject(projectId: string): Promise<any[]> {
+  async findByProject(projectId: string): Promise<ProcurementWithDesign[]> {
     const records = await this.procurementRepo.find({
       where: { projectId },
       order: { createdAt: 'ASC' },
@@ -46,14 +54,7 @@ export class ReagentProcurementService {
   async update(
     projectId: string,
     id: string,
-    dto: Partial<{
-      supplier: string;
-      batchNo: string;
-      purity: string;
-      quantity: string;
-      isValid: boolean;
-      remark: string;
-    }>,
+    dto: UpdateProcurementDto,
   ): Promise<ReagentProcurement> {
     await this.workflowService.assertStepNotCompleted(projectId, 'procurement');
 

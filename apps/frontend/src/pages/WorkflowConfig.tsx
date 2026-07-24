@@ -29,6 +29,7 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { FormSelect } from "../components/FormFields";
 import { PageLoader } from "../components/PageLoader";
+import { PageHeader } from "../components/PageHeader";
 import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 
@@ -68,8 +69,8 @@ function StepNode({ data: rawData, selected }: NodeProps) {
 
   return (
     <div
-      className={`px-4 py-3 bg-white border border-gray-200 border-l-4 border-l-blue-500 rounded-lg shadow-sm min-w-[160px] text-left relative ${
-        selected ? "ring-2 ring-blue-500/30" : ""
+      className={`px-4 py-3 bg-white border border-gray-200 border-l-4 border-l-action rounded-lg shadow-sm min-w-[160px] text-left relative ${
+        selected ? "ring-2 ring-focus/30" : ""
       }`}
     >
       {/* Target handle (top) */}
@@ -537,22 +538,13 @@ function WorkflowConfig() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
+    <div className="flex h-[calc(100dvh-9rem)] min-h-[560px] flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-            <Layers className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{t("workflow_config")}</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {t("workflow_config_desc", "View workflow templates")}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <FormSelect
+      <PageHeader
+        title={t("workflow_config")}
+        description={t("workflow_config_desc", "View workflow templates")}
+        icon={<Layers className="h-5 w-5" />}
+        actions={<FormSelect
             value={activeTemplateId ?? ""}
             onChange={(e) => setActiveTemplateId(e.target.value || null)}
             className="w-auto! min-w-[250px]!"
@@ -563,10 +555,10 @@ function WorkflowConfig() {
                 {tpl.name} {tpl.isDefault ? `[${t("default")}]` : ""}
               </option>
             ))}
-          </FormSelect>
-          {/* Editing disabled temporarily per user request */}
-        </div>
-      </div>
+          </FormSelect>}
+        bordered
+        className="shrink-0 px-1 pb-4"
+      />
 
       {/* React Flow Canvas */}
       <div className="flex-1 relative bg-slate-50">
@@ -585,7 +577,7 @@ function WorkflowConfig() {
             proOptions={{ hideAttribution: true }}
             minZoom={0.3}
             maxZoom={2}
-            connectionLineStyle={{ stroke: "#1d74f5", strokeWidth: 2 }}
+            connectionLineStyle={{ stroke: "var(--color-action)", strokeWidth: 2 }}
             defaultEdgeOptions={{
               type: "smoothstep",
               style: { stroke: "#64748b", strokeWidth: 2 },
@@ -646,7 +638,7 @@ function WorkflowConfig() {
               {t("step_label")}
             </label>
             <input
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-focus focus:outline-none focus:ring-2 focus:ring-focus/30"
               value={editLabel}
               onChange={(e) => setEditLabel(e.target.value)}
             />

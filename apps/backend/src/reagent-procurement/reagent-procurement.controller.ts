@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { ReagentProcurementService } from './reagent-procurement.service';
+import { UpdateProcurementDto } from './dto/update-procurement.dto';
 
 @ApiTags('Reagent Procurement')
 @ApiBearerAuth()
@@ -35,7 +36,7 @@ export class ReagentProcurementController {
   async update(
     @Param('projectId') projectId: string,
     @Param('id') id: string,
-    @Body() dto: any,
+    @Body() dto: UpdateProcurementDto,
   ) {
     return {
       success: true,

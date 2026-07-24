@@ -14,13 +14,17 @@ import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.ent
 import { Project } from '../entities/project.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { NotificationsService } from '../notifications/notifications.service';
-import { GroupsService } from '../groups/groups.service';
-import { ProcessData } from '../entities/process-data.entity';
 import { PickedCell } from '../entities/picked-cell.entity';
 import { User } from '../entities/user.entity';
+import { ExperimentDesign } from '../entities/experiment-design.entity';
+import { ProcessData } from '../entities/process-data.entity';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import type { WorkflowStepDefinition } from '@eln/shared';
+import { StepStatus, type WorkflowStepDefinition } from '@eln/shared';
+
+export function isTerminalStepStatus(status: string): boolean {
+  return status === StepStatus.Completed || status === StepStatus.Skipped;
+}
 
 @Injectable()
 export class WorkflowService {
@@ -40,7 +44,6 @@ export class WorkflowService {
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
     private readonly notificationsService: NotificationsService,
-    private readonly groupsService: GroupsService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
@@ -56,6 +59,22 @@ export class WorkflowService {
     dcr_test: 'DcrTest',
     fast_charge: 'FastCharge',
     ht_cycle: 'HtCycle',
+  };
+
+  // Step name → Chinese label mapping for experiment titles
+  private readonly STEP_LABEL_MAP: Record<string, string> = {
+    experiment_design: '实验设计',
+    drying_injection: '干燥/注液',
+    formation: '化成',
+    second_sealing: '二封',
+    capacity_grading: '定容',
+    battery_selection: '挑选电池',
+    calendar_life: '日历寿命',
+    storage_swelling: '存储胀气',
+    energy_efficiency: '能量效率',
+    dcr_test: 'DCR测试',
+    fast_charge: '快充时间',
+    ht_cycle: '高温循环',
   };
 
   // ════════════════════════════════════════════════════════════════
@@ -357,10 +376,22 @@ export class WorkflowService {
       throw new BadRequestException('Workflow already completed');
     }
 
+    const project = await this.projectRepo.findOne({ where: { id: projectId } });
+
     // Find the user's active leaf step
-    const currentStep = steps.find(
+    let currentStep = steps.find(
       (s) => s.status === 'in_progress' && s.assignedUserId === userId && !s.isParallelGroup,
     );
+
+    // If no active step for user, allow project creator to force-complete
+    if (!currentStep && project && project.createdBy === userId) {
+      currentStep = steps.find(
+        (s) => s.status === 'in_progress' && !s.isParallelGroup,
+      );
+      if (currentStep) {
+        this.logger.log(`Project creator ${userId} force-completing step "${currentStep.stepName}"`);
+      }
+    }
 
     if (!currentStep) {
       const groupStep = steps.find((s) => s.status === 'in_progress' && s.isParallelGroup);
@@ -382,12 +413,10 @@ export class WorkflowService {
 
     this.logger.log(`Step "${currentStep.stepName}" completed by ${userId} in project ${projectId}`);
 
-    const project = await this.projectRepo.findOne({ where: { id: projectId } });
-
     // ── Parallel child completion check ──
     if (currentStep.parentStepName) {
       const children = steps.filter((s) => s.parentStepName === currentStep.parentStepName);
-      const allDone = children.every((s) => s.status === 'completed');
+      const allDone = children.every((s) => isTerminalStepStatus(s.status));
 
       if (!allDone) {
         if (project) {
@@ -399,7 +428,7 @@ export class WorkflowService {
               projectName: project.name,
               stepName: currentStep.stepName,
               status: 'partial',
-              remaining: children.filter((s) => s.status !== 'completed').length,
+              remaining: children.filter((s) => !isTerminalStepStatus(s.status)).length,
             },
           );
         }
@@ -427,7 +456,7 @@ export class WorkflowService {
     project: Project | null,
   ): Promise<{ instance: WorkflowInstance; steps: WorkflowStepAssignment[] }> {
     const maxCompleted = Math.max(
-      ...steps.filter((s) => s.status === 'completed').map((s) => s.stepIndex),
+      ...steps.filter((s) => isTerminalStepStatus(s.status)).map((s) => s.stepIndex),
       -1,
     );
     const next = steps.find((s) => s.stepIndex > maxCompleted && s.status === 'pending');
@@ -537,7 +566,7 @@ export class WorkflowService {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) return;
 
-    const stepLabel = stepName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const stepLabel = this.STEP_LABEL_MAP[stepName] ?? stepName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     const exp = this.experimentRepo.create({
       id: uuid(),
       projectId,
@@ -551,24 +580,49 @@ export class WorkflowService {
     const saved = await this.experimentRepo.save(exp);
     this.logger.log(`Auto-created experiment "${exp.title}" for step "${stepName}"`);
 
-    // If it's a process step, pre-fill ProcessData with all cell IDs from groups
+    // ── For ProcessData steps, pre-fill rows with cell IDs from experiment design ──
     if (assayType === 'ProcessData') {
-      const groups = await this.groupsService.findByProject(projectId);
-      const cellIds: string[] = [];
-      for (const g of groups) {
-        const members = await this.groupsService.getMembers(g.id);
-        cellIds.push(...members.map(m => m.cellIdentifier));
-      }
+      await this.prefillProcessDataCells(projectId, saved.id);
+    }
+  }
 
-      if (cellIds.length > 0) {
-        const processRepo = this.dataSource.getRepository(ProcessData);
-        const rows = cellIds.map(cellId => processRepo.create({
-          id: uuid(),
-          experimentId: saved.id,
-          cellId,
-        }));
-        await processRepo.save(rows);
+  /**
+   * Pre-fill ProcessData rows with cell IDs generated from each experiment design group.
+   * Format: <Group><Seq> e.g. A001, A002, ..., A017 (cellCount) + A018, A019, A020 (redundancy)
+   */
+  private async prefillProcessDataCells(projectId: string, experimentId: string): Promise<void> {
+    const designs = await this.dataSource.getRepository(ExperimentDesign).find({
+      where: { projectId, isRedundancy: false },
+      order: { rowIndex: 'ASC' },
+    });
+    if (designs.length === 0) {
+      this.logger.log(`No experiment designs found for project ${projectId}, skipping ProcessData pre-fill`);
+      return;
+    }
+
+    const processRepo = this.dataSource.getRepository(ProcessData);
+    const rows: ProcessData[] = [];
+
+    for (const design of designs) {
+      const cellCount = design.cellCount ?? 17;
+      const redundancyCount = design.redundancyCount ?? 0;
+      const totalCells = cellCount + redundancyCount;
+
+      for (let i = 1; i <= totalCells; i++) {
+        const cellId = `${design.group}${String(i).padStart(3, '0')}`;
+        rows.push(
+          processRepo.create({
+            id: uuid(),
+            experimentId,
+            cellId,
+          }),
+        );
       }
+    }
+
+    if (rows.length > 0) {
+      await processRepo.save(rows);
+      this.logger.log(`Pre-filled ${rows.length} ProcessData rows for experiment ${experimentId}`);
     }
   }
 

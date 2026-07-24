@@ -11,8 +11,6 @@ import { WorkflowInstance } from '../entities/workflow-instance.entity';
 import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 import { CreateExperimentDto } from '../experiments/dto';
-import { GroupsService } from '../groups/groups.service';
-import { ProcessData } from '../entities/process-data.entity';
 
 @Injectable()
 export class ProjectsService {
@@ -22,7 +20,6 @@ export class ProjectsService {
     @InjectRepository(ExperimentCollaborator)
     private readonly collaboratorsRepo: Repository<ExperimentCollaborator>,
     @InjectDataSource() private readonly dataSource: DataSource,
-    private readonly groupsService: GroupsService,
   ) {}
 
   async findVisibleToUser(
@@ -31,27 +28,7 @@ export class ProjectsService {
     limit?: number,
     search?: string,
   ): Promise<{ items: Project[]; total?: number } | Project[]> {
-    // Sub-query: experiments where user is a collaborator
-    const collabSubQuery = this.projectsRepo.manager
-      .createQueryBuilder(Experiment, 'experiment')
-      .select('experiment.projectId')
-      .innerJoin(ExperimentCollaborator, 'collaborator', 'collaborator.experimentId = experiment.id')
-      .where('collaborator.userId = :userId');
-
-    // Sub-query: workflow instances where user is assigned a step
-    const wfSubQuery = this.projectsRepo.manager
-      .createQueryBuilder(WorkflowInstance, 'wi')
-      .select('wi.projectId')
-      .innerJoin(WorkflowStepAssignment, 'wsa', 'wsa.workflowInstanceId = wi.id')
-      .where('wsa.assignedUserId = :userId');
-
-    const query = this.projectsRepo
-      .createQueryBuilder('project')
-      .leftJoinAndSelect('project.creator', 'creator')
-      .where(
-        '(project.createdBy = :userId OR project.id IN (' + collabSubQuery.getQuery() + ') OR project.id IN (' + wfSubQuery.getQuery() + '))',
-        { userId },
-      );
+    const query = this.buildVisibleProjectsQuery(userId).leftJoinAndSelect('project.creator', 'creator');
 
     if (search && search.trim() !== '') {
       const searchPattern = `%${search.trim().toLowerCase()}%`;
@@ -69,9 +46,29 @@ export class ProjectsService {
       return { items, total };
     }
 
-    // No pagination — return all
-    const items = await query.getMany();
-    return items;
+    return query.getMany();
+  }
+
+  private buildVisibleProjectsQuery(userId: string) {
+    const collabSubQuery = this.projectsRepo.manager
+      .createQueryBuilder(Experiment, 'experiment')
+      .select('experiment.projectId')
+      .innerJoin(ExperimentCollaborator, 'collaborator', 'collaborator.experimentId = experiment.id')
+      .where('collaborator.userId = :userId');
+
+    // Sub-query: workflow instances where user is assigned a step
+    const wfSubQuery = this.projectsRepo.manager
+      .createQueryBuilder(WorkflowInstance, 'wi')
+      .select('wi.projectId')
+      .innerJoin(WorkflowStepAssignment, 'wsa', 'wsa.workflowInstanceId = wi.id')
+      .where('wsa.assignedUserId = :userId');
+
+    return this.projectsRepo
+      .createQueryBuilder('project')
+      .where(
+        '(project.createdBy = :userId OR project.id IN (' + collabSubQuery.getQuery() + ') OR project.id IN (' + wfSubQuery.getQuery() + '))',
+        { userId },
+      );
   }
 
   async findOne(id: string, userId?: string): Promise<Project> {
@@ -91,35 +88,9 @@ export class ProjectsService {
    * Checks whether a user can see a project (creator, collaborator, or workflow assignee).
    */
   private async isVisibleToUser(projectId: string, userId: string): Promise<boolean> {
-    // Creator can always see
-    const project = await this.projectsRepo.findOne({ where: { id: projectId } });
-    if (!project) return false;
-    if (project.createdBy === userId) return true;
-
-    // Check experiment collaborator
-    const collabCount = await this.collaboratorsRepo.count({
-      where: { userId } as any,
-    });
-    if (collabCount > 0) {
-      const expWithCollab = await this.projectsRepo.manager
-        .createQueryBuilder(Experiment, 'experiment')
-        .innerJoin(ExperimentCollaborator, 'collaborator', 'collaborator.experimentId = experiment.id')
-        .where('experiment.projectId = :projectId', { projectId })
-        .andWhere('collaborator.userId = :userId', { userId })
-        .getCount();
-      if (expWithCollab > 0) return true;
-    }
-
-    // Check workflow step assignment
-    const wfCount = await this.projectsRepo.manager
-      .createQueryBuilder(WorkflowInstance, 'wi')
-      .innerJoin(WorkflowStepAssignment, 'wsa', 'wsa.workflowInstanceId = wi.id')
-      .where('wi.projectId = :projectId', { projectId })
-      .andWhere('wsa.assignedUserId = :userId', { userId })
-      .getCount();
-    if (wfCount > 0) return true;
-
-    return false;
+    return this.buildVisibleProjectsQuery(userId)
+      .andWhere('project.id = :projectId', { projectId })
+      .getExists();
   }
 
   async findExperiments(
@@ -216,26 +187,6 @@ export class ProjectsService {
     });
 
     const saved = await this.experimentsRepo.save(experiment);
-
-    // If it's a process step (like drying_injection, formation, grading), pre-fill ProcessData with cell IDs
-    if (dto.assayType === 'ProcessData') {
-      const groups = await this.groupsService.findByProject(projectId);
-      const cellIds: string[] = [];
-      for (const g of groups) {
-        const members = await this.groupsService.getMembers(g.id);
-        cellIds.push(...members.map(m => m.cellIdentifier));
-      }
-      
-      if (cellIds.length > 0) {
-        const processRepo = this.dataSource.getRepository(ProcessData);
-        const rows = cellIds.map(cellId => processRepo.create({
-          id: uuid(),
-          experimentId: saved.id,
-          cellId,
-        }));
-        await processRepo.save(rows);
-      }
-    }
 
     return saved;
   }

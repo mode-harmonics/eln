@@ -10,6 +10,8 @@ export interface ExperimentDesignDto {
   designPrinciple: string | null;
   internalCode: string;
   isRedundancy: boolean;
+  cellCount: number | null;
+  redundancyCount: number;
   createdAt: string;
 }
 
@@ -20,10 +22,10 @@ export interface CreateExperimentDesignDto {
   molecularStructure?: string;
   cas: string;
   designPrinciple?: string;
+  cellCount?: number;
+  redundancyCount?: number;
 }
 
 export interface BatchCreateDesignDto {
-  defaultCount: number;
-  redundancyCount: number;
-  rows: CreateExperimentDesignDto[];
+  groups: CreateExperimentDesignDto[];
 }

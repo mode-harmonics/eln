@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { DcrTest } from '../../entities/dcr-test.entity';
-import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 const NUMERIC_FIELDS = ['q0', 'du0', 'du1', 'di', 'cu0', 'cu1', 'ci'] as const;
 
@@ -27,7 +27,7 @@ export class DcrTestParser implements DataParser<Partial<DcrTest>> {
     return normalized.includes('du0') && normalized.includes('du1') && normalized.includes('di');
   }
 
-  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<DcrTest>[] {
+  parse(sheet: Worksheet, experimentId: string, _filename?: string, attachmentId?: string): Partial<DcrTest>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['du0', 'du1', 'di', 'cu0', 'cu1', 'ci']);
     const headers = normalizeHeaders(rawHeaders);
     const colIndex = (name: string) => headers.indexOf(name);

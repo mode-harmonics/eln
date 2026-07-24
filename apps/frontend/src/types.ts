@@ -13,8 +13,7 @@ import type {
   FastChargeDto,
   FastChargeStepDto,
   HtCycleDto,
-  CellGroupDto,
-  CellGroupAssignment,
+
 } from "@eln/shared";
 
 export type Role = RoleDto;
@@ -33,5 +32,4 @@ export type DcrTest = DcrTestDto;
 export type FastChargeStep = FastChargeStepDto;
 export type FastCharge = FastChargeDto;
 export type HtCycle = HtCycleDto;
-export type CellGroup = CellGroupDto;
-export type GroupAssignment = CellGroupAssignment;
+// Cell grouping removed - experiment design groups are used instead

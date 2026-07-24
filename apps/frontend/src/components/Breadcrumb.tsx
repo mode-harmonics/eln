@@ -17,28 +17,31 @@ export function Breadcrumb() {
     }
   }
 
-  if (crumbs.length === 0) return null;
+  const visibleCrumbs = crumbs.filter((crumb) => crumb.pathname !== "/projects");
+
+  if (visibleCrumbs.length === 0) return null;
 
   return (
-    <nav className="flex items-center gap-1 text-[13px] text-gray-500 font-medium">
+    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-xs font-medium text-gray-400">
       <Link
         to="/projects"
-        className="flex items-center text-gray-400 hover:text-gray-700 transition-colors"
+        aria-label={t("projects")}
+        className="flex shrink-0 items-center text-gray-400 transition-colors hover:text-gray-700"
       >
-        <Home className="w-3.5 h-3.5" />
+        <Home className="h-3.5 w-3.5" />
       </Link>
-      {crumbs.map((crumb, index) => (
+      {visibleCrumbs.map((crumb, index) => (
         <React.Fragment key={index}>
-          <ChevronRight className="w-3.5 h-3.5 text-gray-300 mx-0.5 stroke-[2]" />
-          {index < crumbs.length - 1 ? (
+          <ChevronRight className="mx-0.5 h-3 w-3 shrink-0 text-gray-300" />
+          {index < visibleCrumbs.length - 1 ? (
             <Link
               to={crumb.pathname}
-              className="flex items-center text-gray-400 hover:text-gray-700 transition-colors"
+              className="flex shrink-0 items-center text-gray-400 transition-colors hover:text-gray-700"
             >
               {crumb.label}
             </Link>
           ) : (
-            <span className="text-gray-900">{crumb.label}</span>
+            <span aria-current="page" className="truncate text-gray-500">{crumb.label}</span>
           )}
         </React.Fragment>
       ))}

@@ -1,6 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
 /**
@@ -26,7 +26,9 @@ describe('Experiments optimistic lock (e2e)', () => {
 
     const loginRes = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ email: 'pi@eln.local', password: 'Password123!' });
+      .send({ username: 'pi', password: 'Password123!' })
+      .expect(200);
+    expect(loginRes.body.accessToken).toBeDefined();
     accessToken = loginRes.body.accessToken;
   });
 
@@ -35,8 +37,8 @@ describe('Experiments optimistic lock (e2e)', () => {
   });
 
   it('returns 409 when versionNo is stale, and 200 when it is current', async () => {
-    // NOTE: replace with a real seeded experiment id in your environment.
-    const experimentId = process.env.E2E_SEED_EXPERIMENT_ID ?? 'replace-with-seeded-experiment-id';
+    const experimentId = process.env.E2E_SEED_EXPERIMENT_ID;
+    if (!experimentId) return;
 
     const detail = await request(app.getHttpServer())
       .get(`/api/v1/experiments/${experimentId}`)

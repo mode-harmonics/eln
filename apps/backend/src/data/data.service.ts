@@ -25,10 +25,7 @@ import { FastChargeStepParser } from './parsers/fast-charge-step.parser';
 import { ProcessDataStepParser } from './parsers/process-data-step.parser';
 import { HtCycleStepParser } from './parsers/ht-cycle-step.parser';
 import { computeFastChargeTime } from './parsers/fast-charge.parser';
-import { GroupsService } from '../groups/groups.service';
-import { CellGroupMember } from '../entities/cell-group-member.entity';
 import { ProjectsService } from '../projects/projects.service';
-import { pickBatteries } from '../battery-picker/pick-batteries';
 import { getColumnHeaders, RAW_STEP_COLUMNS } from './export-columns';
 import { WorkflowService } from '../workflow/workflow.service';
 
@@ -102,7 +99,6 @@ export class DataService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly parserRegistry: ParserRegistry,
-    private readonly groupsService: GroupsService,
     private readonly projectsService: ProjectsService,
     private readonly workflowService: WorkflowService,
   ) { }
@@ -576,15 +572,10 @@ export class DataService {
   }
 
   /**
-   * Auto-pick cells for a project using the battery selection algorithm.
-   * 1. Resolve the project's ProcessData experiment
-   * 2. Build input records from process data (QD1st=gqd1, GR1=gr1, FVG=fvg, KU=ku)
-   * 3. Run selectBatteries() — z-score outlier removal + global normalization
-   *    + sequential combinatorial enumeration
-   * 4. Persist the assigned cells as PickedCell rows
-   * 5. Auto-assign groups by prefix matching
+    * Rank project cells by first discharge capacity and total formation
+    * capacity, then allocate up to 17 cells across the configured tests.
    */
-  async autoPickCells(projectId: string, topN?: number): Promise<PickedCell[]> {
+    async autoPickCells(projectId: string): Promise<PickedCell[]> {
     const TEST_ALLOCATION = [
       { testType: 'CalendarLife', count: 3 },
       { testType: 'StorageSwelling', count: 3 },
@@ -821,38 +812,6 @@ export class DataService {
     return repo.save(repo.create(rowData as any));
   }
 
-  /** Persist the uploaded file to disk and create an attachment record. */
-  async saveAttachment(
-    buffer: Buffer,
-    originalName: string,
-    mimeType: string,
-    experimentId: string,
-    uploadedBy: string,
-  ): Promise<Attachment> {
-    const id = uuid();
-    const ext = path.extname(originalName) || '.xlsx';
-    const storedName = `${id}${ext}`;
-    const dir = path.resolve('uploads', experimentId);
-
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-
-    const filePath = path.join(dir, storedName);
-    fs.writeFileSync(filePath, buffer);
-
-    const attachment = new Attachment();
-    attachment.id = id;
-    attachment.experimentId = experimentId;
-    attachment.fileName = originalName;
-    attachment.filePath = filePath;
-    attachment.fileSize = buffer.length;
-    attachment.mimeType = mimeType;
-    attachment.uploadedBy = uploadedBy;
-
-    return this.dataSource.getRepository(Attachment).save(attachment);
-  }
-
   /** GET /data/:type/:expId returns all rows for the given table + experiment. */
   async findByType(type: string, experimentId: string): Promise<unknown[]> {
     const EntityClass = TYPE_PARAM_TO_ENTITY[type];
@@ -891,28 +850,6 @@ export class DataService {
       where: { experimentId } as Record<string, unknown>,
       order
     });
-  }
-
-  /**
-   * GET /data/:type/:expId?withGroups=true&projectId=...
-   * Returns rows + groupMap so the frontend can colour each cell by group.
-   */
-  async findByTypeWithGroups(
-    type: string,
-    experimentId: string,
-    projectId: string,
-  ): Promise<{ rows: unknown[]; groupMap: Record<string, { groupId: string | null; groupName: string | null; color: string }> }> {
-    const rows = await this.findByType(type, experimentId) as Record<string, unknown>[];
-
-    // Collect all cell identifiers from the rows
-    const cellIdentifiers: string[] = [];
-    for (const row of rows) {
-      const ci = (row.cellName as string) ?? (row.cellId as string);
-      if (ci) cellIdentifiers.push(ci);
-    }
-
-    const groupMap = await this.groupsService.getGroupMap(cellIdentifiers, projectId);
-    return { rows, groupMap };
   }
 
   /** PUT /data/:type/:id update a single data row. */

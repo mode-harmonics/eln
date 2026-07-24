@@ -5,7 +5,7 @@ import { RequestUser } from '../decorators/current-user.decorator';
 
 export function hasPermission(permissionList: string[], required: string): boolean {
   if (!permissionList || permissionList.length === 0) return false;
-  const [resource, action] = required.split(':');
+  const [resource] = required.split(':');
   return permissionList.some((p) => {
     if (p === '*' || p === `${resource}:*` || p === required) return true;
     return false;

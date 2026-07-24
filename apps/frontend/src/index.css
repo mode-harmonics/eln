@@ -4,6 +4,17 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-action: #f27429;
+  --color-action-hover: #d95f16;
+  --color-action-subtle: #fff3eb;
+  --color-action-muted: #9a451b;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f7f8fa;
+  --color-border: #e5e7eb;
+  --color-border-strong: #d1d5db;
+  --color-focus: #f27429;
+  --radius-control: 0.375rem;
+  --radius-surface: 0.5rem;
 }
 
 html, body, #root {

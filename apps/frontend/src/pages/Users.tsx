@@ -15,6 +15,8 @@ import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { User, Role } from "../types";
 import { Popconfirm } from "../components/Popconfirm";
+import { PageHeader } from "../components/PageHeader";
+import { ListToolbar } from "../components/ListToolbar";
 
 export function Users() {
   const { t } = useTranslation();
@@ -145,28 +147,23 @@ export function Users() {
   }
 
   return (
-    <div className="space-y-8 relative">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {t("user_management")}
-        </h1>
-      </div>
+    <div className="relative space-y-6">
+      <PageHeader title={t("user_management")} />
 
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <SearchInput
+        <ListToolbar
+          search={<SearchInput
             value={searchInput}
             onChange={setSearchInput}
             onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
             placeholder={t("search_users")}
-          />
-          <div className="flex items-center gap-4">
-            <ViewToggle
+          />}
+          view={<ViewToggle
               viewMode={viewMode}
               setViewMode={setViewMode}
               className="hidden sm:flex"
-            />
-            {hasPermission("users:write") && (
+          />}
+          actions={hasPermission("users:write") ? (
               <Button
                 size="sm"
                 variant="secondary"
@@ -178,9 +175,8 @@ export function Users() {
                 <Plus className="w-4 h-4" />
                 {t("add_user")}
               </Button>
-            )}
-          </div>
-        </div>
+          ) : undefined}
+        />
 
         {viewMode === "list" ? (
           <TableWrapper>
@@ -192,7 +188,7 @@ export function Users() {
                   <TableHead>{t("email")}</TableHead>
                   <TableHead>{t("role")}</TableHead>
                   <TableHead>{t("status")}</TableHead>
-                  {hasPermission("users:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">{t("actions")}</TableHead>}
+                  {hasPermission("users:write") && <TableHead className="sticky right-0 z-20 bg-gray-50 text-right">{t("actions")}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -202,7 +198,7 @@ export function Users() {
                     <TableRow key={user.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold border border-blue-200">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-action-subtle text-xs font-bold text-action-muted">
                             {initial}
                           </div>
                           <div className="text-[13px] font-medium text-gray-900">
@@ -236,7 +232,7 @@ export function Users() {
                       {hasPermission("users:write") && (
                         <TableCell className="text-right text-sm font-medium sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                           <div className="inline-flex items-center gap-3">
-                            <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                            <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action">
                               <Edit3 className="w-4 h-4" />
                             </Button>
                             <Popconfirm
@@ -264,7 +260,7 @@ export function Users() {
                 <Card key={user.id} className="flex flex-col items-center text-center relative group p-6 border-gray-200 hover:border-gray-300">
                   {hasPermission("users:write") && (
                     <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]">
+                      <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action">
                         <Edit3 className="w-4 h-4" />
                       </Button>
                       <Popconfirm
@@ -278,7 +274,7 @@ export function Users() {
                       </Popconfirm>
                     </div>
                   )}
-                  <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold border border-blue-200">
+                  <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-action-subtle text-xl font-bold text-action-muted">
                     {initial}
                   </div>
                   <h3 className="font-semibold text-[17px] text-gray-900">

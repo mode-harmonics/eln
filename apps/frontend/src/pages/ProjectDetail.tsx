@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import {
   Loader2, CheckCircle2, Circle, Play, FileText, Beaker,
   FlaskConical, Layers, Clock, Thermometer, Zap, Activity,
-  ChevronRight, User, UploadCloud, FileDigit, ShieldAlert, AlertCircle, Sparkles
+  ChevronRight, User, AlertCircle, LockKeyhole, ListChecks
 } from "lucide-react";
 import { Button } from "../components/Button";
 import { cn } from "../lib/utils";
@@ -19,9 +19,10 @@ import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
 import { STEP_ASSAY_MAP, getChildStepLabel } from "@eln/shared";
 import { RECORD_TYPE_TO_API_TYPE } from "../utils/recordTypes";
+import { PageHeader } from "../components/PageHeader";
 import type {
   Project, Experiment, ProcessData, CalendarLife, StorageSwelling,
-  EnergyEfficiency, DcrTest, FastCharge, HtCycle, CellGroup,
+  EnergyEfficiency, DcrTest, FastCharge, HtCycle,
 } from "../types";
 
 // ─── Types ──────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ export function ProjectDetail() {
   const [loadedTypes, setLoadedTypes] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
 
-  const [groups, setGroups] = useState<CellGroup[]>([]);
+  // Cell groups removed - experiment design groups are used instead
   const [pickedCells, setPickedCells] = useState<string[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
   const [cellPickerOpen, setCellPickerOpen] = useState(false);
@@ -194,9 +195,8 @@ export function ProjectDetail() {
 
 
 
-  // ── Load groups & picked cells ──
+  // ── Load picked cells ──
   useEffect(() => { if (!projectId) return; api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`).then((d) => setPickedCells((d || []).map((p: any) => p.cellId))).catch(() => { }); }, [projectId, refetchTrigger]);
-  useEffect(() => { if (!projectId) return; api.get<CellGroup[]>(`/api/v1/projects/${projectId}/groups`).then(setGroups).catch(() => { }); }, [projectId]);
 
   // Summary / Raw data fetch — loads when either summary or raw_data tab is active
   useEffect(() => {
@@ -276,38 +276,39 @@ export function ProjectDetail() {
     return children;
   };
 
+  const completedStepCount = stepParents.filter((step) => step.status === "completed").length;
+  const activeStepCount = stepParents.filter((step) => step.status === "in_progress").length;
+  const workflowProgress = stepParents.length > 0
+    ? Math.round((completedStepCount / stepParents.length) * 100)
+    : 0;
+  const focusedStep = currentStep || (isCreator
+    ? wf.steps.find((step) => step.status === "in_progress" && !step.isParallelGroup) || null
+    : null);
+
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-            <span className={cn(
-              "text-[13px] font-medium flex items-center gap-1.5",
-              project.status === "Approved" ? "text-green-600" : "text-blue-600"
+      <PageHeader
+        title={project.name}
+        description={project.description || "暂无项目描述"}
+        badges={<span className={cn(
+              "inline-flex items-center gap-1.5 rounded bg-gray-100 px-2 py-1 text-xs font-medium",
+              project.status === "Approved" ? "text-green-700" : "text-gray-700"
             )}>
-              <span className={cn("w-1.5 h-1.5 rounded-full", project.status === "Approved" ? "bg-green-500" : "bg-blue-500")}></span>
+              <span className={cn("h-1.5 w-1.5 rounded-full", project.status === "Approved" ? "bg-green-500" : "bg-gray-500")}></span>
               {project.status || "In Progress"}
-            </span>
+            </span>}
+        actions={currentStep ? (
+          <div className="flex shrink-0 items-center gap-2 text-[13px] sm:pt-1">
+            <span className="text-gray-400">{t("current_step", "当前步骤")}</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-action"></span>
+            <span className="font-medium text-gray-700">{STEP_META[currentStep.stepName]?.label || currentStep.stepName}</span>
           </div>
-          <p className="text-[13px] text-gray-500 mt-1 max-w-2xl line-clamp-2">{project.description || "暂无项目描述"}</p>
-        </div>
-        {currentStep && (
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="text-right">
-              <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wider">Current Step</p>
-              <p className="text-sm font-semibold text-gray-900 mt-0.5 flex items-center justify-end gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                {STEP_META[currentStep.stepName]?.label || currentStep.stepName}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* ── Tabs ── */}
       <Tabs
+        variant="segmented"
         items={[
           { key: "workflow", label: t("workflow", "工作流程进度") },
           ...(isCreator ? [
@@ -321,191 +322,203 @@ export function ProjectDetail() {
 
       {/* ═══════════ Workflow Tab ═══════════ */}
       {activeTab === "workflow" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: step list */}
-          <div className="lg:col-span-2 divide-y divide-gray-100 border-y border-gray-100 bg-transparent">
-            {wfLoading ? (
-              <div className="py-16 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-500" /></div>
-            ) : !wf.instance ? (
-              <div className="text-center py-12 bg-white rounded-lg border border-gray-200 shadow-sm text-gray-400 text-sm">
-                {t("no_workflow", "当前项目暂无工作流实例")}
+        <div className="space-y-5">
+          <section className="rounded-lg bg-gray-50 px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="h-4 w-4 text-gray-600" />
+                  <h2 className="text-[15px] font-semibold text-gray-900">{t("workflow_progress", "流程进度")}</h2>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {completedStepCount} / {stepParents.length} {t("step_completed", "步骤已完成")}
+                  {activeStepCount > 0 && ` · ${activeStepCount} ${t("step_in_progress", "进行中")}`}
+                </p>
               </div>
-            ) : (
-              stepParents.map((step) => {
-                const meta = STEP_META[step.stepName] || { label: step.stepName, icon: <Circle className="w-4 h-4" /> };
-                const children = stepChildren(step.stepName);
-                const isComplete = step.status === "completed";
-                const isInProgress = step.status === "in_progress";
-                const isPending = step.status === "pending";
-                const route = isPending ? null : stepRoute(step.stepName, projectId!, experiments);
+              <div className="flex items-center gap-3 sm:min-w-64">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-valuenow={workflowProgress} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="h-full rounded-full bg-action transition-[width] duration-500" style={{ width: `${workflowProgress}%` }} />
+                </div>
+                <span className="w-10 text-right text-sm font-semibold tabular-nums text-gray-900">{workflowProgress}%</span>
+              </div>
+            </div>
+          </section>
 
-                return (
-                  <div key={step.stepName} className={cn("bg-transparent py-1 transition-colors", !isPending && "hover:bg-gray-50/50")}>
-                    {/* Step header */}
-                    <div className="flex items-center justify-between px-2 py-2">
-                      <Link
-                        to={route || "#"}
-                        onClick={(e) => { 
-                          if (!route) e.preventDefault(); 
-                          if (step.stepName === "battery_selection" && (isInProgress || isComplete)) {
-                            setCellPickerOpen(true);
-                          }
-                        }}
-                        className={cn("flex items-center gap-3 flex-1 min-w-0 no-underline", isPending && "opacity-50 cursor-not-allowed")}
-                      >
-                        <div className={cn("w-6 h-6 rounded-full flex items-center justify-center shrink-0 font-medium text-[11px]",
-                          isComplete ? "bg-green-100 text-green-700" :
-                            isInProgress ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"
-                        )}>
-                          {isComplete ? <CheckCircle2 className="w-3.5 h-3.5" /> : isInProgress ? <Play className="w-3 h-3 fill-current ml-0.5" /> : step.stepIndex + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={cn("text-[13px] font-medium", isComplete ? "text-gray-900" : isInProgress ? "text-blue-700 font-semibold" : "text-gray-500")}>
-                              {meta.label}
-                            </span>
-                            <StatusBadge status={step.status} />
-                          </div>
-                          {step.assignedUserId && (
-                            <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
-                              <User className="w-3 h-3 text-gray-400" /> 负责人: {(step as any).assignedUserName || `用户 #${(step.assignedUserId || '').slice(0, 6)}`}
-                            </p>
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="overflow-hidden rounded-lg bg-gray-50/70">
+              <div className="px-5 pb-3 pt-5 sm:px-6">
+                <h2 className="text-[15px] font-semibold text-gray-900">{t("workflow", "工作流程")}</h2>
+                <p className="mt-1 text-xs text-gray-500">按实验阶段查看任务状态、负责人和数据记录</p>
+              </div>
+
+              {wfLoading ? (
+                <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-gray-500" /></div>
+              ) : !wf.instance ? (
+                <div className="px-6 py-16 text-center text-sm text-gray-500">
+                  <ListChecks className="mx-auto mb-3 h-9 w-9 text-gray-300" />
+                  {t("no_workflow", "当前项目暂无工作流实例")}
+                </div>
+              ) : (
+                <div className="space-y-1 px-2 pb-2 sm:px-3 sm:pb-3">
+                  {stepParents.map((step, index) => {
+                    const meta = STEP_META[step.stepName] || { label: step.stepName, icon: <Circle className="h-4 w-4" /> };
+                    const children = stepChildren(step.stepName);
+                    const isComplete = step.status === "completed";
+                    const isInProgress = step.status === "in_progress";
+                    const isPending = step.status === "pending";
+                    const route = isPending ? null : stepRoute(step.stepName, projectId!, experiments);
+                    const canOpen = !!route || (step.stepName === "battery_selection" && !isPending);
+
+                    return (
+                      <div key={step.stepName} className={cn("relative rounded-2xl px-3 py-3 transition-colors sm:px-4", isInProgress && "bg-[#f0f6ff]")}>
+                        {index < stepParents.length - 1 && <div className="absolute bottom-[-6px] left-[31px] top-10 w-px bg-gray-200/70 sm:left-[35px]" />}
+                        <Link
+                          to={route || "#"}
+                          aria-current={isInProgress ? "step" : undefined}
+                          onClick={(event) => {
+                            if (!route) event.preventDefault();
+                            if (step.stepName === "battery_selection" && !isPending) setCellPickerOpen(true);
+                          }}
+                          className={cn(
+                            "group flex min-w-0 items-center gap-3 no-underline",
+                            canOpen ? "cursor-pointer" : isPending ? "cursor-not-allowed" : "cursor-default",
                           )}
-                        </div>
-                      </Link>
-
-                      {/* Right action controls on step card */}
-                      <div className="flex items-center gap-2 shrink-0">
-                        {step.stepName === "battery_selection" && (isInProgress || isComplete) && (
-                          <div 
-                            className="p-1 text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
-                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setCellPickerOpen(true); }}
-                          >
-                            <ChevronRight className="w-4 h-4" />
+                        >
+                          <div className={cn(
+                            "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
+                            isComplete ? "border-transparent bg-emerald-50 text-emerald-700" :
+                              isInProgress ? "border-transparent bg-action text-white" :
+                                "border-transparent bg-gray-100 text-gray-400",
+                          )}>
+                            {isComplete ? <CheckCircle2 className="h-4 w-4" /> : isInProgress ? <Play className="ml-0.5 h-3.5 w-3.5 fill-current" /> : step.stepIndex + 1}
                           </div>
-                        )}
-                        {route && (
-                          <Link to={route} className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
-                            <ChevronRight className="w-4 h-4" />
-                          </Link>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={cn("text-sm font-medium", isPending ? "text-gray-500" : "text-gray-900")}>{meta.label}</span>
+                              <StatusBadge status={step.status} />
+                            </div>
+                            <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
+                              {step.assignedUserId ? (
+                                <><User className="h-3 w-3" /><span className="truncate">{t("assignee", "执行人")}: {(step as any).assignedUserName || `用户 #${step.assignedUserId.slice(0, 6)}`}</span></>
+                              ) : isPending ? (
+                                <><LockKeyhole className="h-3 w-3" /><span>{t("step_pending", "等待前置步骤完成")}</span></>
+                              ) : null}
+                            </div>
+                          </div>
+                          {canOpen && <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-700" />}
+                        </Link>
+
+                        {children.length > 0 && (
+                          <div className="ml-11 mt-3 overflow-hidden rounded-md bg-gray-100/80 p-1">
+                            {children.map((child, childIndex) => {
+                              const childMeta = STEP_META[child.stepName] || { label: child.stepName, icon: <Circle className="h-3 w-3" /> };
+                              const childPending = child.status === "pending";
+                              const childRoute = childPending ? null : stepRoute(child.stepName, projectId!, experiments);
+                              return (
+                                <Link
+                                  key={child.stepName}
+                                  to={childRoute || "#"}
+                                  onClick={(event) => { if (!childRoute) event.preventDefault(); }}
+                                  className={cn(
+                                    "group flex min-w-0 items-center gap-3 px-3 py-2.5 no-underline transition-colors",
+                                    childIndex > 0 && "mt-0.5",
+                                    childRoute ? "rounded hover:bg-white" : childPending ? "cursor-not-allowed" : "cursor-default",
+                                  )}
+                                >
+                                  <div className={cn(
+                                    "flex h-6 w-6 shrink-0 items-center justify-center rounded",
+                                    child.status === "completed" ? "bg-emerald-50 text-emerald-600" :
+                                      child.status === "in_progress" ? "bg-action-subtle text-action-muted" : "bg-white text-gray-400",
+                                  )}>
+                                    {React.isValidElement(childMeta.icon)
+                                      ? React.cloneElement(childMeta.icon as React.ReactElement<{ className?: string }>, { className: "h-3 w-3" })
+                                      : childMeta.icon}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className={cn("truncate text-[13px]", child.status === "in_progress" ? "font-medium text-action-muted" : "text-gray-700")}>{childMeta.label}</p>
+                                    {child.assignedUserId && <p className="mt-0.5 truncate text-[11px] text-gray-400">{t("assignee", "执行人")}: {(child as any).assignedUserName || `用户 #${child.assignedUserId.slice(0, 6)}`}</p>}
+                                  </div>
+                                  <StatusBadge status={child.status} />
+                                  {childRoute && <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-gray-700" />}
+                                </Link>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <aside className="lg:sticky lg:top-5">
+              {focusedStep ? (
+                <div className="overflow-hidden rounded-lg bg-gray-50">
+                  <div className="bg-action-subtle px-5 py-4">
+                    <div className="flex items-center gap-2 text-xs font-medium text-action-muted">
+                      <span className="h-2 w-2 rounded-full bg-action" />
+                      {t("current_task", "当前任务")}
+                    </div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-action-muted">
+                        {STEP_META[focusedStep.stepName]?.icon || <Circle className="h-4 w-4" />}
+                      </div>
+                      <h3 className="text-[15px] font-semibold text-gray-900">{STEP_META[focusedStep.stepName]?.label || focusedStep.stepName}</h3>
+                    </div>
+                  </div>
+                  <div className="space-y-4 p-5">
+                    <div className="flex gap-2.5 text-[13px] text-gray-600">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                      <p className="leading-5">完成当前阶段的数据录入与校验后，可在对应实验页面提交并推进流程。</p>
                     </div>
 
-                    {/* Sub-steps */}
-                    {children.length > 0 && (
-                      <div className={cn("pl-10 pr-2 pb-3 space-y-2", children[0]?.isParallelGroup ? "pt-0" : "pt-1")}>
-                        {children.map((child) => {
-                          const cm = STEP_META[child.stepName] || { label: child.stepName, icon: <Circle className="w-3 h-3" /> };
-                          const isChildPending = child.status === "pending";
-                          const childRoute = isChildPending ? null : stepRoute(child.stepName, projectId!, experiments);
-                          return (
-                            <div
-                              key={child.stepName}
-                              className={cn(
-                                "flex items-center justify-between px-3 py-2.5 rounded-md transition-colors",
-                                child.isParallelGroup
-                                  ? cn("border-l-2", child.status === "in_progress" ? "border-blue-500 bg-gray-50/50" : child.status === "completed" ? "border-green-500 bg-transparent" : "border-transparent hover:bg-gray-50/50")
-                                  : cn("bg-gray-50 border border-gray-100", !isChildPending && "hover:bg-gray-100/70")
-                              )}
-                            >
-                              <Link
-                                to={childRoute || "#"}
-                                onClick={(e) => { if (!childRoute) e.preventDefault(); }}
-                                className={cn("flex items-center gap-3 flex-1 min-w-0 no-underline", isChildPending && "opacity-50 cursor-not-allowed")}
-                              >
-                                <div className={cn("w-6 h-6 rounded flex items-center justify-center shrink-0",
-                                  child.status === "completed" ? "bg-green-100/50 text-green-600" :
-                                    child.status === "in_progress" ? "bg-blue-100/50 text-blue-600" : "bg-white text-gray-400 border border-gray-200"
-                                )}>
-                                  {React.isValidElement(cm.icon) ? React.cloneElement(cm.icon as React.ReactElement<{ className?: string }>, { className: "w-3 h-3" }) : cm.icon}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <span className={cn("text-[13px] block", child.status === "completed" ? "text-gray-900" : child.status === "in_progress" ? "text-blue-600 font-medium" : "text-gray-600")}>
-                                    {cm.label}
-                                  </span>
-                                  {child.assignedUserId && (
-                                    <p className={cn("text-[11px] mt-0.5 flex items-center gap-1", isChildPending ? "text-gray-300" : "text-gray-400")}>
-                                      <User className="w-3 h-3" /> 负责人: {(child as any).assignedUserName || `用户 #${(child.assignedUserId || '').slice(0, 6)}`}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <StatusBadge status={child.status} />
-                                  {childRoute && <ChevronRight className="w-4 h-4 text-gray-300" />}
-                                </div>
-                              </Link>
-
-                            </div>
-                          );
-                        })}
+                    {focusedStep.assignedUserId && (
+                      <div className="flex items-center gap-2 pt-1 text-xs text-gray-500">
+                        <User className="h-3.5 w-3.5" />
+                        <span>{t("assignee", "执行人")}: {(focusedStep as any).assignedUserName || `用户 #${focusedStep.assignedUserId.slice(0, 6)}`}</span>
                       </div>
                     )}
-                  </div>
-                );
-              })
-            )}
-          </div>
 
-          {/* Right panel: Task info & Submission Guidelines */}
-          <div className="space-y-4 lg:pl-6">
-            {currentStep ? (
-              <div className="bg-transparent space-y-4">
-                <div className="border-b border-gray-100 pb-2">
-                  <p className="text-[13px] font-semibold text-gray-900 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                    当前任务
-                  </p>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded flex items-center justify-center bg-gray-50 text-gray-700 shrink-0">
-                      {STEP_META[currentStep.stepName]?.icon || <Circle className="w-4 h-4" />}
-                    </div>
-                    <div>
-                      <p className="text-[13px] font-semibold text-gray-900">
-                        {STEP_META[currentStep.stepName]?.label || currentStep.stepName}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-transparent border-l-2 border-gray-200 pl-3 py-1 text-[13px] text-gray-600">
-                    <div className="flex items-center gap-1.5 font-medium text-gray-800 mb-0.5">
-                      <AlertCircle className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-                      <span>操作规范</span>
-                    </div>
-                    <p className="leading-relaxed text-gray-500">
-                      该步骤需要先录入或上传符合规范的线下汇总表数据。校验无误后方可推进至下一环节。
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 pt-2 border-t border-gray-100">
-
-
-                    {currentStep.stepName === "experiment_design" && (
+                    {focusedStep.stepName === "experiment_design" && (
                       <Link to={`/projects/${projectId}/design`} className="block no-underline">
-                        <Button variant="primary" className="w-full justify-center">
+                        <Button variant="primary" className="w-full">
+                          <FileText className="h-4 w-4" />
                           前往实验设计
+                          <ChevronRight className="ml-auto h-4 w-4" />
                         </Button>
                       </Link>
                     )}
 
-                    {currentStep.stepName === "battery_selection" && (
-                      <Button variant="primary" className="w-full justify-center" onClick={() => setCellPickerOpen(true)}>
-                        <Layers className="w-4 h-4" />
+                    {focusedStep.stepName === "battery_selection" && (
+                      <Button variant="primary" className="w-full" onClick={() => setCellPickerOpen(true)}>
+                        <Layers className="h-4 w-4" />
                         挑选实验电芯 ({pickedCells.length})
+                        <ChevronRight className="ml-auto h-4 w-4" />
                       </Button>
                     )}
+
+                    {!['experiment_design', 'battery_selection', 'testing'].includes(focusedStep.stepName) && (() => {
+                      const taskRoute = stepRoute(focusedStep.stepName, projectId!, experiments);
+                      return taskRoute ? (
+                        <Link to={taskRoute} className="block no-underline">
+                          <Button variant="primary" className="w-full">
+                            打开实验记录
+                            <ChevronRight className="ml-auto h-4 w-4" />
+                          </Button>
+                        </Link>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-transparent border border-gray-100 rounded-lg p-6 text-center">
-                <CheckCircle2 className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                <h3 className="text-[13px] font-medium text-gray-900">暂无待办任务</h3>
-                <p className="text-xs text-gray-500 mt-1">所有步骤已完成或尚未启动</p>
-              </div>
-            )}
+              ) : (
+                <div className="rounded-lg bg-gray-50 p-6 text-center">
+                  <CheckCircle2 className="mx-auto mb-3 h-9 w-9 text-emerald-500" />
+                  <h3 className="text-sm font-medium text-gray-900">{t("workflow_completed", "暂无待办任务")}</h3>
+                  <p className="mt-1 text-xs leading-5 text-gray-500">{t("workflow_completed_desc", "所有步骤已完成或尚未启动")}</p>
+                </div>
+              )}
+            </aside>
           </div>
         </div>
       )}
@@ -514,14 +527,14 @@ export function ProjectDetail() {
       {activeTab === "summary" && (dataLoading ? <SkeletonCard rows={5} /> :
         <DataSummary loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
           storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
-          fastCharge={fastCharge} htCycle={htCycle} groups={groups} />
+          fastCharge={fastCharge} htCycle={htCycle} />
       )}
 
       {/* ═══════════ Raw Data Tab ═══════════ */}
       {activeTab === "raw_data" && (dataLoading ? <SkeletonCard rows={5} /> :
         <ProjectRawData loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
           storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
-          fastCharge={fastCharge} htCycle={htCycle} groups={groups} projectId={projectId!} />
+          fastCharge={fastCharge} htCycle={htCycle} projectId={projectId!} />
       )}
 
 
@@ -557,7 +570,7 @@ function stepRoute(stepName: string, projectId: string, experiments: Experiment[
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     pending: { label: "待处理", cls: "bg-gray-100 text-gray-500" },
-    in_progress: { label: "进行中", cls: "bg-blue-100/80 text-blue-700 font-medium" },
+    in_progress: { label: "进行中", cls: "bg-action-subtle text-action-muted font-medium" },
     completed: { label: "已完成", cls: "bg-emerald-100/80 text-emerald-700 font-medium" },
     skipped: { label: "已跳过", cls: "bg-gray-100 text-gray-400" },
   };

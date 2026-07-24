@@ -25,6 +25,7 @@ import { API_ROUTES } from "@eln/shared";
 import { PageLoader } from "../components/PageLoader";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/Card";
 import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
+import { PageHeader } from "../components/PageHeader";
 
 interface DashboardSummary {
   projectStatusDistribution: { status: string; count: number }[];
@@ -44,6 +45,7 @@ interface DashboardSummary {
     user?: string;
     timestamp: string;
     experimentId?: string;
+    projectId?: string;
     experimentTitle?: string;
     content?: string;
     payload?: any;
@@ -110,27 +112,22 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="bg-blue-100 p-2 rounded-lg">
-          <LayoutDashboard className="w-6 h-6 text-[#1d74f5]" />
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900">{t("dashboard", "Dashboard")}</h1>
-      </div>
+      <PageHeader title={t("dashboard", "Dashboard")} icon={<LayoutDashboard className="h-5 w-5" />} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="flex flex-col items-center justify-center p-6 text-center border-gray-100 shadow-sm">
+        <Card className="flex flex-col items-center justify-center p-6 text-center">
           <CardDescription className="font-medium mb-1 mt-0">{t("total_projects", "Total Projects")}</CardDescription>
           <div className="text-2xl font-bold text-gray-900">{totalProjects}</div>
         </Card>
-        <Card className="flex flex-col items-center justify-center p-6 text-center border-gray-100 shadow-sm">
+        <Card className="flex flex-col items-center justify-center p-6 text-center">
           <CardDescription className="font-medium mb-1 mt-0">{t("total_experiments", "Total Experiments")}</CardDescription>
           <div className="text-2xl font-bold text-gray-900">{totalExperiments}</div>
         </Card>
-        <Card className="flex flex-col items-center justify-center p-6 text-center border-gray-100 shadow-sm">
+        <Card className="flex flex-col items-center justify-center p-6 text-center">
           <CardDescription className="font-medium mb-1 mt-0">{t("pending_approvals", "Pending Approvals")}</CardDescription>
-          <div className="text-2xl font-bold text-[#f27429]">{summary.pendingApprovals.length}</div>
+          <div className="text-2xl font-bold text-action">{summary.pendingApprovals.length}</div>
         </Card>
-        <Card className="flex flex-col items-center justify-center p-6 text-center border-gray-100 shadow-sm">
+        <Card className="flex flex-col items-center justify-center p-6 text-center">
           <CardDescription className="font-medium mb-1 mt-0">{t("recent_activities", "Recent Activities")}</CardDescription>
           <div className="text-2xl font-bold text-[#10b981]">{summary.recentActivities.length}</div>
         </Card>
@@ -138,7 +135,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Charts */}
-        <Card className="border-gray-100 shadow-sm">
+        <Card>
           <CardHeader className="pb-0 mb-4">
             <CardTitle>{t("project_status", "Project Status")}</CardTitle>
           </CardHeader>
@@ -166,7 +163,7 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border-gray-100 shadow-sm">
+        <Card>
           <CardHeader className="pb-0 mb-4">
             <CardTitle>{t("experiment_status", "Experiment Status")}</CardTitle>
           </CardHeader>
@@ -195,10 +192,10 @@ export function Dashboard() {
         </Card>
 
         {/* Pending Approvals */}
-        <Card className="col-span-1 lg:col-span-2 border-gray-100 shadow-sm">
+        <Card className="col-span-1 lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="w-5 h-5 text-[#f27429]" />
+              <Clock className="w-5 h-5 text-action" />
               {t("my_pending_approvals", "Pending My Approval")}
             </CardTitle>
           </CardHeader>
@@ -228,7 +225,7 @@ export function Dashboard() {
                         <TableCell className="text-right">
                           <Link
                             to={`/projects/${exp.projectId}/experiments/${exp.id}`}
-                            className="text-[#1d74f5] hover:underline font-medium"
+                            className="font-medium text-action-muted hover:underline"
                           >
                             {t("review", "Review")}
                           </Link>
@@ -243,7 +240,7 @@ export function Dashboard() {
         </Card>
 
         {/* Recent Activities */}
-        <Card className="col-span-1 lg:col-span-2 border-gray-100 shadow-sm">
+        <Card className="col-span-1 lg:col-span-2">
           <CardHeader>
             <CardTitle>{t("recent_activities", "Recent Activities")}</CardTitle>
           </CardHeader>
@@ -262,7 +259,7 @@ export function Dashboard() {
                     <div className="flex-1">
                       <div className="flex justify-between items-start mb-1">
                         <p className="text-sm font-medium text-gray-900">
-                          {activity.user && <span className="text-[#1d74f5]">{activity.user}</span>}
+                          {activity.user && <span className="text-action-muted">{activity.user}</span>}
                           {activity.user && " "}
                           {activity.action}
                         </p>
@@ -273,12 +270,16 @@ export function Dashboard() {
                       {activity.experimentTitle && (
                         <p className="text-xs text-gray-500 mb-1">
                           {t("experiment", "Experiment")}:{" "}
-                          <Link
-                            to={`/projects/${activity.experimentId ? `some_proj_id/experiments/${activity.experimentId}` : "#"}`}
-                            className="text-gray-700 hover:text-[#1d74f5] font-medium"
-                          >
-                            {activity.experimentTitle}
-                          </Link>
+                          {activity.projectId && activity.experimentId ? (
+                            <Link
+                              to={`/projects/${activity.projectId}/experiments/${activity.experimentId}`}
+                              className="font-medium text-gray-700 hover:text-action-muted"
+                            >
+                              {activity.experimentTitle}
+                            </Link>
+                          ) : (
+                            <span className="font-medium text-gray-700">{activity.experimentTitle}</span>
+                          )}
                         </p>
                       )}
                       {activity.content && (

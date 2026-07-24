@@ -19,6 +19,5 @@ import { NotificationsModule } from '../notifications/notifications.module';
   ],
   controllers: [ExperimentsController],
   providers: [ExperimentsService],
-  exports: [ExperimentsService],
 })
 export class ExperimentsModule {}

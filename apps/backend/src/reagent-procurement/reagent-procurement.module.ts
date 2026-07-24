@@ -13,6 +13,5 @@ import { WorkflowModule } from '../workflow/workflow.module';
   ],
   controllers: [ReagentProcurementController],
   providers: [ReagentProcurementService],
-  exports: [ReagentProcurementService],
 })
 export class ReagentProcurementModule {}

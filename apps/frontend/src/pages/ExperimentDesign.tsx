@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  Plus, Trash2, Save, ChevronLeft, Image, Edit3, Check, X, Loader2,
+  Plus, Trash2, Save, Edit3, Check, X, Loader2,
   CheckCircle2, Lock,
 } from "lucide-react";
 import { Button } from "../components/Button";
@@ -17,6 +17,8 @@ import {
 import { toast } from "../components/Toast";
 import { PageLoader } from "../components/PageLoader";
 import { api, ApiError } from "../lib/api";
+import { PageHeader } from "../components/PageHeader";
+import { SegmentedControl } from "../components/SegmentedControl";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -31,6 +33,8 @@ interface DesignRow {
   designPrinciple: string;
   internalCode?: string;
   isRedundancy?: boolean;
+  cellCount?: number | null;
+  redundancyCount?: number;
 }
 
 interface ProcurementRow {
@@ -52,13 +56,30 @@ interface ProcurementRow {
   createdAt: string;
 }
 
-const EMPTY_ROW = (): DesignRow => ({
-  group: "", moleculeName: "", chineseName: "",
-  molecularStructure: "", cas: "", designPrinciple: "",
-});
+// ─── Helpers ────────────────────────────────────────────────────
 
-const DEFAULT_COUNT = 17;
-const DEFAULT_REDUNDANCY = 3;
+const GROUP_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+function nextGroupName(existing: DesignRow[]): string {
+  const used = new Set(existing.map((g) => g.group));
+  for (const ch of GROUP_LETTERS) {
+    if (!used.has(ch)) return ch;
+  }
+  // Fallback: G1, G2...
+  let n = existing.length + 1;
+  while (used.has(`G${n}`)) n++;
+  return `G${n}`;
+}
+
+function EMPTY_GROUP(existing: DesignRow[] = []): DesignRow {
+  return {
+    group: nextGroupName(existing),
+    moleculeName: "", chineseName: "",
+    molecularStructure: "", cas: "", designPrinciple: "",
+    cellCount: 17,
+    redundancyCount: 3,
+  };
+}
 
 // ─── Main Component ─────────────────────────────────────────────
 
@@ -72,11 +93,13 @@ export function ExperimentDesign() {
   const [loading, setLoading] = useState(true);
 
   // Design state
-  const [rows, setRows] = useState<DesignRow[]>([]);
+  const [groups, setGroups] = useState<DesignRow[]>([]);
   const [designSubmitted, setDesignSubmitted] = useState(false);
   const [savingDesign, setSavingDesign] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<DesignRow | null>(null);
+  const [batchEditing, setBatchEditing] = useState(false);
+  const [batchDraft, setBatchDraft] = useState<DesignRow[]>([]);
 
   // Procurement state
   const [procRecords, setProcRecords] = useState<ProcurementRow[]>([]);
@@ -85,10 +108,6 @@ export function ExperimentDesign() {
   const [procEditId, setProcEditId] = useState<string | null>(null);
   const [procSavingId, setProcSavingId] = useState<string | null>(null);
 
-  // Image modal
-  const [imageModalOpen, setImageModalOpen] = useState(false);
-  const [imageUrl, setImageUrl] = useState("");
-
   // ── Fetch design data ──
   const fetchData = useCallback(async () => {
     if (!projectId) return;
@@ -96,16 +115,16 @@ export function ExperimentDesign() {
     try {
       const designData = await api.get<DesignRow[]>(`/api/v1/projects/${projectId}/design`);
       if (Array.isArray(designData) && designData.length > 0) {
-        setRows(designData);
+        setGroups(designData.map((r) => ({
+          ...r,
+          redundancyCount: r.redundancyCount ?? 0,
+        })));
         setDesignSubmitted(true);
       } else {
-        const initial: DesignRow[] = [];
-        for (let i = 0; i < DEFAULT_COUNT; i++) initial.push({ ...EMPTY_ROW(), group: String.fromCharCode(65 + i) });
-        for (let i = 0; i < DEFAULT_REDUNDANCY; i++) initial.push({ ...EMPTY_ROW(), group: `R${i + 1}`, isRedundancy: true });
-        setRows(initial);
+        setGroups([EMPTY_GROUP()]);
       }
 
-      // Determine if procurement is submitted by checking workflow step
+      // Determine if procurement is submitted
       let procSubmittedFlag = false;
       try {
         const wf = await api.get<any>(`/api/v1/workflow/instances/${projectId}`);
@@ -131,26 +150,34 @@ export function ExperimentDesign() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // ── Derived totals ──
+  const totalCells = groups.reduce((sum, g) => sum + 17 + (g.redundancyCount ?? 0), 0);
+
   // ── Design: submit ──
   const handleSubmitDesign = async () => {
     if (!projectId) return;
 
-    if (rows.some(r => !r.moleculeName?.trim())) {
+    if (groups.some((r) => !r.moleculeName?.trim())) {
       toast.error(t("molecule_name_required", "分子名称不可为空"));
+      return;
+    }
+    if (groups.length === 0) {
+      toast.error("请至少添加一个分组");
       return;
     }
 
     setSavingDesign(true);
     try {
-      const nonRedundancy = rows.filter((r) => !r.isRedundancy);
-      const redundancyRows = rows.filter((r) => r.isRedundancy);
       await api.post(`/api/v1/projects/${projectId}/design`, {
-        defaultCount: nonRedundancy.length,
-        redundancyCount: redundancyRows.length,
-        rows: nonRedundancy.map((r) => ({
-          group: r.group, moleculeName: r.moleculeName, chineseName: r.chineseName,
-          molecularStructure: r.molecularStructure || undefined, cas: r.cas,
+        groups: groups.map((r) => ({
+          group: r.group,
+          moleculeName: r.moleculeName,
+          chineseName: r.chineseName,
+          molecularStructure: r.molecularStructure || undefined,
+          cas: r.cas,
           designPrinciple: r.designPrinciple || undefined,
+          cellCount: 17,
+          redundancyCount: r.redundancyCount ?? 0,
         })),
       });
 
@@ -158,7 +185,6 @@ export function ExperimentDesign() {
       setDesignSubmitted(true);
       setEditingIndex(null);
       setEditForm(null);
-      // Refresh to get procurement data
       fetchData();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : t("create_failed"));
@@ -168,32 +194,89 @@ export function ExperimentDesign() {
   };
 
   // ── Design: inline edit ──
-  const startEditing = (index: number) => { if (designSubmitted) return; setEditingIndex(index); setEditForm({ ...rows[index] }); };
-  const cancelEditing = () => { setEditingIndex(null); setEditForm(null); };
-  const handleChange = (field: keyof DesignRow, value: string) => { if (!editForm) return; setEditForm({ ...editForm, [field]: value }); };
+  const startEditing = (index: number) => {
+    if (designSubmitted) return;
+    setEditingIndex(index);
+    setEditForm({ ...groups[index] });
+  };
+  const cancelEditing = () => {
+    setEditingIndex(null);
+    setEditForm(null);
+  };
+  const handleChange = (field: keyof DesignRow, value: string) => {
+    if (!editForm) return;
+    setEditForm({ ...editForm, [field]: value });
+  };
+  const handleNumChange = (field: "redundancyCount", value: string) => {
+    if (!editForm) return;
+    const num = parseInt(value, 10);
+    if (!isNaN(num) && num >= 0) {
+      setEditForm({ ...editForm, [field]: num });
+    }
+  };
   const handleSaveRow = () => {
     if (editingIndex === null || !editForm) return;
-    
     if (!editForm.moleculeName?.trim()) {
       toast.error(t("molecule_name_required", "分子名称不可为空"));
       return;
     }
-
-    const updated = [...rows];
+    const updated = [...groups];
     updated[editingIndex] = { ...editForm };
-    setRows(updated);
+    setGroups(updated);
     setEditingIndex(null);
     setEditForm(null);
   };
-  const handleDelete = (index: number) => {
+
+  // ── Group management ──
+  const handleAddGroup = () => {
     if (designSubmitted) return;
-    const row = rows[index];
-    if (!row.isRedundancy) return;
-    setRows((prev) => prev.filter((_, i) => i !== index));
+    setGroups((prev) => [...prev, EMPTY_GROUP(prev)]);
   };
-  const handleAddRow = () => {
+  const handleDeleteGroup = (index: number) => {
     if (designSubmitted) return;
-    setRows((prev) => [...prev, { ...EMPTY_ROW(), group: `R${prev.filter((r) => r.isRedundancy).length + 1}`, isRedundancy: true }]);
+    if (groups.length <= 1) {
+      toast.error("至少保留一个分组");
+      return;
+    }
+    setGroups((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ── Batch edit ──
+  const enterBatchEdit = () => {
+    cancelEditing();
+    setBatchDraft(groups.map((g) => ({ ...g })));
+    setBatchEditing(true);
+  };
+  const cancelBatchEdit = () => {
+    setBatchEditing(false);
+    setBatchDraft([]);
+  };
+  const handleBatchFieldChange = (index: number, field: keyof DesignRow, value: string) => {
+    setBatchDraft((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+  const handleBatchNumChange = (index: number, value: string) => {
+    const num = parseInt(value, 10);
+    if (!isNaN(num) && num >= 0) {
+      setBatchDraft((prev) => {
+        const updated = [...prev];
+        updated[index] = { ...updated[index], redundancyCount: num };
+        return updated;
+      });
+    }
+  };
+  const saveBatchEdit = () => {
+    if (batchDraft.some((r) => !r.moleculeName?.trim())) {
+      toast.error(t("molecule_name_required", "分子名称不可为空"));
+      return;
+    }
+    setGroups(batchDraft);
+    setBatchEditing(false);
+    setBatchDraft([]);
+    toast.success(t("design_saved", "批量修改已应用"));
   };
 
   // ── Procurement: submit ──
@@ -201,7 +284,7 @@ export function ExperimentDesign() {
     setSavingProc(true);
     try {
       await api.put(`/api/v1/workflow/instances/${projectId}/transition`);
-      toast.success("Procurement submitted, workflow advanced!");
+      toast.success(t("procurement_submit_success", "Procurement submitted, workflow advanced!"));
       setProcSubmitted(true);
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : t("create_failed"));
@@ -216,7 +299,11 @@ export function ExperimentDesign() {
     setProcSavingId(record.id);
     try {
       await api.put(`/api/v1/projects/${projectId}/procurement/${record.id}`, { [field]: value });
-      setProcRecords((prev) => prev.map((r) => (r.experimentDesignId === record.experimentDesignId ? { ...r, [field]: value } : r)));
+      setProcRecords((prev) =>
+        prev.map((r) =>
+          r.experimentDesignId === record.experimentDesignId ? { ...r, [field]: value } : r,
+        ),
+      );
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : t("update_failed"));
     } finally {
@@ -234,121 +321,270 @@ export function ExperimentDesign() {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={() => navigate(`/projects/${projectId}`)}><ChevronLeft className="w-4 h-4" /></Button>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{t("experiment_design")}</h1>
-            <p className="text-xs text-gray-400 mt-0.5">{t("experiment_design_desc")}</p>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title={t("experiment_design")}
+        description={t("experiment_design_desc")}
+        onBack={() => navigate(`/projects/${projectId}`)}
+        bordered
+      />
 
       {/* Step Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-1">
-          <button onClick={() => setSearchParams({ tab: "design" })}
-            className={cn("px-2 py-3 border-b-2 text-[13px] font-medium transition-colors mx-3 first:ml-1",
-              step === "design" ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200",
-            )}
-          >
-            1. {t("experiment_design")} {designSubmitted && <CheckCircle2 className="w-3.5 h-3.5 inline text-green-500 ml-1" />}
-          </button>
-          <button onClick={() => setSearchParams({ tab: "procurement" })}
-            className={cn("px-2 py-3 border-b-2 text-[13px] font-medium transition-colors mx-3 first:ml-1",
-              step === "procurement" ? "border-gray-900 text-gray-900" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-200",
-              !designSubmitted ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
-            )}
-            disabled={!designSubmitted}
-          >
-            2. {t("reagent_procurement")} {procSubmitted && <CheckCircle2 className="w-3.5 h-3.5 inline text-green-500 ml-1" />}
-          </button>
-        </nav>
-      </div>
+      <SegmentedControl
+        items={[
+          {
+            value: "design",
+            label: <span className="inline-flex items-center gap-1.5">1. {t("experiment_design")}{designSubmitted && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}</span>,
+          },
+          {
+            value: "procurement",
+            label: <span className="inline-flex items-center gap-1.5">2. {t("reagent_procurement")}{procSubmitted && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}</span>,
+            disabled: !designSubmitted,
+          },
+        ]}
+        value={step}
+        onValueChange={(value) => setSearchParams({ tab: value })}
+        className="sm:min-w-[360px]"
+      />
 
       {/* ═══════ Step 1: Design ═══════ */}
       {step === "design" && (
         <div className="space-y-4">
-          {/* Actions bar */}
-          <div className="flex items-center justify-between">
-            <div className="flex gap-4 text-[13px] font-medium text-gray-700">
-              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>{t("design_default_count", { count: rows.filter((r) => !r.isRedundancy).length })}</span>
-              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>{t("design_redundancy_count")}: {rows.filter((r) => r.isRedundancy).length}</span>
+          {/* Summary bar */}
+          <div className="flex flex-col gap-4 rounded-md bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13px] font-medium text-gray-700">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>
+                {t("design_group_count", "分组数")}: {groups.length}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                {t("design_cell_count", "电芯数")}: {totalCells}
+              </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {designSubmitted ? (
-                <span className="text-xs text-green-600 flex items-center gap-1"><Lock className="w-3 h-3" />Design Submitted</span>
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {t("design_submitted", "Design Submitted")}
+                </span>
+              ) : batchEditing ? (
+                <>
+                  <Button variant="secondary" size="sm" onClick={cancelBatchEdit}>
+                    <X className="w-3.5 h-3.5" />
+                    {t("cancel", "取消")}
+                  </Button>
+                  <Button size="sm" onClick={saveBatchEdit}>
+                    <Check className="w-3.5 h-3.5" />
+                    {t("design_save_all", "保存全部")}
+                  </Button>
+                  <Popconfirm title={t("design_submit_confirm", "确认提交实验设计？提交后不可修改。")} onConfirm={handleSubmitDesign} placement="top">
+                    <Button size="sm" loading={savingDesign}>
+                      <Save className="w-3.5 h-3.5" />
+                      {t("design_submit")}
+                    </Button>
+                  </Popconfirm>
+                </>
               ) : (
                 <>
-                  <Button variant="secondary" size="sm" onClick={handleAddRow}><Plus className="w-3.5 h-3.5" />{t("design_add_redundancy", "Add Redundancy")}</Button>
-                  <Button size="sm" onClick={handleSubmitDesign} loading={savingDesign}><Save className="w-3.5 h-3.5" />{t("design_submit")}</Button>
+                  <Button variant="secondary" size="sm" onClick={enterBatchEdit}>
+                    <Edit3 className="w-3.5 h-3.5" />
+                    {t("design_batch_edit", "批量编辑")}
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={handleAddGroup}>
+                    <Plus className="w-3.5 h-3.5" />
+                    {t("design_add_group", "添加分组")}
+                  </Button>
+                  <Popconfirm title={t("design_submit_confirm", "确认提交实验设计？提交后不可修改。")} onConfirm={handleSubmitDesign} placement="top">
+                    <Button size="sm" loading={savingDesign}>
+                      <Save className="w-3.5 h-3.5" />
+                      {t("design_submit")}
+                    </Button>
+                  </Popconfirm>
                 </>
               )}
             </div>
           </div>
 
           {/* Design Table */}
-          <TableWrapper className="max-h-[500px] overflow-y-auto">
-            <Table className="table-fixed w-full">
-              <TableHeader className="sticky top-0 z-20">
+          <TableWrapper className="max-h-[560px] overflow-auto rounded-lg !bg-white">
+            <Table className="table-fixed w-full min-w-[960px] !divide-y-0">
+              <TableHeader className="sticky top-0 z-20 !bg-gray-50">
                 <TableRow>
-                  <TableHead className="w-[4%]">#</TableHead>
-                  <TableHead className="w-[8%]">{t("design_group")}</TableHead>
-                  <TableHead className="w-[15%]"><span className="text-red-500 mr-1">*</span>{t("design_molecule_name")}</TableHead>
-                  <TableHead className="w-[15%]">{t("design_chinese_name")}</TableHead>
-                  <TableHead className="w-[10%]">{t("design_molecular_structure")}</TableHead>
-                  <TableHead className="w-[10%]">{t("design_cas")}</TableHead>
-                  <TableHead className="w-[15%]">{t("design_principle")}</TableHead>
-                  <TableHead className="w-[8%]">{t("design_internal_code")}</TableHead>
-                  <TableHead className="w-[8%]">{t("design_redundancy")}</TableHead>
-                  <TableHead className="w-[7%] sticky right-0 z-20 bg-white shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t("actions")}</TableHead>
+                  <TableHead className="w-[3%]">#</TableHead>
+                  <TableHead className="w-[7%]">{t("design_group")}</TableHead>
+                  <TableHead className="w-[12%]">
+                    <span className="text-red-500 mr-1">*</span>
+                    {t("design_molecule_name")}
+                  </TableHead>
+                  <TableHead className="w-[12%]">{t("design_chinese_name")}</TableHead>
+                  <TableHead className="w-[7%]">{t("design_cas")}</TableHead>
+                  <TableHead className="w-[11%]">{t("design_principle")}</TableHead>
+
+                  <TableHead className="w-[7%]">{t("design_redundancy", "冗余")}</TableHead>
+                  <TableHead className="w-[9%]">{t("design_internal_code")}</TableHead>
+                  <TableHead className="w-[7%] sticky right-0 z-20 !bg-gray-50">
+                    {t("actions")}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {rows.map((row, i) => {
-                  const editing = editingIndex === i;
-                  return (
-                    <TableRow key={i} className={row.isRedundancy ? "bg-amber-50/40" : ""}>
-                      <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
-                      <TableCell><CellText value={row.group} editing={editing} editValue={editForm?.group ?? ''} onEdit={(v) => handleChange("group", v)} onClick={() => startEditing(i)} locked={designSubmitted} /></TableCell>
-                      <TableCell><CellText value={row.moleculeName} editing={editing} editValue={editForm?.moleculeName ?? ''} onEdit={(v) => handleChange("moleculeName", v)} onClick={() => startEditing(i)} locked={designSubmitted} /></TableCell>
-                      <TableCell><CellText value={row.chineseName} editing={editing} editValue={editForm?.chineseName ?? ''} onEdit={(v) => handleChange("chineseName", v)} onClick={() => startEditing(i)} locked={designSubmitted} /></TableCell>
-                      <TableCell>
-                        {row.molecularStructure ? (
-                          <button onClick={() => { setImageUrl(row.molecularStructure); setImageModalOpen(true); }} className="text-blue-600 hover:text-blue-800 text-xs">{t("view", "View")}</button>
-                        ) : editing ? (
-                          <input className="w-24 border border-gray-300 rounded px-1.5 py-1 text-xs" value={editForm?.molecularStructure ?? ''} onChange={(e) => handleChange("molecularStructure", e.target.value)} autoFocus />
-                        ) : (
-                          <span className="text-gray-300 text-xs">{designSubmitted ? "—" : "+"}</span>
-                        )}
-                      </TableCell>
-                      <TableCell><CellText value={row.cas} editing={editing} editValue={editForm?.cas ?? ''} onEdit={(v) => handleChange("cas", v)} onClick={() => startEditing(i)} locked={designSubmitted} /></TableCell>
-                      <TableCell><CellText value={row.designPrinciple} editing={editing} editValue={editForm?.designPrinciple ?? ''} onEdit={(v) => handleChange("designPrinciple", v)} onClick={() => startEditing(i)} locked={designSubmitted} className="line-clamp-1 max-w-[120px]" /></TableCell>
-                      <TableCell><code className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">{row.internalCode || "—"}</code></TableCell>
-                      <TableCell>{row.isRedundancy ? <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">{t("design_redundancy")}</span> : <span className="text-xs text-gray-400">—</span>}</TableCell>
-                      <TableCell className={cn("sticky right-0 z-10 shadow-[-4px_0_12px_rgba(0,0,0,0.05)]", row.isRedundancy ? "bg-amber-50 group-hover:bg-amber-100" : "bg-white group-hover:bg-gray-50")}>
-                        {designSubmitted ? (
-                          <Lock className="w-3.5 h-3.5 text-gray-300" />
-                        ) : editing ? (
-                          <div className="flex gap-0.5">
-                            <Button variant="text" size="sm" onClick={handleSaveRow} className="!p-1 hover:!text-emerald-600 hover:bg-emerald-50"><Check className="w-3.5 h-3.5" /></Button>
-                            <Button variant="text" size="sm" onClick={cancelEditing} className="!p-1 hover:bg-gray-100"><X className="w-3.5 h-3.5" /></Button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-0.5">
-                            <Button variant="text" size="sm" onClick={() => startEditing(i)} className="!p-1 hover:!text-blue-600 hover:bg-blue-50"><Edit3 className="w-3.5 h-3.5" /></Button>
-                            {row.isRedundancy && (
-                              <Popconfirm title={t("design_delete_confirm")} onConfirm={() => handleDelete(i)} placement="top">
-                                <Button variant="text" size="sm" className="!p-1 hover:!text-red-500 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></Button>
+              <TableBody className="!divide-y divide-gray-100/70 !bg-transparent">
+                {groups.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center text-gray-400 py-12">
+                      {t("design_no_groups", '暂无分组，请点击上方「添加分组」')}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  groups.map((row, i) => {
+                    const editing = editingIndex === i || batchEditing;
+                    return (
+                      <TableRow key={i} className={batchEditing ? "bg-gray-50" : ""}>
+                        <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
+                        <TableCell>
+                          {batchEditing ? (
+                            <input className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                              value={batchDraft[i]?.group ?? ""}
+                              onChange={(e) => handleBatchFieldChange(i, "group", e.target.value)}
+                              autoFocus={i === 0}
+                            />
+                          ) : (
+                            <CellText
+                              value={row.group}
+                              editing={editingIndex === i}
+                              editValue={editForm?.group ?? ""}
+                              onEdit={(v) => handleChange("group", v)}
+                              onClick={() => startEditing(i)}
+                              locked={designSubmitted}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {batchEditing ? (
+                            <input className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                              value={batchDraft[i]?.moleculeName ?? ""}
+                              onChange={(e) => handleBatchFieldChange(i, "moleculeName", e.target.value)}
+                            />
+                          ) : (
+                            <CellText
+                              value={row.moleculeName}
+                              editing={editingIndex === i}
+                              editValue={editForm?.moleculeName ?? ""}
+                              onEdit={(v) => handleChange("moleculeName", v)}
+                              onClick={() => startEditing(i)}
+                              locked={designSubmitted}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {batchEditing ? (
+                            <input className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                              value={batchDraft[i]?.chineseName ?? ""}
+                              onChange={(e) => handleBatchFieldChange(i, "chineseName", e.target.value)}
+                            />
+                          ) : (
+                            <CellText
+                              value={row.chineseName}
+                              editing={editingIndex === i}
+                              editValue={editForm?.chineseName ?? ""}
+                              onEdit={(v) => handleChange("chineseName", v)}
+                              onClick={() => startEditing(i)}
+                              locked={designSubmitted}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {batchEditing ? (
+                            <input className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                              value={batchDraft[i]?.cas ?? ""}
+                              onChange={(e) => handleBatchFieldChange(i, "cas", e.target.value)}
+                            />
+                          ) : (
+                            <CellText
+                              value={row.cas}
+                              editing={editingIndex === i}
+                              editValue={editForm?.cas ?? ""}
+                              onEdit={(v) => handleChange("cas", v)}
+                              onClick={() => startEditing(i)}
+                              locked={designSubmitted}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {batchEditing ? (
+                            <input className="w-full min-w-24 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                              value={batchDraft[i]?.designPrinciple ?? ""}
+                              onChange={(e) => handleBatchFieldChange(i, "designPrinciple", e.target.value)}
+                            />
+                          ) : (
+                            <CellText
+                              value={row.designPrinciple}
+                              editing={editingIndex === i}
+                              editValue={editForm?.designPrinciple ?? ""}
+                              onEdit={(v) => handleChange("designPrinciple", v)}
+                              onClick={() => startEditing(i)}
+                              locked={designSubmitted}
+                              className="line-clamp-1 max-w-[120px]"
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {batchEditing ? (
+                            <input className="w-14 rounded border-0 bg-gray-100 px-1.5 py-1 text-center text-xs outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                              type="number" min={0} max={50}
+                              value={batchDraft[i]?.redundancyCount ?? 0}
+                              onChange={(e) => handleBatchNumChange(i, e.target.value)}
+                            />
+                          ) : editingIndex === i ? (
+                            <input
+                              className="w-14 rounded border-0 bg-gray-100 px-1.5 py-1 text-center text-xs outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                              type="number" min={0} max={50}
+                              value={editForm?.redundancyCount ?? 0}
+                              onChange={(e) => handleNumChange("redundancyCount", e.target.value)}
+                            />
+                          ) : (
+                            <span
+                              className={cn("inline-flex items-center min-h-[28px] text-xs",
+                                designSubmitted ? "text-gray-700" : "cursor-pointer text-gray-700 hover:text-gray-950",
+                              )}
+                              onClick={() => !designSubmitted && startEditing(i)}
+                            >
+                              {row.redundancyCount ?? 0}
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <code className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">
+                            {row.internalCode || "—"}
+                          </code>
+                        </TableCell>
+                        <TableCell className="sticky right-0 z-10 !bg-white">
+                          {designSubmitted ? (
+                            <Lock className="w-3.5 h-3.5 text-gray-300 mx-auto" />
+                          ) : editingIndex === i && !batchEditing ? (
+                            <div className="flex gap-0.5">
+                              <Button variant="text" size="sm" onClick={handleSaveRow}
+                                className="!p-1 hover:!text-emerald-600 hover:bg-emerald-50"><Check className="w-3.5 h-3.5" /></Button>
+                              <Button variant="text" size="sm" onClick={cancelEditing}
+                                className="!p-1 hover:bg-gray-100"><X className="w-3.5 h-3.5" /></Button>
+                            </div>
+                          ) : batchEditing ? (
+                            <Trash2 className="w-3.5 h-3.5 text-gray-300 mx-auto opacity-0" />
+                          ) : (
+                            <div className="flex gap-0.5">
+                              <Button variant="text" size="sm" onClick={() => startEditing(i)}
+                                className="!p-1 hover:!text-gray-900 hover:bg-gray-100"><Edit3 className="w-3.5 h-3.5" /></Button>
+                              <Popconfirm title={t("design_delete_group_confirm", "确定删除此分组？")}
+                                onConfirm={() => handleDeleteGroup(i)} placement="top">
+                                <Button variant="text" size="sm"
+                                  className="!p-1 hover:!text-red-500 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></Button>
                               </Popconfirm>
-                            )}
-                          </div>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </TableWrapper>
@@ -358,23 +594,41 @@ export function ExperimentDesign() {
       {/* ═══════ Step 2: Procurement ═══════ */}
       {step === "procurement" && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex gap-4 text-[13px] font-medium text-gray-700">
-              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>{t("procurement_is_valid")}: {procRecords.filter((r) => r.isValid).length}</span>
-              <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>{t("procurement_invalid")}: {procRecords.filter((r) => !r.isValid).length}</span>
+          <div className="flex flex-col gap-4 rounded-md bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-4 text-[13px] font-medium text-gray-700">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                {t("procurement_is_valid")}: {procRecords.filter((r) => r.isValid).length}
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                {t("procurement_invalid")}: {procRecords.filter((r) => !r.isValid).length}
+              </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {procSubmitted ? (
-                <span className="text-xs text-green-600 flex items-center gap-1"><Lock className="w-3 h-3" />Procurement Submitted</span>
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {t("procurement_submitted", "Procurement Submitted")}
+                </span>
               ) : (
-                <Button size="sm" onClick={handleSubmitProcurement} loading={savingProc}><Save className="w-3.5 h-3.5" />{t("design_submit")}</Button>
+                <Popconfirm
+                  title={t("procurement_confirm", "确认提交试剂采购？提交后将推进工作流，不可撤回。")}
+                  onConfirm={handleSubmitProcurement}
+                  placement="top"
+                >
+                  <Button size="sm" loading={savingProc}>
+                    <Save className="w-3.5 h-3.5" />
+                    {t("design_submit")}
+                  </Button>
+                </Popconfirm>
               )}
             </div>
           </div>
 
-          <TableWrapper className="max-h-[500px] overflow-y-auto">
-            <Table className="table-fixed w-full">
-              <TableHeader className="sticky top-0 z-20">
+          <TableWrapper className="max-h-[560px] overflow-auto rounded-lg !bg-white">
+            <Table className="table-fixed w-full min-w-[1100px] !divide-y-0">
+              <TableHeader className="sticky top-0 z-20 !bg-gray-50">
                 <TableRow>
                   <TableHead className="w-[4%]">#</TableHead>
                   <TableHead className="w-[8%]">{t("design_group")}</TableHead>
@@ -386,36 +640,124 @@ export function ExperimentDesign() {
                   <TableHead className="w-[8%]">{t("procurement_quantity")}</TableHead>
                   <TableHead className="w-[8%]">{t("procurement_is_valid")}</TableHead>
                   <TableHead className="w-[12%]">{t("procurement_remark")}</TableHead>
-                  <TableHead className="w-[8%] sticky right-0 z-20 bg-white shadow-[-4px_0_12px_rgba(0,0,0,0.05)]">{t("actions")}</TableHead>
+                  <TableHead className="w-[8%] sticky right-0 z-20 !bg-gray-50">
+                    {t("actions")}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="!divide-y divide-gray-100/70 !bg-transparent">
                 {procRecords.length === 0 ? (
-                  <TableRow><TableCell colSpan={11} className="text-center text-gray-400 py-12">{t("no_data_available", { type: t("reagent_procurement") })}</TableCell></TableRow>
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center text-gray-400 py-12">
+                      {t("no_data_available", { type: t("reagent_procurement") })}
+                    </TableCell>
+                  </TableRow>
                 ) : (
                   procRecords.map((record, i) => (
-                    <TableRow key={record.experimentDesignId || i} className={cn(!record.isValid ? "opacity-60" : "", record.isRedundancy ? "bg-amber-50/40" : "")}>
+                    <TableRow
+                      key={record.experimentDesignId || i}
+                      className={cn(!record.isValid ? "opacity-60" : "")}
+                    >
                       <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
                       <TableCell className="font-medium text-xs">{record.group}</TableCell>
                       <TableCell className="text-xs">{record.moleculeName}</TableCell>
-                      <TableCell><code className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">{record.internalCode || "—"}</code></TableCell>
-                      <TableCell><ProcCell value={record.supplier || ""} onSave={(v) => updateProcField(record, "supplier", v)} saving={procSavingId === record.id} locked={procSubmitted} editing={procEditId === record.id} /></TableCell>
-                      <TableCell><ProcCell value={record.batchNo || ""} onSave={(v) => updateProcField(record, "batchNo", v)} saving={procSavingId === record.id} locked={procSubmitted} editing={procEditId === record.id} /></TableCell>
-                      <TableCell><ProcCell value={record.purity || ""} onSave={(v) => updateProcField(record, "purity", v)} saving={procSavingId === record.id} locked={procSubmitted} editing={procEditId === record.id} /></TableCell>
-                      <TableCell><ProcCell value={record.quantity || ""} onSave={(v) => updateProcField(record, "quantity", v)} saving={procSavingId === record.id} locked={procSubmitted} editing={procEditId === record.id} /></TableCell>
                       <TableCell>
-                        <Switch checked={record.isValid} onChange={() => toggleValid(record)} size="sm" disabled={procSubmitted} />
+                        <code className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">
+                          {record.internalCode || "—"}
+                        </code>
                       </TableCell>
-                      <TableCell><ProcCell value={record.remark || ""} onSave={(v) => updateProcField(record, "remark", v)} saving={procSavingId === record.id} locked={procSubmitted} editing={procEditId === record.id} /></TableCell>
-                      <TableCell className={cn("sticky right-0 z-10 shadow-[-4px_0_12px_rgba(0,0,0,0.05)]", record.isRedundancy ? "bg-amber-50 group-hover:bg-amber-100" : "bg-white group-hover:bg-gray-50")}>
+                      <TableCell>
+                        <ProcCell
+                          value={record.supplier || ""}
+                          onSave={(v) => updateProcField(record, "supplier", v)}
+                          saving={procSavingId === record.id}
+                          locked={procSubmitted}
+                          editing={procEditId === record.id}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <ProcCell
+                          value={record.batchNo || ""}
+                          onSave={(v) => updateProcField(record, "batchNo", v)}
+                          saving={procSavingId === record.id}
+                          locked={procSubmitted}
+                          editing={procEditId === record.id}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <ProcCell
+                          value={record.purity || ""}
+                          onSave={(v) => updateProcField(record, "purity", v)}
+                          saving={procSavingId === record.id}
+                          locked={procSubmitted}
+                          editing={procEditId === record.id}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <ProcCell
+                          value={record.quantity || ""}
+                          onSave={(v) => updateProcField(record, "quantity", v)}
+                          saving={procSavingId === record.id}
+                          locked={procSubmitted}
+                          editing={procEditId === record.id}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={record.isValid}
+                          onChange={() => toggleValid(record)}
+                          size="sm"
+                          disabled={procSubmitted}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <ProcCell
+                          value={record.remark || ""}
+                          onSave={(v) => updateProcField(record, "remark", v)}
+                          saving={procSavingId === record.id}
+                          locked={procSubmitted}
+                          editing={procEditId === record.id}
+                        />
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "sticky right-0 z-10 !bg-white",
+                        )}
+                      >
                         <div className="flex items-center gap-1 justify-center">
-                          {procSubmitted ? <Lock className="w-3.5 h-3.5 text-gray-300" /> : procEditId === record.id ? (
+                          {procSubmitted ? (
+                            <Lock className="w-3.5 h-3.5 text-gray-300" />
+                          ) : procEditId === record.id ? (
                             <>
-                              <Button variant="text" size="sm" onClick={() => { setProcEditId(null); toast.success(t("procurement_updated")); }} className="!p-1 hover:!text-emerald-600 hover:bg-emerald-50"><Check className="w-4 h-4" /></Button>
-                              <Button variant="text" size="sm" onClick={() => setProcEditId(null)} className="!p-1 hover:bg-gray-100"><X className="w-4 h-4" /></Button>
+                              <Button
+                                variant="text"
+                                size="sm"
+                                onClick={() => {
+                                  setProcEditId(null);
+                                  toast.success(t("procurement_updated"));
+                                }}
+                                className="!p-1 hover:!text-emerald-600 hover:bg-emerald-50"
+                              >
+                                <Check className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="text"
+                                size="sm"
+                                onClick={() => setProcEditId(null)}
+                                className="!p-1 hover:bg-gray-100"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
                             </>
                           ) : (
-                            <Button variant="text" size="sm" onClick={() => setProcEditId(record.id)} className="!p-1 hover:!text-blue-600 hover:bg-blue-50"><Edit3 className="w-3.5 h-3.5" /></Button>
+                            <Button
+                              variant="text"
+                              size="sm"
+                              onClick={() => setProcEditId(record.id)}
+                              className="!p-1 hover:!text-gray-900 hover:bg-gray-100"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </Button>
                           )}
                         </div>
                       </TableCell>
@@ -427,34 +769,101 @@ export function ExperimentDesign() {
           </TableWrapper>
         </div>
       )}
-
-      {/* Image Preview Modal */}
-      <Modal open={imageModalOpen} onClose={() => setImageModalOpen(false)} title={t("design_molecular_structure")} maxWidth="xl"
-        footer={<Button size="sm" variant="ghost" onClick={() => setImageModalOpen(false)}>{t("close", "Close")}</Button>}
-      >
-        {imageUrl ? <img src={imageUrl} alt="Molecular structure" className="max-w-full h-auto mx-auto rounded-lg" onError={(e) => { (e.target as HTMLImageElement).src = ""; }} /> : <p className="text-gray-500 text-center py-8">{t("no_data_available", { type: "" })}</p>}
-      </Modal>
     </div>
   );
 }
 
-// ─── CellText (design step) ──────────────────────────────────────
+// ─── CellText ───────────────────────────────────────────────────
 
-function CellText({ value, editing, editValue, onEdit, onClick, locked, className }: {
-  value: string; editing: boolean; editValue: string; onEdit: (v: string) => void; onClick: () => void; locked: boolean; className?: string;
+function CellText({
+  value,
+  editing,
+  editValue,
+  onEdit,
+  onClick,
+  locked,
+  className,
+}: {
+  value: string;
+  editing: boolean;
+  editValue: string;
+  onEdit: (v: string) => void;
+  onClick: () => void;
+  locked: boolean;
+  className?: string;
 }) {
-  if (locked) return <span className={cn("text-xs text-gray-500", className)}>{value || <span className="text-gray-300 italic">—</span>}</span>;
-  if (editing) return <input className="w-full min-w-12 border border-gray-300 bg-white rounded px-1.5 py-1 text-xs font-mono focus:border-gray-400 focus:outline-none" value={editValue} onChange={(e) => onEdit(e.target.value)} autoFocus />;
-  return <span className={cn("cursor-pointer text-xs text-gray-700 hover:text-blue-600 inline-flex items-center min-h-[28px]", className)} onClick={onClick}>{value || <span className="text-gray-300 italic">—</span>}</span>;
+  if (locked)
+    return (
+      <span className={cn("text-xs text-gray-500", className)}>
+        {value || <span className="text-gray-300 italic">—</span>}
+      </span>
+    );
+  if (editing)
+    return (
+      <input
+        className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+        value={editValue}
+        onChange={(e) => onEdit(e.target.value)}
+        autoFocus
+      />
+    );
+  return (
+    <span
+      className={cn(
+        "cursor-pointer text-xs text-gray-700 hover:text-gray-950 inline-flex items-center min-h-[28px]",
+        className,
+      )}
+      onClick={onClick}
+    >
+      {value || <span className="text-gray-300 italic">—</span>}
+    </span>
+  );
 }
 
-// ─── ProcCell (procurement step) ────────────────────────────────
+// ─── ProcCell ───────────────────────────────────────────────────
 
-function ProcCell({ value, onSave, saving, locked, editing }: { value: string; onSave: (v: string) => Promise<void>; saving: boolean; locked: boolean; editing: boolean }) {
+function ProcCell({
+  value,
+  onSave,
+  saving,
+  locked,
+  editing,
+}: {
+  value: string;
+  onSave: (v: string) => Promise<void>;
+  saving: boolean;
+  locked: boolean;
+  editing: boolean;
+}) {
   const [draft, setDraft] = useState(value);
-  const { t } = useTranslation();
-  useEffect(() => { setDraft(value); }, [value]);
-  if (locked) return <span className="text-xs text-gray-500">{value || <span className="text-gray-300 italic">—</span>}</span>;
-  if (editing) return <input className="w-20 border border-gray-300 rounded px-1.5 py-0.5 text-xs focus:border-gray-400 focus:outline-none" value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={() => { if (draft !== value) onSave(draft); }} onKeyDown={(e) => { if (e.key === "Enter" && draft !== value) onSave(draft); }} autoFocus />;
-  return <span className={cn("text-xs min-w-[50px] inline-block", value ? "text-gray-700" : "text-gray-300 italic")}>{value || "—"}{saving && <Loader2 className="w-2.5 h-2.5 animate-spin inline ml-1" />}</span>;
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+  if (locked)
+    return (
+      <span className="text-xs text-gray-500">
+        {value || <span className="text-gray-300 italic">—</span>}
+      </span>
+    );
+  if (editing)
+    return (
+      <input
+        className="w-20 rounded border-0 bg-gray-100 px-2 py-1 text-xs outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          if (draft !== value) onSave(draft);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && draft !== value) onSave(draft);
+        }}
+        autoFocus
+      />
+    );
+  return (
+    <span className={cn("text-xs min-w-[50px] inline-block", value ? "text-gray-700" : "text-gray-300 italic")}>
+      {value || "—"}
+      {saving && <Loader2 className="w-2.5 h-2.5 animate-spin inline ml-1" />}
+    </span>
+  );
 }

@@ -7,6 +7,7 @@ import { VersionHistory } from '../entities/version-history.entity';
 import { ExperimentComment } from '../entities/experiment-comment.entity';
 import { Notification } from '../entities/notification.entity';
 import { User } from '../entities/user.entity';
+import { ExperimentStatus } from '@eln/shared';
 
 @Injectable()
 export class DashboardService {
@@ -47,7 +48,7 @@ export class DashboardService {
     const pendingApprovals = await this.experimentRepo
       .createQueryBuilder('e')
       .select(['e.id', 'e.title', 'e.status', 'e.updatedAt', 'e.projectId'])
-      .where('e.status = :status', { status: 'Submitted' })
+      .where('e.status = :status', { status: ExperimentStatus.InReview })
       .andWhere('e.reviewerId = :reviewerId', { reviewerId: userId })
       .orderBy('e.updatedAt', 'DESC')
       .getMany();
@@ -132,14 +133,16 @@ export class DashboardService {
     activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     const recentActivities = activities.slice(0, 15);
 
-    // Attach experiment titles to activities
+    // Attach experiment routing data to activities.
     const activityExpIds = [...new Set(recentActivities.map(a => a.experimentId).filter(Boolean))];
     const activityExps = activityExpIds.length ? await this.experimentRepo.findByIds(activityExpIds as string[]) : [];
-    const activityExpMap = new Map(activityExps.map(e => [e.id, e.title]));
+    const activityExpMap = new Map(activityExps.map(e => [e.id, { title: e.title, projectId: e.projectId }]));
     
     for (const a of recentActivities) {
       if (a.experimentId) {
-        (a as any).experimentTitle = activityExpMap.get(a.experimentId) || 'Unknown Experiment';
+        const experiment = activityExpMap.get(a.experimentId);
+        (a as any).experimentTitle = experiment?.title || 'Unknown Experiment';
+        (a as any).projectId = experiment?.projectId;
       }
     }
 

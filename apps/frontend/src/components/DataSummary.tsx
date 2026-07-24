@@ -270,7 +270,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
 
     // 1. Process Data
     props.processData.forEach((d) => {
-      const g = getGroupName(d.cellId, "prefix", {}, props.groups);
+      const g = getGroupName(d.cellId, "prefix", {});
       const fq = parseFloat(d.fq || "0");
       const gqc1 = parseFloat(d.gqc1 || "0");
       const gqd1 = parseFloat(d.gqd1 || "0");
@@ -290,7 +290,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     Object.keys(clByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, "prefix", {}, props.groups);
+      const g = getGroupName(cellName, "prefix", {});
       const items = clByCell[cellName].sort((a, b) => a.dayCount - b.dayCount);
       const latest = items[items.length - 1];
 
@@ -330,7 +330,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     Object.keys(ssByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, "prefix", {}, props.groups);
+      const g = getGroupName(cellName, "prefix", {});
       const items = ssByCell[cellName].sort((a, b) => a.dayCount - b.dayCount);
       const latest = items[items.length - 1];
       if (latest && latest.dayCount > 0) {
@@ -339,18 +339,18 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
     });
 
     props.energyEfficiency.forEach((d: any) => {
-      const g = getGroupName(d.cellName, "prefix", {}, props.groups);
+      const g = getGroupName(d.cellName, "prefix", {});
       addMetric(g, "energy_eff", d.cellName, parseFloat(d.eePct || d.ee || "0"));
     });
 
     props.dcrTest.forEach((d: any) => {
-      const g = getGroupName(d.cellName, "prefix", {}, props.groups);
+      const g = getGroupName(d.cellName, "prefix", {});
       if (d.ddcr) addMetric(g, "dcr_discharge", d.cellName, parseFloat(d.ddcr));
       if (d.cdcr) addMetric(g, "dcr_charge", d.cellName, parseFloat(d.cdcr));
     });
 
     props.fastCharge.forEach((d: any) => {
-      const g = getGroupName(d.cellName, "prefix", {}, props.groups);
+      const g = getGroupName(d.cellName, "prefix", {});
       addMetric(g, "fc_time", d.cellName, parseFloat(d.computedFastChargeTime || d.fcTime || "0"));
     });
 
@@ -363,7 +363,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
       }
     });
     Object.keys(htByCell).forEach((cellName) => {
-      const g = getGroupName(cellName, "prefix", {}, props.groups);
+      const g = getGroupName(cellName, "prefix", {});
       const sorted = htByCell[cellName].sort((a: any, b: any) => a.cycle - b.cycle);
       const latest = sorted[sorted.length - 1];
       if (latest && latest.cycle > 0) {
@@ -394,19 +394,11 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
   }, [props]);
 
   const groupsToUse = useMemo(() => {
-    // Prefer server-defined groups from API
-    if (props.groups && props.groups.length > 0) {
-      return props.groups
-        .slice()
-        .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
-        .map((g) => g.name);
-    }
-    // Fallback to computed groups from data
     if (metrics.groups.length > 0) return metrics.groups;
     const groupsSet = new Set<string>();
-    allCellNames.forEach((name) => groupsSet.add(getGroupName(name, "prefix", {}, props.groups)));
+    allCellNames.forEach((name) => groupsSet.add(getGroupName(name, "prefix", {})));
     return Array.from(groupsSet).sort();
-  }, [props.groups, metrics.groups, allCellNames]);
+  }, [metrics.groups, allCellNames]);
 
   // Fallback group when no groups exist — ensures table is always visible
   const displayGroups = groupsToUse.length > 0 ? groupsToUse : ["All"];

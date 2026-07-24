@@ -43,8 +43,4 @@ export class ParserRegistry {
   resolve(sheet: Worksheet, assayType?: string): DataParser<any> | null {
     return this.parsers.find((parser) => parser.detect(sheet, assayType)) ?? null;
   }
-
-  getAll(): DataParser<any>[] {
-    return this.parsers;
-  }
 }

@@ -15,6 +15,12 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { WorkflowService } from './workflow.service';
+import {
+  CreateWorkflowInstanceDto,
+  CreateWorkflowTemplateDto,
+  UpdateStepAssignmentDto,
+  UpdateWorkflowTemplateDto,
+} from './dto/workflow.dto';
 
 @ApiTags('Workflow')
 @ApiBearerAuth()
@@ -43,14 +49,14 @@ export class WorkflowController {
   @Post('workflow/templates')
   @RequirePermission('workflow:write')
   @ApiOperation({ summary: 'Create a new workflow template' })
-  async createTemplate(@Body() dto: any) {
+  async createTemplate(@Body() dto: CreateWorkflowTemplateDto) {
     return { success: true, data: await this.workflowService.createTemplate(dto) };
   }
 
   @Put('workflow/templates/:id')
   @RequirePermission('workflow:write')
   @ApiOperation({ summary: 'Update a workflow template' })
-  async updateTemplate(@Param('id') id: string, @Body() dto: any) {
+  async updateTemplate(@Param('id') id: string, @Body() dto: UpdateWorkflowTemplateDto) {
     return { success: true, data: await this.workflowService.updateTemplate(id, dto) };
   }
 
@@ -67,7 +73,7 @@ export class WorkflowController {
   @Post('workflow/instances')
   @RequirePermission('workflow:write')
   @ApiOperation({ summary: 'Create a workflow instance for a project' })
-  async createInstance(@Body() dto: any) {
+  async createInstance(@Body() dto: CreateWorkflowInstanceDto) {
     return { success: true, data: await this.workflowService.createInstance(dto) };
   }
 
@@ -107,7 +113,7 @@ export class WorkflowController {
   async updateStepAssignment(
     @Param('projectId') projectId: string,
     @Param('stepName') stepName: string,
-    @Body() dto: any,
+    @Body() dto: UpdateStepAssignmentDto,
   ) {
     return {
       success: true,

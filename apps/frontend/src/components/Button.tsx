@@ -14,7 +14,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "bg-[#1d74f5] text-white hover:bg-blue-600 focus:outline-none",
+    "bg-action text-white hover:bg-action-hover focus:outline-none",
   secondary:
     "text-gray-700 bg-gray-100/80 hover:bg-gray-200/80 focus:outline-none",
   danger:
@@ -44,7 +44,7 @@ export function Button({
     <button
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed",
+        "inline-flex items-center justify-center gap-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35 focus-visible:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed",
         variantStyles[variant],
         variant !== "text" && sizeStyles[size],
         className,

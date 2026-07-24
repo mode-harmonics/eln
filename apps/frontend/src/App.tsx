@@ -6,7 +6,6 @@ import { Projects } from "./pages/Projects";
 import { ProjectScaffold } from "./pages/ProjectScaffold";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { ExperimentDetail } from "./pages/ExperimentDetail";
-import { Groups } from "./pages/Groups";
 import { ExperimentDesign } from "./pages/ExperimentDesign";
 import { WorkflowConfigPage } from "./pages/WorkflowConfig";
 import { Inventory } from "./pages/Inventory";
@@ -73,21 +72,6 @@ const router = createBrowserRouter([
               {
                 path: "procurement",
                 element: <Navigate to="../design" replace />,
-              },
-              {
-                path: "groups",
-                element: <Groups />,
-                loader: async ({ params }) => {
-                  try {
-                    const project = await api.get<{ name: string }>(`/api/v1/projects/${params.projectId}`);
-                    return { projectName: project.name };
-                  } catch {
-                    return { projectName: params.projectId };
-                  }
-                },
-                handle: {
-                  breadcrumb: "group_management",
-                },
               },
               {
                 path: "experiments/:experimentId",

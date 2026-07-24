@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../components/Button";
 import { api, ApiError } from "../lib/api";
 import { toast } from "../components/Toast";
+import { PageHeader } from "../components/PageHeader";
+import { Surface } from "../components/Surface";
 
 export function Profile() {
   const { t } = useTranslation();
@@ -71,13 +73,13 @@ export function Profile() {
   const initial = profile.fullName ? profile.fullName.charAt(0).toUpperCase() : "U";
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-gray-900">{t("my_profile")}</h1>
+    <div className="space-y-6">
+      <PageHeader title={t("my_profile")} />
 
-      <div className="bg-white rounded border border-gray-200 overflow-hidden">
+      <Surface variant="outlined" className="overflow-hidden">
         <div className="p-8 flex flex-col md:flex-row gap-8 items-start">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-24 h-24 bg-[#f27429] rounded-full flex items-center justify-center text-white text-4xl font-bold shadow-sm">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-action text-4xl font-bold text-white">
               {initial}
             </div>
           </div>
@@ -123,7 +125,7 @@ export function Profile() {
                       type={showOld ? "text" : "password"}
                       value={oldPassword}
                       onChange={(e) => setOldPassword(e.target.value)}
-                      className="block w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 focus:border-[#1d74f5] focus:outline-none"
+                      className="block w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30"
                       placeholder="输入当前密码"
                     />
                     <button type="button" onClick={() => setShowOld(!showOld)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -138,7 +140,7 @@ export function Profile() {
                       type={showNew ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="block w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 focus:border-[#1d74f5] focus:outline-none"
+                      className="block w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30"
                       placeholder="至少 6 位"
                     />
                     <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -152,7 +154,7 @@ export function Profile() {
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="block w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-[#1d74f5] focus:outline-none"
+                    className="block w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30"
                     placeholder="再次输入新密码"
                   />
                 </div>
@@ -163,7 +165,7 @@ export function Profile() {
             </div>
           </div>
         </div>
-      </div>
+      </Surface>
     </div>
   );
 }

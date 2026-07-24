@@ -29,6 +29,8 @@ import { cn } from "../lib/utils";
 import type { Experiment } from "../types";
 import { usePermissions } from "../hooks/usePermissions";
 import { Popconfirm } from "../components/Popconfirm";
+import { SegmentedControl } from "../components/SegmentedControl";
+import { PageHeader } from "../components/PageHeader";
 
 interface ExperimentDetail extends Experiment {
   attachments?: any[];
@@ -220,6 +222,20 @@ export function ExperimentDetail() {
   };
 
   const [completingStep, setCompletingStep] = useState(false);
+  const [stepCompleted, setStepCompleted] = useState(false);
+
+  // On mount, check if the workflow step is already completed
+  useEffect(() => {
+    if (!experiment?.projectId || !experiment?.workflowStepName) return;
+    api.get<any>(`/api/v1/workflow/instances/${experiment.projectId}`)
+      .then((wf) => {
+        if (wf?.steps?.length) {
+          const match = wf.steps.find((s: any) => s.stepName === experiment.workflowStepName);
+          if (match?.status === 'completed') setStepCompleted(true);
+        }
+      })
+      .catch(() => { /* no workflow yet */ });
+  }, [experiment?.projectId, experiment?.workflowStepName]);
 
   const handleCompleteStep = async () => {
     if (!experiment?.projectId) return;
@@ -227,8 +243,15 @@ export function ExperimentDetail() {
     try {
       await api.put(`/api/v1/workflow/instances/${experiment.projectId}/transition`);
       toast.success(t("step_completed_success", "当前工步已提交"));
+      setStepCompleted(true);
     } catch (err: any) {
-      toast.error(err?.message ?? t("submit_failed", "提交失败"));
+      const msg = err?.message ?? '';
+      // If step is already completed, treat as success
+      if (msg.includes('already completed') || msg.includes('already')) {
+        setStepCompleted(true);
+        return;
+      }
+      toast.error(msg || t("submit_failed", "提交失败"));
     } finally {
       setCompletingStep(false);
     }
@@ -319,13 +342,13 @@ export function ExperimentDetail() {
 
   const renderTable = () => {
     switch (assayType) {
-      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} />;
-      case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} />;
-      case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} />;
-      case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} />;
-      case "DcrTest": return <DcrTestTable key={refreshCounter} experimentId={experiment.id} />;
-      case "FastCharge": return <FastChargeTable key={refreshCounter} experimentId={experiment.id} />;
-      case "HtCycle": return <HtCycleTable key={refreshCounter} experimentId={experiment.id} />;
+      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} readOnly={stepCompleted} />;
+      case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
+      case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
+      case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
+      case "DcrTest": return <DcrTestTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
+      case "FastCharge": return <FastChargeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
+      case "HtCycle": return <HtCycleTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
       default:
         return (
           <div className="p-8 text-center text-sm text-gray-500">
@@ -337,11 +360,9 @@ export function ExperimentDetail() {
 
   return (
     <div className="space-y-6 relative">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-4 border-b border-gray-100 sticky top-0 bg-white/95 backdrop-blur z-30 pt-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-2xl font-bold text-gray-900 truncate">{experiment.title}</h1>
+      <PageHeader
+        title={experiment.title}
+        badges={<>
             {assayType && (
               <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 shrink-0">
                 {assayType !== 'ProcessData' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
@@ -358,24 +379,35 @@ export function ExperimentDetail() {
             )}>
               {t(`status_${experiment.status.toLowerCase().replace(" ", "_")}`, experiment.status)}
             </span>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-gray-500">
+          </>}
+        metadata={<div className="flex items-center gap-3">
             <span>{t("updated")} {format(new Date(experiment.updatedAt), "MMM d, yyyy")}</span>
             <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
             <span>v{experiment.versionNo}</span>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
-          {experiment.projectId && canWrite && (
-            <Button size="sm" variant="primary" onClick={handleCompleteStep} loading={completingStep} disabled={completingStep}>
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-              {t("complete_step", "提交")}
-            </Button>
+          </div>}
+        actions={<>
+          {experiment.projectId && canWrite && !stepCompleted && (
+            <Popconfirm
+              title={t("complete_step_confirm", "确认提交当前工步？提交后将推进工作流至下一环节。")}
+              onConfirm={handleCompleteStep}
+              placement="bottom"
+            >
+              <Button size="sm" variant="primary" loading={completingStep} disabled={completingStep}>
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                {t("complete_step", "提交")}
+              </Button>
+            </Popconfirm>
+          )}
+          {stepCompleted && (
+            <span className="text-xs text-green-600 flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {t("step_already_completed", "已提交")}
+            </span>
           )}
           {/* Quick drawer toggles */}
           <ButtonGroup
             items={[
-              ...(canWrite ? [{
+              ...(canWrite && !stepCompleted ? [{
                 id: "edit",
                 label: "编辑",
                 icon: <Edit3 className="w-4 h-4 text-gray-500" />,
@@ -395,7 +427,7 @@ export function ExperimentDetail() {
                 icon: <Paperclip className="w-4 h-4" />,
                 title: t("attachments", "附件"),
                 onClick: () => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); },
-                badge: attachments.length > 0 ? <span className="w-1.5 h-1.5 rounded-full bg-blue-500 absolute top-1 right-1" /> : undefined,
+                badge: attachments.length > 0 ? <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gray-600" /> : undefined,
                 className: "relative"
               },
               {
@@ -413,7 +445,7 @@ export function ExperimentDetail() {
           {/* Import / Export */}
           <ButtonGroup
             items={[
-              ...(hasRawData && canWrite ? [{
+              ...(hasRawData && canWrite && !stepCompleted ? [{
                 id: "import",
                 label: t("import_raw", "导入原始数据"),
                 icon: <UploadCloud className="w-3.5 h-3.5" />,
@@ -427,12 +459,12 @@ export function ExperimentDetail() {
                 badge: <ChevronDown className="w-3 h-3 opacity-50 ml-0.5" />,
                 dropdownContent: (
                   <>
-                    <button onClick={() => handleExport('summary')} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors text-left">
+                    <button onClick={() => handleExport('summary')} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 hover:text-gray-950 transition-colors text-left">
                       <Table2 className="w-3.5 h-3.5 text-gray-400" />
                       {t("export_summary", "导出汇总 Excel")}
                     </button>
                     {hasRawData && (
-                      <button onClick={() => handleExport('raw')} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors text-left">
+                      <button onClick={() => handleExport('raw')} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 hover:text-gray-950 transition-colors text-left">
                         <FileDigit className="w-3.5 h-3.5 text-gray-400" />
                         {t("export_raw", "导出原始工步 Excel")}
                       </button>
@@ -442,8 +474,9 @@ export function ExperimentDetail() {
               }
             ]}
           />
-        </div>
-      </div>
+        </>}
+        bordered
+      />
 
       {experiment.content && (
         <div className="bg-white rounded-lg border border-gray-100 p-5 shadow-sm">
@@ -465,39 +498,37 @@ export function ExperimentDetail() {
           />
 
           {/* Data Section */}
-          <div className="bg-white border border-gray-200 rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div className="overflow-hidden rounded-lg bg-white">
+            <div className="flex items-center justify-between bg-gray-50 px-4 py-3">
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-gray-900">{t("data_table")}</h2>
-                <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 border border-gray-200/60">
-                  <button onClick={() => { setDataView("summary"); setRawLoaded({}); }}
-                    className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
-                      dataView === "summary" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-                    <Table2 className="w-3.5 h-3.5" />{t("tab_summary", "汇总")}
-                  </button>
-                  <button onClick={() => setDataView("raw")}
-                    className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all flex items-center gap-1.5",
-                      dataView === "raw" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-                    <FileDigit className="w-3.5 h-3.5" />{t("tab_raw", "原始")}
-                  </button>
-                </div>
+                <SegmentedControl
+                  items={[
+                    { value: "summary", label: t("tab_summary", "汇总"), icon: <Table2 className="h-3.5 w-3.5" /> },
+                    { value: "raw", label: t("tab_raw", "原始"), icon: <FileDigit className="h-3.5 w-3.5" /> },
+                  ]}
+                  value={dataView}
+                  onValueChange={(value) => {
+                    setDataView(value);
+                    if (value === "summary") setRawLoaded({});
+                  }}
+                  size="sm"
+                />
                 {showProcessRawToggles && dataView === "raw" && (
-                  <div className="flex items-center bg-gray-100/80 rounded-lg p-0.5 border border-gray-200/60 ml-2">
-                    {(!experiment.workflowStepName || experiment.workflowStepName === "formation") && (
-                      <button onClick={() => { setRawSource("formation"); setRawLoaded({}); }}
-                        className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                          rawSource === "formation" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-                        {t("raw_formation", "化成数据")}
-                      </button>
-                    )}
-                    {(!experiment.workflowStepName || experiment.workflowStepName === "capacity_grading") && (
-                      <button onClick={() => { setRawSource("grading"); setRawLoaded({}); }}
-                        className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-all",
-                          rawSource === "grading" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
-                        {t("raw_grading", "定容数据")}
-                      </button>
-                    )}
-                  </div>
+                  <SegmentedControl
+                    items={[
+                      ...(!experiment.workflowStepName || experiment.workflowStepName === "formation"
+                        ? [{ value: "formation" as const, label: t("raw_formation", "化成数据") }]
+                        : []),
+                      ...(!experiment.workflowStepName || experiment.workflowStepName === "capacity_grading"
+                        ? [{ value: "grading" as const, label: t("raw_grading", "定容数据") }]
+                        : []),
+                    ]}
+                    value={rawSource}
+                    onValueChange={(value) => { setRawSource(value); setRawLoaded({}); }}
+                    size="sm"
+                    className="ml-2"
+                  />
                 )}
               </div>
               {dataView === "raw" && rawSteps.length > 0 && (
@@ -602,7 +633,7 @@ export function ExperimentDetail() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("title")}</label>
             <input type="text" required value={editTitle} onChange={(e) => setEditTitle(e.target.value)}
-              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm" disabled={saving} />
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300 sm:text-sm" disabled={saving} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("notes")}</label>
@@ -624,7 +655,7 @@ export function ExperimentDetail() {
         }>
         <div className="space-y-4">
           <div
-            className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-[#1d74f5] hover:bg-blue-50/20 transition-all"
+            className="cursor-pointer rounded-lg border border-dashed border-gray-300 p-8 text-center transition-colors hover:border-gray-500 hover:bg-gray-50"
             onClick={() => uploadInputRef.current?.click()}
           >
             <UploadCloud className="w-10 h-10 text-gray-300 mx-auto mb-3" />
@@ -670,13 +701,13 @@ export function ExperimentDetail() {
               {attachments.map(att => (
                 <li key={att.id} className="py-3 flex items-center justify-between">
                   <div className="min-w-0 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center shrink-0">
-                      <FileDigit className="w-4 h-4 text-[#1d74f5]" />
+                    <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center shrink-0">
+                      <FileDigit className="w-4 h-4 text-gray-600" />
                     </div>
                     <div className="min-w-0">
                       <button
                         onClick={() => downloadAttachment(att.id, att.fileName)}
-                        className="text-sm font-medium text-blue-600 hover:underline truncate block text-left"
+                        className="block truncate text-left text-sm font-medium text-gray-800 hover:underline"
                       >
                         {att.fileName}
                       </button>
@@ -717,7 +748,7 @@ export function ExperimentDetail() {
                     <span className="text-[11px] text-gray-500 mb-1 px-1">
                       {isMe ? t("you", "我") : t("collaborator", "协作者")} • {format(new Date(c.createdAt), "MMM d, HH:mm")}
                     </span>
-                    <div className={cn("px-4 py-2.5 rounded-2xl text-sm shadow-sm", isMe ? "bg-[#1d74f5] text-white rounded-br-none" : "bg-white border border-gray-100 text-gray-900 rounded-bl-none")}>
+                    <div className={cn("rounded-lg px-4 py-2.5 text-sm", isMe ? "bg-action text-white" : "bg-gray-100 text-gray-900")}>
                       {c.content}
                     </div>
                   </div>
@@ -732,7 +763,7 @@ export function ExperimentDetail() {
                 value={newComment}
                 onChange={e => setNewComment(e.target.value)}
                 placeholder={t("comment_placeholder", "输入评论...")}
-                className="flex-1 rounded-full border border-gray-300 px-4 py-2 text-sm focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5]"
+                className="flex-1 rounded border border-gray-300 px-4 py-2 text-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300"
                 disabled={commentSubmitting}
               />
               <Button type="submit" variant="primary" className="!rounded-full !p-2 shrink-0" loading={commentSubmitting} disabled={commentSubmitting || !newComment.trim()}>

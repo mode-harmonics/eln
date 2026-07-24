@@ -10,7 +10,7 @@ interface PageLoaderProps {
 export function PageLoader({ className, iconClassName }: PageLoaderProps) {
   return (
     <div className={cn("flex items-center justify-center py-24", className)}>
-      <Loader2 className={cn("w-6 h-6 animate-spin text-[#1d74f5]", iconClassName)} />
+      <Loader2 className={cn("w-6 h-6 animate-spin text-gray-500", iconClassName)} />
     </div>
   );
 }

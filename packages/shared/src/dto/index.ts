@@ -4,7 +4,6 @@ export * from './project.dto';
 export * from './experiment.dto';
 export * from './battery-data.dto';
 export * from './inventory.dto';
-export * from './group.dto';
 export * from './workflow.dto';
 export * from './experiment-design.dto';
 export * from './reagent-procurement.dto';

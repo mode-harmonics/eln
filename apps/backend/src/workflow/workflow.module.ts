@@ -9,7 +9,6 @@ import { Project } from '../entities/project.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { User } from '../entities/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
-import { GroupsModule } from '../groups/groups.module';
 
 @Module({
   imports: [
@@ -22,7 +21,6 @@ import { GroupsModule } from '../groups/groups.module';
       User,
     ]),
     NotificationsModule,
-    GroupsModule,
   ],
   controllers: [WorkflowController],
   providers: [WorkflowService],

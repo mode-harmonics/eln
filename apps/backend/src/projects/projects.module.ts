@@ -8,12 +8,9 @@ import { ProjectsService } from './projects.service';
 import { WorkflowInstance } from '../entities/workflow-instance.entity';
 import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
 
-import { GroupsModule } from '../groups/groups.module';
-
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, Experiment, ExperimentCollaborator, WorkflowInstance, WorkflowStepAssignment]),
-    GroupsModule,
   ],
   controllers: [ProjectsController],
   providers: [ProjectsService],

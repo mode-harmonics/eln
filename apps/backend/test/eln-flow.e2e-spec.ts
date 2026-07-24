@@ -1,7 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as ExcelJS from 'exceljs';
-import * as request from 'supertest';
+import request from 'supertest';
 import { AppModule } from '../src/app.module';
 
 /**
@@ -19,6 +19,7 @@ describe('ELN full flow (e2e)', () => {
   let app: INestApplication;
   let accessToken: string;
   let projectId: string;
+  let experimentId: string;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -38,7 +39,7 @@ describe('ELN full flow (e2e)', () => {
   it('logs in with the seeded PI account', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ email: 'pi@eln.local', password: 'Password123!' })
+      .send({ username: 'pi', password: 'Password123!' })
       .expect(200);
 
     expect(res.body.accessToken).toBeDefined();
@@ -76,16 +77,15 @@ describe('ELN full flow (e2e)', () => {
     expect(res.body.some((p: { id: string }) => p.id === projectId)).toBe(true);
   });
 
-  it('creates an experiment under the project (via direct repository seed, then fetches it)', async () => {
-    // The spec does not define a POST /experiments endpoint (experiments
-    // are created as part of upload/seed flows in the real product), so
-    // this e2e exercises GET/PUT/submit against the experiment seeded by
-    // src/seed.ts, scoped to projectId for traceability.
+  it('creates an experiment under the project', async () => {
     const res = await request(app.getHttpServer())
-      .get('/api/v1/projects')
+      .post(`/api/v1/projects/${projectId}/experiments`)
       .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-    expect(res.body.length).toBeGreaterThan(0);
+      .send({ title: 'E2E Upload Experiment', assayType: 'ProcessData' })
+      .expect(201);
+
+    expect(res.body.id).toBeDefined();
+    experimentId = res.body.id;
   });
 
   it('uploads a sample 7-sheet xlsx and parses rows into the data tables', async () => {
@@ -100,22 +100,21 @@ describe('ELN full flow (e2e)', () => {
     calendar.addRow(['cellName', 'q_0d', 'q_7d']);
     calendar.addRow(['A001', 2.0, 1.95]);
 
-    const buffer = (await workbook.xlsx.writeBuffer()) as Buffer;
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/data/upload')
       .set('Authorization', `Bearer ${accessToken}`)
-      .field('experimentId', experimentId ?? 'placeholder-experiment-id')
-      .attach('file', buffer, 'sample.xlsx')
+      .field('experimentId', experimentId)
+      .attach('files', buffer, 'sample.xlsx')
       .expect(201);
 
     expect(res.body.rowsInsertedByTable).toBeDefined();
   });
 
   it('queries process data for the experiment', async () => {
-    const expId = experimentId ?? 'placeholder-experiment-id';
     const res = await request(app.getHttpServer())
-      .get(`/api/v1/data/process/${expId}`)
+      .get(`/api/v1/data/process/${experimentId}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 

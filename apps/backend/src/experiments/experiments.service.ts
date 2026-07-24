@@ -22,6 +22,7 @@ import { HtCycle } from '../entities/ht-cycle.entity';
 import { RawStepData } from '../entities/raw-step-data.entity';
 import { SubmitExperimentDto, UpdateExperimentDto } from './dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ExperimentStatus } from '@eln/shared';
 
 export interface ExperimentDetail extends Experiment {
   attachments: Attachment[];
@@ -171,7 +172,7 @@ export class ExperimentsService {
       throw new ConflictException(`Cannot submit experiment in status: ${experiment.status}`);
     }
 
-    experiment.status = 'In Review';
+    experiment.status = ExperimentStatus.InReview;
     if (dto.reviewerId) {
       experiment.reviewerId = dto.reviewerId;
     }
@@ -208,7 +209,7 @@ export class ExperimentsService {
       throw new NotFoundException('Experiment not found.');
     }
 
-    if (experiment.status !== 'In Review') {
+    if (experiment.status !== ExperimentStatus.InReview) {
       throw new ConflictException(`Cannot approve experiment in status: ${experiment.status}`);
     }
 
@@ -246,7 +247,7 @@ export class ExperimentsService {
       throw new NotFoundException('Experiment not found.');
     }
 
-    if (experiment.status !== 'In Review') {
+    if (experiment.status !== ExperimentStatus.InReview) {
       throw new ConflictException(`Cannot reject experiment in status: ${experiment.status}`);
     }
 

@@ -14,7 +14,6 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { Response } from 'express';
 import { Readable } from 'stream';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -188,8 +187,7 @@ export class DataController {
     if (dto.mode === 'manual') {
       return this.dataService.manualPickCells(projectId, dto.assignments, dto.cellIds);
     }
-    const topN = dto.topN != null && dto.topN > 0 ? dto.topN : undefined;
-    return this.dataService.autoPickCells(projectId, topN);
+    return this.dataService.autoPickCells(projectId);
   }
 
   @Get('picked-cells/:projectId')
@@ -214,8 +212,6 @@ export class DataController {
   async findByType(
     @Param('type') type: string,
     @Param('expId') expId: string,
-    @Query('withGroups') withGroups: string | undefined,
-    @Query('projectId') projectId: string | undefined,
     @CurrentUser() user: RequestUser,
   ) {
     const requiredPermission = `data_${type}:read`;
@@ -225,9 +221,6 @@ export class DataController {
       throw new ForbiddenException(
         `You do not have the required permission: ${requiredPermission} or data:read`,
       );
-    }
-    if (withGroups === 'true' && projectId) {
-      return this.dataService.findByTypeWithGroups(type, expId, projectId);
     }
     return this.dataService.findByType(type, expId);
   }

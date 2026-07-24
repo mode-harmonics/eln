@@ -139,12 +139,12 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
       onClose={onClose}
       title="挑选与分配电芯"
       description="选择后续测试使用的电芯并分配测试类型"
-      icon={<Layers className="w-4 h-4 text-[#1d74f5]" />}
+      icon={<Layers className="w-4 h-4 text-action" />}
       size="max-w-xl"
       footer={
         <div className="flex items-center justify-between w-full">
           <p className="text-sm text-gray-500">
-            共 <span className="font-semibold text-gray-900">{cells.length}</span> 个可用电芯，已分配 <span className="font-semibold text-[#1d74f5]">{assignedCount}</span>
+            共 <span className="font-semibold text-gray-900">{cells.length}</span> 个可用电芯，已分配 <span className="font-semibold text-action-muted">{assignedCount}</span>
           </p>
           <div className="flex items-center gap-3">
             <Button variant="secondary" onClick={onClose} disabled={syncing}>{readonly ? "关闭" : "取消"}</Button>
@@ -209,12 +209,12 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
                 >
                   <span className={cn(
                     "w-5 h-5 rounded text-[10px] font-bold flex items-center justify-center shrink-0",
-                    isSel ? "bg-[#1d74f5] text-white" : "bg-gray-100 text-gray-400",
+                    isSel ? "bg-action text-white" : "bg-gray-100 text-gray-400",
                   )}>
                     {i + 1}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className={cn("text-sm font-medium", isSel ? "text-[#1d74f5]" : "text-gray-900")}>{cell.cellId}</p>
+                    <p className={cn("text-sm font-medium", isSel ? "text-action-muted" : "text-gray-900")}>{cell.cellId}</p>
                     <p className="text-xs text-gray-500 mt-0.5">化成容量 {cell.fqTotal.toFixed(4)} Ah</p>
                   </div>
                   
@@ -224,8 +224,8 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
                       onChange={(e) => handleAssign(cell.cellId, e.target.value)}
                       disabled={readonly}
                       className={cn(
-                        "text-sm rounded border-gray-300 py-1 pl-2 pr-8 focus:ring-[#1d74f5] focus:border-[#1d74f5]",
-                        isSel ? "bg-white text-[#1d74f5] font-medium border-[#1d74f5]" : "bg-white text-gray-500",
+                        "text-sm rounded border-gray-300 py-1 pl-2 pr-8 focus:ring-focus/30 focus:border-focus",
+                        isSel ? "bg-white text-action-muted font-medium border-action" : "bg-white text-gray-500",
                         readonly && "opacity-60 cursor-not-allowed bg-gray-50"
                       )}
                     >

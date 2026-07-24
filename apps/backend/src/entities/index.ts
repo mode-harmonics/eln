@@ -20,10 +20,6 @@ export * from './dcr-test.entity';
 export * from './fast-charge.entity';
 export * from './ht-cycle.entity';
 
-// Cell grouping entities
-export * from './cell-group.entity';
-export * from './cell-group-member.entity';
-
 // Picked cells
 export * from './picked-cell.entity';
 

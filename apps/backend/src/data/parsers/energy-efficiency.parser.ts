@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { EnergyEfficiency } from '../../entities/energy-efficiency.entity';
-import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 /**
  * energyEfficiency — flat one-row-per-cell sheet: discharge energy (de),
@@ -23,7 +23,7 @@ export class EnergyEfficiencyParser implements DataParser<Partial<EnergyEfficien
     return normalized.includes('de') && normalized.includes('ce');
   }
 
-  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<EnergyEfficiency>[] {
+  parse(sheet: Worksheet, experimentId: string, _filename?: string, attachmentId?: string): Partial<EnergyEfficiency>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['de', 'ce', 'ee']);
     const headers = normalizeHeaders(rawHeaders);
     const cellNameCol = headers.findIndex((h) => ['cellname', 'cellid', 'batteryid'].includes(h));

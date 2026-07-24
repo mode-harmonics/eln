@@ -10,7 +10,6 @@ import { ExperimentDesign } from '../entities/experiment-design.entity';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
 import { Project } from '../entities/project.entity';
 import { WorkflowService } from '../workflow/workflow.service';
-import { GroupsService } from '../groups/groups.service';
 
 @Injectable()
 export class ExperimentDesignService {
@@ -22,7 +21,6 @@ export class ExperimentDesignService {
     @InjectRepository(Project)
     private readonly projectRepo: Repository<Project>,
     private readonly workflowService: WorkflowService,
-    private readonly groupsService: GroupsService,
   ) {}
 
   async findByProject(projectId: string): Promise<ExperimentDesign[]> {
@@ -35,15 +33,15 @@ export class ExperimentDesignService {
   async batchCreate(
     projectId: string,
     dto: {
-      defaultCount: number;
-      redundancyCount: number;
-      rows: Array<{
+      groups: Array<{
         group: string;
         moleculeName: string;
         chineseName: string;
         molecularStructure?: string;
         cas: string;
         designPrinciple?: string;
+        cellCount?: number;
+        redundancyCount?: number;
       }>;
     },
   ): Promise<ExperimentDesign[]> {
@@ -52,63 +50,36 @@ export class ExperimentDesignService {
 
     await this.workflowService.assertStepNotCompleted(projectId, 'experiment_design');
 
-    // Block duplicate submission of experiment design
+    // Block duplicate submission
     const existingCount = await this.designRepo.count({ where: { projectId } });
     if (existingCount > 0) {
       throw new BadRequestException('实验设计已提交，不可重复提交整个表单。如需修改请使用行内编辑。');
     }
 
-    if (dto.rows.some(r => !r.moleculeName || !r.moleculeName.trim())) {
+    if (dto.groups.some(r => !r.moleculeName || !r.moleculeName.trim())) {
       throw new BadRequestException('分子名称不可为空');
     }
 
     const designs: ExperimentDesign[] = [];
     let globalIndex = 0;
 
-    // Create default rows
-    for (let i = 0; i < dto.defaultCount && i < dto.rows.length; i++) {
-      const row = dto.rows[i];
-      const internalCode = await this.generateInternalCode(projectId, row.group, globalIndex + 1);
+    for (const group of dto.groups) {
+      const internalCode = await this.generateInternalCode(projectId, group.group, globalIndex + 1);
       designs.push(
         this.designRepo.create({
           id: uuid(),
           projectId,
           rowIndex: globalIndex++,
-          group: row.group,
-          moleculeName: row.moleculeName,
-          chineseName: row.chineseName ?? null,
-          molecularStructure: row.molecularStructure ?? null,
-          cas: row.cas,
-          designPrinciple: row.designPrinciple ?? null,
+          group: group.group,
+          moleculeName: group.moleculeName,
+          chineseName: group.chineseName ?? null,
+          molecularStructure: group.molecularStructure ?? null,
+          cas: group.cas,
+          designPrinciple: group.designPrinciple ?? null,
           internalCode,
+          cellCount: group.cellCount ?? 17,
+          redundancyCount: group.redundancyCount ?? 0,
           isRedundancy: false,
-        }),
-      );
-    }
-
-    // Create redundancy rows
-    for (let i = 0; i < dto.redundancyCount; i++) {
-      const rowIndex = i % dto.rows.length;
-      const row = dto.rows[rowIndex];
-      const internalCode = await this.generateInternalCode(
-        projectId,
-        row.group,
-        globalIndex + 1,
-        true,
-      );
-      designs.push(
-        this.designRepo.create({
-          id: uuid(),
-          projectId,
-          rowIndex: globalIndex++,
-          group: row.group,
-          moleculeName: row.moleculeName,
-          chineseName: row.chineseName ?? null,
-          molecularStructure: row.molecularStructure ?? null,
-          cas: row.cas,
-          designPrinciple: row.designPrinciple ?? null,
-          internalCode,
-          isRedundancy: true,
         }),
       );
     }
@@ -117,36 +88,6 @@ export class ExperimentDesignService {
 
     // Auto-generate procurement records from designs
     await this.generateProcurement(projectId, saved);
-
-    // Auto-generate cell groups and battery IDs based EXACTLY on ExperimentDesign rows (1-to-1)
-    const existingGroups = await this.groupsService.findByProject(projectId);
-    if (existingGroups.length === 0) {
-      let sortOrder = 0;
-      
-      // We will track the current cell sequence for each group to handle multiple rows with the same group
-      const groupSeq: Record<string, number> = {};
-
-      for (const design of saved) {
-        if (!design.group) continue;
-        const groupName = design.group;
-        
-        // Ensure group exists
-        let group = await this.groupsService.findByProject(projectId).then(gs => gs.find(g => g.name === groupName));
-        if (!group) {
-          group = await this.groupsService.create(projectId, {
-            name: groupName,
-            matchMode: 'prefix',
-            matchValue: groupName,
-            sortOrder: sortOrder++,
-          });
-        }
-
-        // Generate exactly 1 cell for this design row
-        groupSeq[groupName] = (groupSeq[groupName] || 0) + 1;
-        const cellId = `${groupName}${String(groupSeq[groupName]).padStart(3, '0')}`;
-        await this.groupsService.assignCellToGroup(group.id, cellId);
-      }
-    }
 
     return saved;
   }

@@ -2,7 +2,7 @@ import * as React from "react"
 import { cn } from "../lib/utils"
 
 const TableWrapper = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("bg-white", className)}>
+  <div ref={ref} className={cn("overflow-x-auto bg-white", className)}>
     <div className="min-w-full inline-block align-middle">
       {props.children}
     </div>
@@ -16,7 +16,7 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn("bg-white", className)} {...props} />
+  <thead ref={ref} className={cn("bg-gray-50", className)} {...props} />
 ))
 TableHeader.displayName = "TableHeader"
 
@@ -31,17 +31,17 @@ const TableFooter = React.forwardRef<HTMLTableSectionElement, React.HTMLAttribut
 TableFooter.displayName = "TableFooter"
 
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(({ className, ...props }, ref) => (
-  <tr ref={ref} className={cn("hover:bg-gray-50/50 group transition-colors", className)} {...props} />
+  <tr ref={ref} className={cn("hover:bg-gray-50/70 group transition-colors", className)} {...props} />
 ))
 TableRow.displayName = "TableRow"
 
 const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(({ className, ...props }, ref) => (
-  <th ref={ref} className={cn("px-4 py-3 text-left text-xs font-medium text-gray-500 align-middle border-b border-gray-200 bg-white", className)} {...props} />
+  <th ref={ref} className={cn("px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500 align-middle border-b border-gray-100 bg-gray-50 whitespace-nowrap", className)} {...props} />
 ))
 TableHead.displayName = "TableHead"
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(({ className, ...props }, ref) => (
-  <td ref={ref} className={cn("px-4 py-3 whitespace-nowrap text-[13px] text-gray-700 align-middle", className)} {...props} />
+  <td ref={ref} className={cn("px-3 py-2 whitespace-nowrap text-[13px] text-gray-700 align-middle", className)} {...props} />
 ))
 TableCell.displayName = "TableCell"
 

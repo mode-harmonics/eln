@@ -289,7 +289,6 @@ async function seed(): Promise<void> {
 
   // --- 7. Raw step data (formation + grading) for 20 cells ---
   const allCellIds = Array.from({ length: 20 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
-  const rand = (min: number, max: number) => min + Math.random() * (max - min);
   {
     const repo = AppDataSource.getRepository(RawStepData);
     const cnt = await repo.count({ where: { experimentId: pdExp.id } as any });

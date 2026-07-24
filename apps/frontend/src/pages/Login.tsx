@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../components/Button";
 import { Logo } from "../components/Logo";
 import { api, ApiError } from "../lib/api";
+import { Surface } from "../components/Surface";
 
 const DEV_ACCOUNTS = [
   { username: "pi", label: "Owner (PI)", color: "bg-purple-500" },
@@ -62,8 +63,8 @@ export function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f7f8fa] px-4">
-      <div className="w-full max-w-md bg-white p-10 border border-gray-200 rounded shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-surface-subtle px-4">
+      <Surface variant="outlined" padding="lg" className="w-full max-w-md sm:p-10">
         <div className="text-center mb-8 flex flex-col items-center">
            <Logo className="text-2xl mb-6 justify-center" />
           <h2 className="text-2xl font-bold text-gray-900">
@@ -79,7 +80,7 @@ export function Login() {
                 id="username"
                 type="text"
                 required
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30 sm:text-sm"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
               />
@@ -92,7 +93,7 @@ export function Login() {
                 id="password"
                 type="password"
                 required
-                className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm"
+                className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30 sm:text-sm"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
@@ -133,7 +134,7 @@ export function Login() {
             ))}
           </div>
         </div>
-      </div>
+      </Surface>
     </div>
   );
 }

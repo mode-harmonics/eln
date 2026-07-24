@@ -24,10 +24,10 @@ export function Switch({ checked, onChange, disabled, size = "md" }: SwitchProps
       disabled={disabled}
       onClick={() => { if (!disabled) onChange(!checked); }}
       className={cn(
-        "relative inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#1d74f5] focus:ring-offset-2",
+        "relative inline-flex shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2",
         trackW,
         trackH,
-        checked ? "bg-[#1d74f5]" : "bg-gray-200",
+        checked ? "bg-action" : "bg-gray-200",
         disabled && "opacity-50 cursor-not-allowed",
       )}
     >

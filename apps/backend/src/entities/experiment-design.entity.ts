@@ -46,6 +46,12 @@ export class ExperimentDesign {
   @Column({ name: 'isRedundancy', type: 'boolean', default: false, comment: '是否为冗余行' })
   isRedundancy!: boolean;
 
+  @Column({ name: 'cellCount', type: 'int', nullable: true, comment: '该分组的正常电池数量（默认17）' })
+  cellCount!: number | null;
+
+  @Column({ name: 'redundancyCount', type: 'int', default: 0, comment: '该分组的冗余电池数量' })
+  redundancyCount!: number;
+
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
 }

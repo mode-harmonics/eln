@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { ProcessData } from '../../entities/process-data.entity';
-import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toBooleanOrFalse, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 const NUMERIC_FIELDS = [
   'm0', 'm1', 'm2',
@@ -34,7 +34,7 @@ export class ProcessDataParser implements DataParser<Partial<ProcessData>> {
     return hasCellId && (hasFormationFields || hasGradingFields || hasDryingFields);
   }
 
-  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<ProcessData>[] {
+  parse(sheet: Worksheet, experimentId: string, _filename?: string, attachmentId?: string): Partial<ProcessData>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['m0', 'm1', 'fu0', 'gu0']);
     const headers = normalizeHeaders(rawHeaders);
     const colIndex = (name: string) => headers.indexOf(name);

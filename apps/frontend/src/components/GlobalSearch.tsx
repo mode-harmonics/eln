@@ -51,7 +51,7 @@ export function GlobalSearch() {
         </div>
         <input
           type="text"
-          className="block w-full sm:w-64 pl-10 pr-3 py-2 border border-gray-200 rounded-md leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-[#1d74f5] focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors"
+          className="block w-full sm:w-64 pl-10 pr-3 py-2 border border-gray-200 rounded-md leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-focus focus:ring-1 focus:ring-focus/30 sm:text-sm transition-colors"
           placeholder={t("search", "Search projects, experiments...")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -59,7 +59,7 @@ export function GlobalSearch() {
         />
         {loading && (
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-            <Loader2 className="h-4 w-4 text-[#1d74f5] animate-spin" />
+            <Loader2 className="h-4 w-4 text-action animate-spin" />
           </div>
         )}
       </div>
@@ -80,7 +80,7 @@ export function GlobalSearch() {
                   className="block px-4 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="inline-flex items-center rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 uppercase">
+                    <span className="inline-flex items-center rounded bg-action-subtle px-1.5 py-0.5 text-[10px] font-semibold text-action-muted uppercase">
                       {item.type}
                     </span>
                     <span className="text-sm font-medium text-gray-900 truncate">

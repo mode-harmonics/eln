@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { ExperimentDesignService } from './experiment-design.service';
+import { BatchCreateDesignDto, UpdateExperimentDesignDto } from './dto/experiment-design.dto';
 
 @ApiTags('Experiment Design')
 @ApiBearerAuth()
@@ -36,7 +37,7 @@ export class ExperimentDesignController {
   @RequirePermission('experiment_design:write')
   async batchCreate(
     @Param('projectId') projectId: string,
-    @Body() dto: any,
+    @Body() dto: BatchCreateDesignDto,
   ) {
     return {
       success: true,
@@ -49,7 +50,7 @@ export class ExperimentDesignController {
   async update(
     @Param('projectId') projectId: string,
     @Param('id') id: string,
-    @Body() dto: any,
+    @Body() dto: UpdateExperimentDesignDto,
   ) {
     return {
       success: true,

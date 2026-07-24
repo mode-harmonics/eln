@@ -58,6 +58,7 @@ export interface CreateWorkflowInstanceDto {
     assignedUserId: string;
     canViewOtherSteps?: boolean;
     canViewInternalCode?: boolean;
+    visibleToUserIds?: string[];
   }>;
 }
 

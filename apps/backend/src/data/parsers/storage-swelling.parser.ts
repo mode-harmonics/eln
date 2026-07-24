@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { StorageSwelling } from '../../entities/storage-swelling.entity';
-import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 /** Matches headers like v_0d, v_7d, v_14d (case-insensitive). */
 const DAY_HEADER_RE = /^v_(\d+)d$/i;
@@ -31,7 +31,7 @@ export class StorageSwellingParser implements DataParser<Partial<StorageSwelling
     return hasDayVolumeCols && hasQd1st;
   }
 
-  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<StorageSwelling>[] {
+  parse(sheet: Worksheet, experimentId: string, _filename?: string, attachmentId?: string): Partial<StorageSwelling>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['v0d', 'v_0d', 'v7d', 'v_7d', 'qd1st', 'qd_1st']);
     const headers = normalizeHeaders(rawHeaders);
 

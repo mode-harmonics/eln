@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { HtCycle } from '../../entities/ht-cycle.entity';
-import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 /**
  * htCycle — 长周期衰减验证数据
@@ -33,7 +33,7 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
     return normalized.includes('cycle');
   }
 
-  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<HtCycle>[] {
+  parse(sheet: Worksheet, experimentId: string, _filename?: string, attachmentId?: string): Partial<HtCycle>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['cycle', '循环圈数']);
     const headers = normalizeHeaders(rawHeaders);
     
@@ -125,7 +125,7 @@ export class HtCycleParser implements DataParser<Partial<HtCycle>> {
     }
 
     const finalRecords: Partial<HtCycle>[] = [];
-    for (const [cellName, records] of cellGroups.entries()) {
+    for (const records of cellGroups.values()) {
       records.sort((a, b) => a.cycle - b.cycle);
       const baseCap = records.find(r => r.dischargeCapacity != null)?.dischargeCapacity ?? 0;
 

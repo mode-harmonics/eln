@@ -61,8 +61,8 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
 
   return (
     <div className="flex items-center gap-3 py-3 px-4 group hover:bg-gray-50 rounded-lg transition-colors">
-      <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-        <FileIcon className="w-4 h-4 text-[#1d74f5]" />
+      <div className="w-8 h-8 rounded-lg bg-action-subtle flex items-center justify-center shrink-0">
+        <FileIcon className="w-4 h-4 text-action" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
@@ -71,7 +71,7 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
           onClick={handleDownload}
-          className="p-1.5 rounded-md text-gray-400 hover:text-[#1d74f5] hover:bg-blue-50 transition-colors"
+          className="p-1.5 rounded-md text-gray-400 hover:text-action hover:bg-action-subtle transition-colors"
           title="下载"
         >
           <Download className="w-3.5 h-3.5" />
@@ -166,8 +166,8 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-              <CloudUpload className="w-4 h-4 text-[#1d74f5]" />
+            <div className="w-7 h-7 rounded-lg bg-action-subtle flex items-center justify-center">
+              <CloudUpload className="w-4 h-4 text-action" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-gray-900">临时文件</h3>
@@ -192,10 +192,10 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
             className={cn(
               "relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-8 cursor-pointer transition-all",
               dragging
-                ? "border-[#1d74f5] bg-blue-50"
+                ? "border-action bg-action-subtle"
                 : loading
                 ? "border-gray-200 bg-gray-50 cursor-not-allowed"
-                : "border-gray-200 hover:border-[#1d74f5] hover:bg-blue-50/30"
+                : "border-gray-200 hover:border-action hover:bg-action-subtle/50"
             )}
           >
             <input
@@ -208,12 +208,12 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
             />
             {loading ? (
               <>
-                <Loader2 className="w-6 h-6 text-[#1d74f5] animate-spin" />
-                <p className="text-sm font-medium text-[#1d74f5]">上传中...</p>
+                <Loader2 className="w-6 h-6 text-action animate-spin" />
+                <p className="text-sm font-medium text-action-muted">上传中...</p>
               </>
             ) : (
               <>
-                <Upload className={cn("w-6 h-6 transition-colors", dragging ? "text-[#1d74f5]" : "text-gray-300")} />
+                <Upload className={cn("w-6 h-6 transition-colors", dragging ? "text-action" : "text-gray-300")} />
                 <div className="text-center">
                   <p className="text-sm font-medium text-gray-700">点击或拖拽文件到此处</p>
                   <p className="text-xs text-gray-400 mt-0.5">支持任意文件类型，可多选</p>

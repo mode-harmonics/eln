@@ -1,7 +1,7 @@
 import { Worksheet } from 'exceljs';
 import { v4 as uuid } from 'uuid';
 import { FastCharge, FastChargeStep } from '../../entities/fast-charge.entity';
-import { DataParser, findHeaderRow, normalizeHeaders, readHeaderRow, toNumberOrNull, toStringOrNull } from './parser.interface';
+import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOrNull } from './parser.interface';
 
 /**
  * Matches step-ladder column headers like:
@@ -76,7 +76,7 @@ export class FastChargeParser implements DataParser<Partial<FastCharge>> {
       (normalized.includes('cellid') && normalized.some((h) => ['stepno', 'step_no', '工步号'].includes(h)));
   }
 
-  parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): Partial<FastCharge>[] {
+  parse(sheet: Worksheet, experimentId: string, _filename?: string, attachmentId?: string): Partial<FastCharge>[] {
     const { rowNumber, headers: rawHeaders } = findHeaderRow(sheet, ['工步号', 'stepno', 'step_no']);
     const headers = normalizeHeaders(rawHeaders);
 

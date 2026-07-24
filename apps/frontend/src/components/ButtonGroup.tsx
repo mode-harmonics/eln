@@ -35,7 +35,7 @@ export function ButtonGroup({ items, activeId, className, size = "sm" }: ButtonG
               size === "sm" ? "px-2 py-1.5 text-xs h-7" : "px-3 py-2 text-sm h-8",
               isActive
                 ? "bg-white text-gray-900 shadow-sm border border-gray-200/60"
-                : "text-gray-500 hover:text-blue-600 hover:bg-white border border-transparent",
+                : "text-gray-500 hover:text-gray-900 hover:bg-white border border-transparent",
               item.className
             )}
           >

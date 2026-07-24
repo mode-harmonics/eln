@@ -19,8 +19,10 @@ import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { SearchInput } from "../components/SearchInput";
 import { Pagination } from "../components/Pagination";
-import { TextInput, Textarea, FormSelect, MultiSelect, Select } from "../components/FormFields";
+import { TextInput, Textarea, FormSelect, MultiSelect } from "../components/FormFields";
 import { PageLoader } from "../components/PageLoader";
+import { PageHeader } from "../components/PageHeader";
+import { ListToolbar } from "../components/ListToolbar";
 import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { cn } from "../lib/utils";
 
@@ -33,7 +35,7 @@ import { toast } from "../components/Toast";
 function projectStatusBadge(project: any) {
   const wf = project.workflowStatus;
   const cls = wf === "Completed" ? "bg-green-50 text-green-700"
-    : wf === "Active" ? "bg-blue-50 text-blue-700"
+    : wf === "Active" ? "bg-action-subtle text-action-muted"
       : wf === "Paused" ? "bg-amber-50 text-amber-700"
         : "bg-gray-100 text-gray-400";
   const label = wf === "Completed" ? "已完成"
@@ -86,7 +88,7 @@ export function Projects() {
   const [createStep, setCreateStep] = useState(1);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [stepAssignments, setStepAssignments] = useState<Record<string, string>>({});
+  const [stepAssignments, setStepAssignments] = useState<Record<string, string[]>>({});
   const [stepVisibleTo, setStepVisibleTo] = useState<Record<string, string[]>>({});
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
 
@@ -133,19 +135,19 @@ export function Projects() {
     if (createStep !== 2) return;
     if (!newProjectName.trim()) return;
 
-    // Validate all steps have assignees
+    // Validate all steps have at least one assignee
     const missing: string[] = [];
     for (const step of selectedTemplateSteps) {
       if (step.isParallel && step.parallelChildren?.length) {
         for (const child of step.parallelChildren) {
-          if (!stepAssignments[child]) missing.push(t(child, childLabel(child)));
+          if (!stepAssignments[child]?.length) missing.push(t(child, childLabel(child)));
         }
       } else {
-        if (!stepAssignments[step.name]) missing.push(step.label);
+        if (!stepAssignments[step.name]?.length) missing.push(step.label);
       }
     }
     if (missing.length > 0) {
-      setAssignmentError(`Please assign a user to: ${missing.join(", ")}`);
+      setAssignmentError(`请为以下步骤指定至少一个执行人: ${missing.join(", ")}`);
       return;
     }
     setAssignmentError(null);
@@ -158,30 +160,46 @@ export function Projects() {
         description: newProjectDesc,
       });
 
-      // 2. Create workflow instance with assignments
+      // 2. Create workflow instance with assignments (flatten multi-user selections)
       if (selectedTemplateSteps.length > 0) {
-        const assignments = selectedTemplateSteps
-          .filter((s) => stepAssignments[s.name])
-          .map((s) => ({
-            stepName: s.name,
-            assignedUserId: stepAssignments[s.name],
-            canViewOtherSteps: true,
-            canViewInternalCode: true,
-            visibleToUserIds: stepVisibleTo[s.name] || [],
-          }));
+        const assignments: Array<{
+          stepName: string;
+          assignedUserId: string;
+          canViewOtherSteps: boolean;
+          canViewInternalCode: boolean;
+          visibleToUserIds: string[];
+        }> = [];
+
+        for (const step of selectedTemplateSteps) {
+          const userIds = stepAssignments[step.name];
+          if (userIds?.length) {
+            for (const userId of userIds) {
+              assignments.push({
+                stepName: step.name,
+                assignedUserId: userId,
+                canViewOtherSteps: true,
+                canViewInternalCode: true,
+                visibleToUserIds: stepVisibleTo[step.name] || [],
+              });
+            }
+          }
+        }
 
         // For parallel children, also assign if specified
         for (const step of selectedTemplateSteps) {
           if (step.isParallel && step.parallelChildren) {
             for (const child of step.parallelChildren) {
-              if (stepAssignments[child]) {
-                assignments.push({
-                  stepName: child,
-                  assignedUserId: stepAssignments[child],
-                  canViewOtherSteps: false,
-                  canViewInternalCode: false,
-                  visibleToUserIds: stepVisibleTo[child] || [],
-                });
+              const userIds = stepAssignments[child];
+              if (userIds?.length) {
+                for (const userId of userIds) {
+                  assignments.push({
+                    stepName: child,
+                    assignedUserId: userId,
+                    canViewOtherSteps: false,
+                    canViewInternalCode: false,
+                    visibleToUserIds: stepVisibleTo[child] || [],
+                  });
+                }
               }
             }
           }
@@ -251,16 +269,12 @@ export function Projects() {
   }
 
   return (
-    <div className="space-y-8 relative">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {t("projects")}
-        </h1>
-      </div>
+    <div className="relative space-y-6">
+      <PageHeader title={t("projects")} />
 
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <SearchInput
+        <ListToolbar
+          search={<SearchInput
             value={searchInput}
             onChange={setSearchInput}
             onSubmit={() => {
@@ -268,17 +282,14 @@ export function Projects() {
               setSearchQuery(searchInput);
             }}
             placeholder={t("search_projects")}
-          />
-          <div className="flex items-center gap-4">
-
-            {hasPermission("projects:write") && (
+          />}
+          actions={hasPermission("projects:write") ? (
               <Button onClick={() => setIsModalOpen(true)} size="sm" variant="secondary">
                 <Plus className="w-4 h-4" />
                 {t("new_project")}
               </Button>
-            )}
-          </div>
-        </div>
+          ) : undefined}
+        />
 
         <TableWrapper>
           <Table>
@@ -288,14 +299,14 @@ export function Projects() {
                 <TableHead>{t("pi")}</TableHead>
                 <TableHead>{t("status")}</TableHead>
                 <TableHead>{t("created")}</TableHead>
-                {hasPermission("projects:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">{t("actions")}</TableHead>}
+                {hasPermission("projects:write") && <TableHead className="sticky right-0 z-20 bg-gray-50 text-right">{t("actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {projects.map((project) => (
                 <TableRow key={project.id} className="cursor-pointer" onClick={() => navigate(`/projects/${project.id}`)}>
                   <TableCell>
-                    <div className="text-[13px] font-medium text-gray-900 group-hover:text-[#1d74f5]">{project.name}</div>
+                    <div className="text-[13px] font-medium text-gray-900 group-hover:text-action-muted">{project.name}</div>
                     <div className="text-[13px] text-gray-500 truncate max-w-sm mt-1">{project.description || '\u00A0'}</div>
                   </TableCell>
                   <TableCell>{project.creator?.fullName || project.createdBy}</TableCell>
@@ -306,7 +317,7 @@ export function Projects() {
                   {hasPermission("projects:write") && (
                     <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                       <div className="flex items-center justify-end gap-3">
-                        <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-[#1d74f5]"><Edit3 className="w-4 h-4" /></Button>
+                        <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action"><Edit3 className="w-4 h-4" /></Button>
                         <Popconfirm
                           title={t("delete_project_confirm", { name: project.name })}
                           onConfirm={() => handleDeleteProject(project)}
@@ -427,7 +438,7 @@ export function Projects() {
                   <TableRow>
                     <TableHead className="w-10">#</TableHead>
                     <TableHead>{t("step", "Step")}</TableHead>
-                    <TableHead className="w-[180px]">{t("assignee", "Assignee")} <span className="text-red-500">*</span></TableHead>
+                    <TableHead className="w-[220px]">{t("assignee", "执行人")} <span className="text-red-500">*</span></TableHead>
                     <TableHead className="w-[180px]">{t("visible_to", "可见人员")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -447,9 +458,9 @@ export function Projects() {
                             <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
                             <TableCell className="font-medium text-gray-800">{t(stepLabelKey(step.name), step.label)}</TableCell>
                             <TableCell>
-                              <Select
-                                value={stepAssignments[step.name] || ""}
-                                onChange={(val) => setStepAssignments((prev) => ({ ...prev, [step.name]: val }))}
+                              <MultiSelect
+                                value={stepAssignments[step.name] || []}
+                                onChange={(vals) => setStepAssignments((prev) => ({ ...prev, [step.name]: vals }))}
                                 options={users.map((u: any) => ({ value: u.id, label: u.fullName || u.username }))}
                                 placeholder={t("select_user", "Select user...")}
                                 className="min-w-[130px]!"
@@ -484,9 +495,9 @@ export function Projects() {
                               {t(child, childLabel(child))}
                             </TableCell>
                             <TableCell>
-                              <Select
-                                value={stepAssignments[child] || ""}
-                                onChange={(val) => setStepAssignments((prev) => ({ ...prev, [child]: val }))}
+                              <MultiSelect
+                                value={stepAssignments[child] || []}
+                                onChange={(vals) => setStepAssignments((prev) => ({ ...prev, [child]: vals }))}
                                 options={users.map((u: any) => ({ value: u.id, label: u.fullName || u.username }))}
                                 placeholder={t("select_user", "Select user...")}
                                 className="min-w-[130px]!"

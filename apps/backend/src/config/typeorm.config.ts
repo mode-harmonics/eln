@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModuleOptions, TypeOrmOptionsFactory } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
 import * as entities from '../entities';
 import { AppConfig } from './configuration';
 
@@ -42,34 +41,4 @@ export class TypeOrmConfigService implements TypeOrmOptionsFactory {
       logging: this.configService.get<string>('nodeEnv') === 'development',
     };
   }
-}
-
-/**
- * Dev-convenience helper: spins up a one-off DataSource with
- * synchronize=true to rapid-prototype schema changes. NEVER use in
- * production — migrations remain the only source of truth there.
- * Invoked via `pnpm --filter @eln/backend run typeorm:sync`.
- */
-export async function syncSchemaForDevOnly(): Promise<void> {
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Refusing to run synchronize:true sync in production.');
-  }
-
-  const ds = new DataSource({
-    type: 'postgres',
-    url: process.env.DATABASE_URL,
-    host: process.env.DB_HOST ?? 'localhost',
-    port: parseInt(process.env.DB_PORT ?? '5432', 10),
-    username: process.env.DB_USERNAME ?? 'eln',
-    password: process.env.DB_PASSWORD ?? 'eln',
-    database: process.env.DB_NAME ?? 'eln',
-    entities: entityList,
-    synchronize: true,
-    logging: true,
-  });
-
-  await ds.initialize();
-   
-  console.log('Dev schema sync complete (synchronize:true). Destroying connection.');
-  await ds.destroy();
 }

@@ -106,14 +106,14 @@ export function Layout() {
                 trigger={
                   <Button
                     title={displayName}
-                    className="!bg-[#f27429] !text-white !w-7 !h-7 !rounded-full !p-0 !text-xs !font-bold hover:!opacity-90 focus:!ring-[#f27429] shrink-0"
+                    className="!h-7 !w-7 shrink-0 !rounded-full !bg-action !p-0 !text-xs !font-bold !text-white hover:!bg-action-hover focus:!ring-focus"
                   >
                     {initial}
                   </Button>
                 }
               >
               <div className="flex items-center gap-3 px-4 py-3 bg-gray-50">
-                <div className="bg-[#f27429] text-white w-8 h-8 flex items-center justify-center rounded font-semibold text-sm shrink-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-action text-sm font-semibold text-white">
                   {initial}
                 </div>
                 <span className="text-sm font-medium text-gray-900 truncate">

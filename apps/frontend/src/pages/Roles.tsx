@@ -14,6 +14,8 @@ import { useViewMode } from "../hooks/useViewMode";
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { Role } from "../types";
+import { PageHeader } from "../components/PageHeader";
+import { ListToolbar } from "../components/ListToolbar";
 
 export function Roles() {
   const { t } = useTranslation();
@@ -129,7 +131,7 @@ export function Roles() {
 
   // ── Permission row helper ──
   const Cb = ({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) => (
-    <label className={`flex items-center justify-center w-5 h-5 flex-none rounded border-2 transition-colors cursor-pointer mx-auto ${checked ? 'bg-[#1d74f5] border-[#1d74f5]' : 'border-gray-300 hover:border-gray-400'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
+    <label className={`flex items-center justify-center w-5 h-5 flex-none rounded border-2 transition-colors cursor-pointer mx-auto ${checked ? 'bg-action border-action' : 'border-gray-300 hover:border-gray-400'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
       <svg className={`w-3 h-3 text-white pointer-events-none ${checked ? 'block' : 'hidden'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -256,8 +258,8 @@ export function Roles() {
     return (
       <React.Fragment key="data-group">
         {/* Parent / group header row */}
-        <tr className="bg-blue-50/60 hover:bg-blue-100/50 cursor-pointer select-none" onClick={toggleGroup}>
-          <td className="px-4 py-3 text-sm font-semibold text-[#1d74f5]">
+        <tr className="cursor-pointer select-none bg-action-subtle hover:bg-orange-100/70" onClick={toggleGroup}>
+          <td className="px-4 py-3 text-sm font-semibold text-action-muted">
             <span className="inline-flex items-center gap-1.5">
               {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               {t("data")}
@@ -289,7 +291,7 @@ export function Roles() {
           };
           const disabled = editingRole?.name === "Owner";
           return (
-            <tr key={r.key} className="bg-gray-50/80 hover:bg-gray-100/60 border-l-2 border-[#1d74f5]/30">
+            <tr key={r.key} className="border-l-2 border-action/30 bg-gray-50/80 hover:bg-gray-100/60">
               <td className="pl-9 pr-4 py-2.5 text-sm text-gray-600">{r.label}</td>
               <td className="px-4 py-2.5 text-center"><Cb checked={isRead} disabled={disabled || isFC} onChange={(v) => toggle("read", v)} /></td>
               <td className="px-4 py-2.5 text-center"><Cb checked={isWrite} disabled={disabled || isFC} onChange={(v) => toggle("write", v)} /></td>
@@ -314,33 +316,27 @@ export function Roles() {
   }
 
   return (
-    <div className="space-y-8 relative">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          {t("role_management")}
-        </h1>
-      </div>
+    <div className="relative space-y-6">
+      <PageHeader title={t("role_management")} />
 
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <SearchInput
+        <ListToolbar
+          search={<SearchInput
             value={searchInput}
             onChange={setSearchInput}
             onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
             placeholder={t("search_roles")}
-          />
-          <div className="flex items-center gap-4">
-            <ViewToggle
+          />}
+          view={<ViewToggle
               viewMode={viewMode}
               setViewMode={setViewMode}
               className="hidden sm:flex"
-            />
-            <Button size="sm" variant="secondary" onClick={() => setIsCreateModalOpen(true)}>
+          />}
+          actions={<Button size="sm" variant="secondary" onClick={() => setIsCreateModalOpen(true)}>
               <Plus className="w-4 h-4" />
               {t("create_role")}
-            </Button>
-          </div>
-        </div>
+          </Button>}
+        />
 
         {viewMode === "list" ? (
         <TableWrapper>
@@ -349,7 +345,7 @@ export function Roles() {
               <TableRow>
                 <TableHead>{t("role_name")}</TableHead>
                 <TableHead>{t("permissions")}</TableHead>
-                {hasPermission("roles:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">{t("actions")}</TableHead>}
+                {hasPermission("roles:write") && <TableHead className="sticky right-0 z-20 bg-gray-50 text-right">{t("actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -372,7 +368,7 @@ export function Roles() {
                   </TableCell>
                   {hasPermission("roles:write") && (
                     <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
-                      <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-[#1d74f5]!">
+                      <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-action!">
                         <Edit3 className="w-4 h-4" />
                       </Button>
                     </TableCell>
@@ -403,7 +399,7 @@ export function Roles() {
               </CardContent>
               {hasPermission("roles:write") && (
                 <CardFooter className="justify-center mt-auto">
-                  <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-[#1d74f5]!">
+                  <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-action!">
                     <Edit3 className="w-4 h-4" />
                   </Button>
                 </CardFooter>
@@ -451,7 +447,7 @@ export function Roles() {
               rows={3}
               value={newRoleDesc}
               onChange={(e) => setNewRoleDesc(e.target.value)}
-              className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors resize-y"
+              className="block w-full resize-y rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 transition-colors focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30 sm:text-sm"
               placeholder={t("role_desc_placeholder")}
             />
           </div>

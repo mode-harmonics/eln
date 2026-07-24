@@ -3,7 +3,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import configuration, { validationSchema } from './config/configuration';
 import { TypeOrmConfigService } from './config/typeorm.config';
-import { DatabaseModule } from './config/database.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { RolesModule } from './roles/roles.module';
@@ -12,7 +11,6 @@ import { ExperimentsModule } from './experiments/experiments.module';
 import { DataModule } from './data/data.module';
 import { AiModule } from './ai/ai.module';
 import { InventoryModule } from './inventory/inventory.module';
-import { GroupsModule } from './groups/groups.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { SearchModule } from './search/search.module';
@@ -39,7 +37,6 @@ import { ReagentProcurementModule } from './reagent-procurement/reagent-procurem
     DataModule,
     AiModule,
     InventoryModule,
-    GroupsModule,
     NotificationsModule,
     DashboardModule,
     SearchModule,
