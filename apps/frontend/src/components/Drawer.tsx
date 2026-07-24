@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useId } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useDialogA11y } from "./useDialogA11y";
 
 interface DrawerProps {
   open: boolean;
@@ -32,6 +33,10 @@ export function Drawer({
   size = "max-w-lg",
   className,
 }: DrawerProps) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const dialogRef = useDialogA11y(open, onClose);
+
   if (!open) return null;
 
   const alignClass = side === "right" ? "justify-end" : "justify-start";
@@ -47,8 +52,14 @@ export function Drawer({
 
       {/* Drawer panel */}
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={description ? descriptionId : undefined}
+        tabIndex={-1}
         className={cn(
-          "relative w-full bg-white shadow-2xl flex flex-col duration-300",
+          "relative flex h-full w-full flex-col bg-surface shadow-2xl outline-none duration-300",
           size,
           slideClass,
           className,
@@ -63,17 +74,19 @@ export function Drawer({
               </div>
             )}
             <div className="min-w-0">
-              <h2 className="text-[15px] font-semibold text-gray-900 truncate">{title}</h2>
+              <h2 id={titleId} className="text-[15px] font-semibold text-gray-900 truncate">{title}</h2>
               {description && (
-                <p className="text-xs text-gray-500 mt-0.5 truncate">{description}</p>
+                <p id={descriptionId} className="text-xs text-gray-500 mt-0.5 truncate">{description}</p>
               )}
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
+            aria-label="Close"
+            className="p-1.5 rounded-control text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 

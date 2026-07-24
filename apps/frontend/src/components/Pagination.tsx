@@ -41,7 +41,7 @@ export function Pagination({
   };
 
   return (
-    <div className={cn("flex items-center justify-between gap-4 px-6 py-4", className)}>
+    <div className={cn("flex flex-wrap items-center justify-center gap-4 px-4 py-4 sm:justify-between sm:px-6", className)}>
       {/* Left: info + page size */}
       <div className="hidden sm:flex sm:items-center sm:gap-4">
         {totalItems > 0 ? (
@@ -53,6 +53,7 @@ export function Pagination({
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-400">{t("pagination_per_page")}</span>
                 <select
+                  aria-label={t("pagination_per_page")}
                   value={pageSize}
                   onChange={(e) => onPageSizeChange(Number(e.target.value))}
                   className="bg-transparent border-0 px-2 py-1 text-[13px] font-medium text-gray-600 focus:outline-none focus:ring-0 cursor-pointer transition-colors hover:text-gray-900"
@@ -75,19 +76,25 @@ export function Pagination({
       {totalPages > 0 && (
         <nav className="flex items-center gap-0.5" aria-label="Pagination">
           {/* First */}
-          <span
-            onClick={() => currentPage > 1 && onPageChange?.(1)}
-            className={cn("cursor-pointer select-none px-1.5 h-8 flex items-center justify-center text-sm transition-colors", currentPage <= 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+          <button
+            type="button"
+            aria-label="First page"
+            disabled={currentPage <= 1}
+            onClick={() => onPageChange?.(1)}
+            className="flex h-8 items-center justify-center rounded-control px-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
           >
-            <ChevronsLeft className="inline h-4 w-4" />
-          </span>
+            <ChevronsLeft className="inline h-4 w-4" aria-hidden="true" />
+          </button>
           {/* Prev */}
-          <span
-            onClick={() => currentPage > 1 && onPageChange?.(currentPage - 1)}
-            className={cn("cursor-pointer select-none px-1.5 h-8 flex items-center justify-center text-sm transition-colors", currentPage <= 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+          <button
+            type="button"
+            aria-label="Previous page"
+            disabled={currentPage <= 1}
+            onClick={() => onPageChange?.(currentPage - 1)}
+            className="flex h-8 items-center justify-center rounded-control px-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
           >
-            <ChevronLeft className="inline h-4 w-4" />
-          </span>
+            <ChevronLeft className="inline h-4 w-4" aria-hidden="true" />
+          </button>
 
           {/* Page numbers */}
           <span className="mx-1 flex items-center gap-0.5">
@@ -101,36 +108,45 @@ export function Pagination({
               }
               const isCurrent = page === currentPage;
               return (
-                <span
+                <button
+                  type="button"
                   key={page}
                   onClick={() => onPageChange?.(page)}
+                  aria-label={`Page ${page}`}
+                  aria-current={isCurrent ? "page" : undefined}
                   className={cn(
-                    "cursor-pointer select-none px-2.5 h-8 flex items-center justify-center text-[13px] transition-colors rounded-md",
+                    "flex h-8 items-center justify-center rounded-control px-2.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35",
                     isCurrent
-                      ? "text-gray-900 font-semibold"
+                      ? "bg-action-subtle text-action-muted font-semibold"
                       : "text-gray-500 hover:text-gray-900 hover:bg-gray-50",
                   )}
                 >
                   {page}
-                </span>
+                </button>
               );
             })}
           </span>
 
           {/* Next */}
-          <span
-            onClick={() => currentPage < totalPages && onPageChange?.(currentPage + 1)}
-            className={cn("cursor-pointer select-none px-1.5 h-8 flex items-center justify-center text-sm transition-colors", currentPage >= totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+          <button
+            type="button"
+            aria-label="Next page"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange?.(currentPage + 1)}
+            className="flex h-8 items-center justify-center rounded-control px-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
           >
-            <ChevronRight className="inline h-4 w-4" />
-          </span>
+            <ChevronRight className="inline h-4 w-4" aria-hidden="true" />
+          </button>
           {/* Last */}
-          <span
-            onClick={() => currentPage < totalPages && onPageChange?.(totalPages)}
-            className={cn("cursor-pointer select-none px-1.5 h-8 flex items-center justify-center text-sm transition-colors", currentPage >= totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-gray-900")}
+          <button
+            type="button"
+            aria-label="Last page"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange?.(totalPages)}
+            className="flex h-8 items-center justify-center rounded-control px-1.5 text-sm text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35 disabled:cursor-not-allowed disabled:text-gray-300 disabled:hover:bg-transparent"
           >
-            <ChevronsRight className="inline h-4 w-4" />
-          </span>
+            <ChevronsRight className="inline h-4 w-4" aria-hidden="true" />
+          </button>
         </nav>
       )}
     </div>

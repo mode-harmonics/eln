@@ -8,6 +8,7 @@ interface SearchInputProps {
   onChange: (value: string) => void;
   onSubmit?: () => void;
   placeholder?: string;
+  ariaLabel?: string;
   className?: string;
 }
 
@@ -16,6 +17,7 @@ export function SearchInput({
   onChange,
   onSubmit,
   placeholder = "Search...",
+  ariaLabel,
   className,
 }: SearchInputProps) {
   return (
@@ -28,12 +30,14 @@ export function SearchInput({
     >
       <button
         type="submit"
+        aria-label="Search"
         className="absolute left-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-900 transition-colors rounded"
       >
         <Search className="h-4 w-4" />
       </button>
       <input
         type="text"
+        aria-label={ariaLabel ?? placeholder}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -46,6 +50,7 @@ export function SearchInput({
       {value && (
         <button
           type="button"
+          aria-label="Clear search"
           onClick={() => { onChange(""); onSubmit?.(); }}
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-900 transition-colors rounded"
         >

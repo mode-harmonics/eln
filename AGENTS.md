@@ -1,155 +1,86 @@
-# ELN — Electronic Lab Notebook
+# ELN Agent Guide
 
-> Production-grade ELN backend for battery-science labs + SPA frontend.
-> See [README.md](./README.md) for setup guide and [BACKEND_SPEC.md](./BACKEND_SPEC.md) for the full table/endpoint specification.
+ELN is a pnpm/Turbo monorepo for a battery-lab electronic notebook. Use [README.md](./README.md) for setup and product context. Treat [BACKEND_SPEC.md](./BACKEND_SPEC.md) as the original backend contract; verify current behavior in source because the application has grown beyond that specification.
 
----
+## Workspace Boundaries
 
-## Quick start
+- `apps/backend`: NestJS, TypeORM, and PostgreSQL API. Controllers own HTTP/auth concerns; services own persistence, transactions, workflow checks, and derived values.
+- `apps/frontend`: React 19 and Vite SPA. [App.tsx](./apps/frontend/src/App.tsx) owns routing/loaders; pages own requests and mutation state; `components/` is the shared UI layer.
+- `packages/shared`: framework-independent API routes, enums, DTO interfaces, response types, colors, and workflow contracts. Put cross-application contracts here, then update both consumers.
+- Do not edit generated `dist/`, `build/`, coverage, Turbo cache, or TypeScript build-info artifacts.
+
+## Setup And Commands
+
+Requires Node 20+ and pnpm 9.12.0. Run commands from the repository root.
 
 ```bash
-pnpm install                    # install all workspace deps
-pnpm --filter @eln/backend run typeorm:run   # run DB migrations
-pnpm --filter @eln/backend run seed          # seed demo data
-pnpm run dev                    # start backend (Turbo watch mode)
-pnpm run test                   # unit tests
-pnpm run test:e2e               # e2e tests (requires Postgres + seed)
+pnpm install
+pnpm --filter @eln/backend run typeorm:run
+pnpm --filter @eln/backend run seed
+pnpm run dev
 ```
 
----
+`pnpm run dev` starts backend, frontend, and shared watch tasks. Backend environment files live at `apps/backend/env/<name>.env`; local runtime defaults to `env/local.env`. Start from `apps/backend/env/example.env`.
 
-## Monorepo structure
+Prefer the narrowest validation that covers the change:
 
-```
-eln/
-├─ apps/
-│  ├─ backend/     # NestJS + TypeORM + PostgreSQL API server
-│  └─ frontend/    # React 19 + Vite + Tailwind 4 SPA
-├─ packages/
-│  └─ shared/      # @eln/shared — enums, DTOs, API route constants
-├─ AGENTS.md       # ← this file
-├─ BACKEND_SPEC.md # Full table + endpoint specification (Chinese)
-└─ README.md       # Setup & usage guide
-```
+```bash
+# Shared contracts
+pnpm --filter @eln/shared run type-check
+pnpm --filter @eln/shared run build
 
----
+# Backend
+pnpm --filter @eln/backend run type-check
+pnpm --filter @eln/backend run test -- --runInBand
+pnpm --filter @eln/backend exec jest <path-to-spec> --runInBand
+pnpm --filter @eln/backend run build
 
-## Backend conventions (NestJS + TypeORM)
+# Frontend ("lint" is tsc --noEmit; there are no frontend unit tests)
+pnpm --filter @eln/frontend run lint
+pnpm --filter @eln/frontend run build
 
-### Entity patterns
-- **UUID primary keys** — `@PrimaryColumn({ type: 'uuid' })`, generated via `v4 as uuid` in service layer
-- **camelCase column names** — explicit `name` in `@Column({ name: 'camelCase' })`
-- **Chinese comments** — all entities/tables have `comment: '中文表名'`
-- **Logical FKs** — no physical foreign key constraints; use `@Index()` on FK columns for query performance
-- **Relations** — use `@ManyToOne` / `@JoinColumn` sparingly; most lookups are manual via repository
-- **Entity barrel** — all entities re-exported from `src/entities/index.ts`
-
-### Auth & security
-- **JWT via Bearer token** — `passport-jwt` strategy, token stored in `localStorage('token')`
-- **RBAC** — `PermissionsGuard` + `@RequirePermission('resource:action')` decorator
-- **401/403** — `JwtAuthGuard` (valid token) → `PermissionsGuard` (has permission)
-- **Standard response** — `{ success: true, data: T }` or `{ success: false, statusCode, message }` (see `@eln/shared`)
-
-### API conventions
-- **Prefix** — `/api/v1` (from `@eln/shared`'s `API_PREFIX`)
-- **Controllers** — `@ApiTags`, `@ApiBearerAuth()`, `@UseGuards(JwtAuthGuard, PermissionsGuard)` per controller class
-- **Swagger** — available at `/api/docs`
-- **Pagination** — `?page=1&limit=10&search=term` pattern
-- **Optimistic locking** — `Experiment.versionNo`; PUT rejects stale versions with HTTP 409
-- **Validation** — `class-validator` DTOs with `whitelist: true, forbidNonWhitelisted: true`
-
-### Data / ETL pipeline
-- Excel upload → 7 parsers → bulk insert in transaction (`DataService.uploadWorkbook`)
-- Parser registry resolves sheet names to parsers (`apps/backend/src/data/parsers/`)
-- 7 business tables: ProcessData, CalendarLife, StorageSwelling, EnergyEfficiency, DcrTest, FastCharge, HtCycle
-- CalendarLife has 4 post-processing fallback rules (see `BACKEND_SPEC.md` §二.10)
-- TypeORM entity mapping: `TABLE_NAME_TO_ENTITY` / `TYPE_PARAM_TO_ENTITY` in `DataService`
-
-### Testing
-- **Jest + ts-jest** — files match `*.spec.ts`
-- **Module alias** — `@eln/shared` maps to `<rootDir>/../../packages/shared/src`
-- **E2e** — `test/` folder, requires running Postgres + seed data
-- Test files co-located in `__tests__/` folders
-
----
-
-## Frontend conventions (React 19 + Vite + Tailwind 4)
-
-### Tech stack
-- **React 19** — functional components, hooks
-- **Vite 6** — dev server on port 5173, proxy `/api` → backend `localhost:3000`
-- **Tailwind CSS 4** — `@tailwindcss/vite` plugin, utility-first
-- **React Router 7** — nested routes with `<Layout>` + `<Outlet>`
-- **i18next** — Chinese/English, auto-detected via `i18next-browser-languagedetector`
-- **lucide-react** — icon library
-- **recharts** — data visualization for battery experiment charts
-- **date-fns** — date formatting
-- **clsx + tailwind-merge** — `cn()` utility for conditional class merging
-
-### Project patterns
-- **API client** — custom `api.get/post/put/delete` in `src/lib/api.ts`, reads JWT from `localStorage('token')`, auto-redirects on 401
-- **Types** — `src/types.ts` re-exports from `@eln/shared` DTOs
-- **Pages** — `src/pages/` directory, one file per route
-- **Components** — `src/components/` shared UI library (Button, Modal, Pagination, etc.)
-- **Hooks** — `src/hooks/` (usePermissions, useViewMode)
-- **Auth** — `ProtectedRoute` wrapper checks `localStorage('auth') === 'true'`
-- **Permissions** — `usePermissions().hasPermission('resource:action')` controls UI visibility
-
-### UI conventions
-- Color: `#1d74f5` primary blue
-- Button variants: primary / secondary / danger / ghost / text
-- Modal: Escape to close, backdrop blur
-- Pages use `useTranslation()` from `react-i18next` for i18n
-- Table components in `ExperimentTables.tsx` for each battery data type
-
-### Routes
-| Path | Component | Description |
-|------|-----------|-------------|
-| `/login` | `Login` | Auth page |
-| `/projects` | `Projects` | Project list |
-| `/projects/:projectId` | `ProjectDetail` | Single project + experiments |
-| `/experiments/:experimentId` | `ExperimentDetail` | Experiment with data tables/charts |
-| `/inventory` | `Inventory` | Lab inventory |
-| `/users` | `Users` | User management (admin) |
-| `/roles` | `Roles` | Role management (admin) |
-| `/profile` | `Profile` | Current user profile |
-
----
-
-## Shared package (@eln/shared)
-
-Single source of truth for:
-- **Enums** — `RoleName`, `ExperimentStatus`, `ProjectStatus`, `InventoryStatus`, `DataType`
-- **API routes** — `API_PREFIX`, `API_ROUTES` constants (backend + frontend use these)
-- **DTOs** — framework-agnostic interfaces for all entities (mirrors TypeORM entities)
-- **Response types** — `ApiSuccessResponse<T>`, `ApiErrorResponse`, `ApiResponse<T>`
-
----
-
-## Key entity relationships
-
-```
-User (roleId → Role)
-Project (createdBy → User)
-  └── Experiment (projectId → Project, createdBy → User)
-       ├── Attachment (experimentId → Experiment)
-       ├── ExperimentCollaborator (experimentId → Experiment, userId → User)
-       ├── VersionHistory (experimentId → Experiment, updatedBy → User)
-       ├── ProcessData (experimentId → Experiment)
-       ├── CalendarLife (experimentId → Experiment)
-       ├── StorageSwelling (experimentId → Experiment)
-       ├── EnergyEfficiency (experimentId → Experiment)
-       ├── DcrTest (experimentId → Experiment)
-       ├── FastCharge (experimentId → Experiment)
-       └── HtCycle (experimentId → Experiment)
+# Dependency-ordered workspace checks
+pnpm run build
+pnpm run test
 ```
 
----
+On a clean tree, build `@eln/shared` before backend-only compilation; backend TypeScript resolves the package's generated `dist`, while Jest resolves shared source directly. Root Turbo `build`, `lint`, and `test` handle upstream build ordering.
 
-## Common pitfalls
+Do not use `pnpm run lint` as a read-only check: the backend lint script runs ESLint with `--fix`. Root `type-check` does not check the frontend; use the frontend `lint` script above.
 
-1. **Entity `@Column` naming** — Always use explicit `name: 'camelCaseName'` to match the DB column convention; TypeORM defaults to snake_case
-2. **DTO vs Entity** — Backend DTOs use `class-validator` decorators; shared DTOs are plain TypeScript `interface`s (no decorators)
-3. **E2e tests** — Require a real Postgres database with seed data; not suitable for CI without DB service
-4. **Module alias** — Backend tsconfig maps `@eln/shared` to `../../packages/shared/dist` (pre-built); Jest config maps to `src` directly
-5. **Decimal columns** — TypeORM returns `string | null` for `decimal` type columns, not `number`
+E2e tests require PostgreSQL plus migrated and seeded test data. They do not automatically load `apps/backend/env/test.env`; provide the intended environment to the process before running:
+
+```bash
+pnpm --filter @eln/backend run typeorm:run:test
+pnpm --filter @eln/backend run seed:test
+pnpm --filter @eln/backend run test:e2e
+```
+
+## Backend Rules
+
+- Use migrations for schema changes. Runtime and CLI TypeORM configurations keep `synchronize: false`.
+- Follow existing entity patterns: UUID primary columns, explicit camel-case database column names, Chinese table/column comments, indexed logical FK columns, and exports from [entities/index.ts](./apps/backend/src/entities/index.ts). Do not introduce physical FK constraints unless the schema strategy is intentionally changed.
+- TypeORM decimal fields are `string | null`; parser outputs also serialize decimal-like values as strings. Do not silently convert these contracts to numbers.
+- Request DTOs are decorated classes under each module's `dto/`; shared DTOs are plain TypeScript interfaces and cannot provide runtime validation. The global validation pipe rejects non-whitelisted fields.
+- Secure endpoints with both `JwtAuthGuard` and the appropriate permission check. `PermissionsGuard` only authorizes when `@RequirePermission` metadata exists; dynamic permissions need an explicit check such as those in [data.controller.ts](./apps/backend/src/data/data.controller.ts).
+- Keep application-managed optimistic locking intact: compare `versionNo`, reject stale writes with 409, increment it, and preserve version-history behavior.
+- Parser registry order is significant because matching is first-win. A new uploaded data type usually needs coordinated parser registration, entity exports/module registration, and mappings in [data.service.ts](./apps/backend/src/data/data.service.ts).
+- Preserve the standard API envelope and exception shape implemented in [all-exceptions.filter.ts](./apps/backend/src/common/filters/all-exceptions.filter.ts).
+
+## Frontend Rules
+
+- Use [api.ts](./apps/frontend/src/lib/api.ts) for JSON API calls; it attaches JWT credentials, unwraps successful envelopes, and normalizes errors. Use `api.upload` for multipart data so the browser supplies the boundary. Authenticated binary downloads are the valid direct-`fetch` exception.
+- Reuse domain types through [types.ts](./apps/frontend/src/types.ts) and `@eln/shared`; add frontend-only response extensions there instead of duplicating backend contracts.
+- Register routed pages and breadcrumb metadata in [App.tsx](./apps/frontend/src/App.tsx). Preserve loader IDs used by nested pages.
+- Gate mutation controls with `usePermissions().hasPermission('resource:action')`, but never treat UI visibility as authorization; the backend remains the security boundary.
+- Authentication uses both `localStorage('auth')` for protected routing and `localStorage('token')` for requests. Permission updates in the same tab must dispatch the existing `permissionsChanged` event.
+- Compose Tailwind classes with `cn()` and reuse tokens from [index.css](./apps/frontend/src/index.css), existing controls, and Lucide icons. Match the established interface instead of introducing a parallel component style.
+- Effects run twice in development under React StrictMode. Make request effects abortable or otherwise idempotent, following nearby page patterns.
+- The frontend TypeScript check covers `src` but not `vite.config.ts`; run the production build after configuration or dependency changes.
+
+## Change Discipline
+
+- Keep changes inside the owning package unless a contract genuinely crosses package boundaries.
+- Search for a neighboring implementation and focused spec before adding an abstraction.
+- Never commit secrets or local environment files. Avoid logging JWTs, database URLs, uploaded workbook contents, or lab data.
+- Add focused Jest coverage for backend behavior changes. For frontend changes, type-check and build at minimum, then exercise the affected route when a dev environment is available.

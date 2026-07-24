@@ -312,7 +312,7 @@ export function ProjectDetail() {
         items={[
           { key: "workflow", label: t("workflow", "工作流程进度") },
           ...(isCreator ? [
-            { key: "summary", label: t("data_summary", "数据对比与统计") },
+            { key: "summary", label: t("data_summary", "数据概览") },
             { key: "raw_data", label: "数据汇总" },
           ] : []),
         ]}
@@ -370,8 +370,8 @@ export function ProjectDetail() {
                     const canOpen = !!route || (step.stepName === "battery_selection" && !isPending);
 
                     return (
-                      <div key={step.stepName} className={cn("relative rounded-2xl px-3 py-3 transition-colors sm:px-4", isInProgress && "bg-[#f0f6ff]")}>
-                        {index < stepParents.length - 1 && <div className="absolute bottom-[-6px] left-[31px] top-10 w-px bg-gray-200/70 sm:left-[35px]" />}
+                      <div key={step.stepName} className={cn("relative rounded-surface px-3 py-3 transition-colors sm:px-4", isInProgress && "bg-action-subtle/60")}>
+                        {index < stepParents.length - 1 && <div className="absolute bottom-[-6px] left-7 top-11 w-px -translate-x-1/2 bg-gray-200 sm:left-8" aria-hidden="true" />}
                         <Link
                           to={route || "#"}
                           aria-current={isInProgress ? "step" : undefined}
@@ -384,13 +384,15 @@ export function ProjectDetail() {
                             canOpen ? "cursor-pointer" : isPending ? "cursor-not-allowed" : "cursor-default",
                           )}
                         >
-                          <div className={cn(
-                            "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
-                            isComplete ? "border-transparent bg-emerald-50 text-emerald-700" :
-                              isInProgress ? "border-transparent bg-action text-white" :
-                                "border-transparent bg-gray-100 text-gray-400",
-                          )}>
-                            {isComplete ? <CheckCircle2 className="h-4 w-4" /> : isInProgress ? <Play className="ml-0.5 h-3.5 w-3.5 fill-current" /> : step.stepIndex + 1}
+                          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+                            <div className={cn(
+                              "relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold",
+                              isComplete ? "border-transparent bg-emerald-50 text-emerald-700" :
+                                isInProgress ? "border-transparent bg-action text-white" :
+                                  "border-transparent bg-gray-100 text-gray-400",
+                            )}>
+                              {isComplete ? <CheckCircle2 className="h-4 w-4" /> : isInProgress ? <Play className="ml-0.5 h-3.5 w-3.5 fill-current" /> : step.stepIndex + 1}
+                            </div>
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">

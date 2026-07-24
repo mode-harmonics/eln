@@ -12,6 +12,7 @@ import {
   User,
   Globe,
   Upload,
+  ChevronDown,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -45,6 +46,7 @@ export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [tempUploadOpen, setTempUploadOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +95,7 @@ export function Layout() {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-[#f7f8fa] border-r border-gray-200 text-gray-600 transition-transform lg:static lg:translate-x-0 lg:flex lg:flex-col",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-[#f7f8fa] border-r border-gray-200 text-gray-600 transition-transform lg:static lg:!translate-x-0 lg:flex lg:flex-col",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
         )}
       >
@@ -103,26 +105,31 @@ export function Layout() {
             <div className="flex items-center gap-1">
               <NotificationBell />
               <Dropdown
+                open={userMenuOpen}
+                onOpenChange={setUserMenuOpen}
+                className="w-64 !p-1"
                 trigger={
                   <Button
-                    title={displayName}
-                    className="!h-7 !w-7 shrink-0 !rounded-full !bg-action !p-0 !text-xs !font-bold !text-white hover:!bg-action-hover focus:!ring-focus"
+                    aria-label={`${displayName} menu`}
+                    aria-expanded={userMenuOpen}
+                    className="!h-8 shrink-0 !gap-1 !rounded-control !bg-transparent !px-1 !py-0 !text-xs !font-semibold !text-gray-700 hover:!bg-gray-100"
                   >
-                    {initial}
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-action text-xs font-bold text-white">{initial}</span>
+                    <ChevronDown className={cn("h-3.5 w-3.5 text-gray-400 transition-transform", userMenuOpen && "rotate-180")} aria-hidden="true" />
                   </Button>
                 }
               >
-              <div className="flex items-center gap-3 px-4 py-3 bg-gray-50">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-action text-sm font-semibold text-white">
+              <div className="flex items-center gap-3 rounded-control bg-surface-subtle px-3 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-action text-sm font-semibold text-white">
                   {initial}
                 </div>
-                <span className="text-sm font-medium text-gray-900 truncate">
-                  {displayName}
-                </span>
-
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-gray-900">{displayName}</p>
+                  <p className="truncate text-xs text-gray-400">{currentUser?.username || currentUser?.email || t("my_profile", "My profile")}</p>
+                </div>
               </div>
-              <div className="border-t border-gray-100 my-1"></div>
-              <Button variant="text" onClick={toggleLanguage} className="w-full !justify-between !px-4 !py-2 !text-sm !text-gray-700 hover:!text-gray-900">
+              <div className="my-1 border-t border-gray-100"></div>
+              <Button variant="text" onClick={toggleLanguage} className="w-full !justify-between !rounded-control !px-3 !py-2 !text-sm !text-gray-700 hover:!bg-gray-50 hover:!text-gray-900">
                 <div className="flex items-center gap-3">
                   <Globe className="w-4 h-4 text-gray-500" />
                   {t("language", "Language")}
@@ -133,13 +140,14 @@ export function Layout() {
               </Button>
               <Link
                 to="/profile"
-                className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                onClick={() => setUserMenuOpen(false)}
+                className="flex items-center gap-3 rounded-control px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50"
               >
                 <User className="w-4 h-4 text-gray-500" />
                 {t("my_profile", "My profile")}
               </Link>
-              <Button variant="text" onClick={handleLogout} className="w-full !justify-start !px-4 !py-2 !text-sm !text-gray-700 hover:!text-gray-900">
-                <LogOut className="w-4 h-4 text-gray-500" />
+              <Button variant="text" onClick={handleLogout} className="w-full !justify-start !rounded-control !px-3 !py-2 !text-sm !text-red-600 hover:!bg-red-50 hover:!text-red-700">
+                <LogOut className="w-4 h-4" />
                 {t("sign_out", "Sign out")}
               </Button>
             </Dropdown>

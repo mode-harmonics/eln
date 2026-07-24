@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useId } from "react";
 import { cn } from "../lib/utils";
 import { Check, ChevronDown, X, Search } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -14,13 +14,14 @@ interface FieldProps {
 }
 
 export function Field({ label, htmlFor, error, children, className }: FieldProps) {
+  const errorId = useId();
   return (
     <div className={cn("space-y-1", className)}>
       <label htmlFor={htmlFor} className="block text-xs font-medium text-gray-700">
         {label}
       </label>
       {children}
-      {error && <p className="text-xs text-red-500">{error}</p>}
+      {error && <p id={errorId} role="alert" className="text-xs text-red-500">{error}</p>}
     </div>
   );
 }
@@ -32,19 +33,25 @@ export const inputClass =
 
 interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
+  error?: string;
 }
 
 export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
-  ({ label, className, id, ...props }, ref) => {
+  ({ label, error, className, id, ...props }, ref) => {
+    const generatedId = useId();
+    const inputId = id ?? generatedId;
+    const errorId = `${inputId}-error`;
     const input = (
       <input
         ref={ref}
-        id={id}
+        id={inputId}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : props["aria-describedby"]}
         className={cn(inputClass, className)}
         {...props}
       />
     );
-    if (label) return <Field label={label} htmlFor={id}>{input}</Field>;
+    if (label) return <Field label={label} htmlFor={inputId}>{input}{error && <p id={errorId} role="alert" className="text-xs text-red-500">{error}</p>}</Field>;
     return input;
   }
 );
@@ -77,6 +84,8 @@ export function Select({
   error,
   ...props
 }: SelectProps) {
+  const triggerId = useId();
+  const listboxId = useId();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
@@ -88,14 +97,14 @@ export function Select({
     if (!open) return;
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        const portal = document.getElementById("select-portal");
+        const portal = document.getElementById(listboxId);
         if (portal && portal.contains(e.target as Node)) return;
         setOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, [open, listboxId]);
 
   // Close on Escape
   useEffect(() => {
@@ -132,8 +141,23 @@ export function Select({
 
   const trigger = (
     <div
+      id={triggerId}
       ref={containerRef}
+      role="combobox"
+      tabIndex={0}
+      aria-expanded={open}
+      aria-controls={listboxId}
+      aria-haspopup="listbox"
+      aria-label={label ?? placeholder}
+      aria-invalid={error ? true : undefined}
       onClick={handleToggle}
+      onKeyDown={(event) => {
+        if (["Enter", " ", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+          if (!open) measure();
+          setOpen(true);
+        }
+      }}
       className={cn(
         "relative flex items-center justify-between w-full rounded-md border px-2.5 py-1.5 text-xs cursor-pointer select-none transition-colors",
         "bg-white hover:border-gray-400",
@@ -157,19 +181,22 @@ export function Select({
 
   return (
     <>
-      {label ? <Field label={label} error={error}>{trigger}</Field> : trigger}
+      {label ? <Field label={label} htmlFor={triggerId} error={error}>{trigger}</Field> : trigger}
 
       {open && createPortal(
-        <div id="select-portal" style={dropdownStyle} className="bg-white rounded-lg shadow-lg border border-gray-200 py-0.5 max-h-[240px] overflow-y-auto z-[9999] animate-in fade-in zoom-in-95 duration-150">
+        <div id={listboxId} role="listbox" style={dropdownStyle} className="bg-white rounded-surface shadow-lg border border-gray-200 py-0.5 max-h-[240px] overflow-y-auto z-[9999] animate-in fade-in zoom-in-95 duration-150">
           {options.length === 0 ? (
             <div className="px-3 py-3 text-xs text-gray-400 text-center">No options</div>
           ) : (
             options.map((opt) => (
-              <div
+              <button
+                type="button"
+                role="option"
+                aria-selected={opt.value === value}
                 key={opt.value}
                 onClick={() => handleSelect(opt.value)}
                 className={cn(
-                  "flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer transition-colors",
+                  "flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-xs cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/35",
                   opt.value === value
                     ? "bg-action-subtle text-action-muted font-medium"
                     : "text-gray-700 hover:bg-gray-50",
@@ -179,7 +206,7 @@ export function Select({
                   {opt.value === value && <Check className="w-2.5 h-2.5 text-action" />}
                 </span>
                 <span className="truncate">{opt.label}</span>
-              </div>
+              </button>
             ))
           )}
         </div>,
@@ -211,6 +238,8 @@ export function MultiSelect({
   error,
   ...props
 }: MultiSelectProps) {
+  const triggerId = useId();
+  const listboxId = useId();
   const [open, setOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -227,7 +256,7 @@ export function MultiSelect({
     if (!open) return;
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        const portal = document.getElementById("multiselect-portal");
+        const portal = document.getElementById(listboxId);
         if (portal && portal.contains(e.target as Node)) return;
         setOpen(false);
         setSearchText("");
@@ -235,7 +264,7 @@ export function MultiSelect({
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, [open, listboxId]);
 
   // Close on Escape
   useEffect(() => {
@@ -319,8 +348,23 @@ export function MultiSelect({
 
   const trigger = (
     <div
+      id={triggerId}
       ref={containerRef}
+      role="combobox"
+      tabIndex={0}
+      aria-expanded={open}
+      aria-controls={listboxId}
+      aria-haspopup="listbox"
+      aria-label={label ?? placeholder}
+      aria-invalid={error ? true : undefined}
       onClick={handleToggle}
+      onKeyDown={(event) => {
+        if (["Enter", " ", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+          if (!open) measure();
+          setOpen(true);
+        }
+      }}
       className={cn(
         "relative flex items-center justify-between w-full rounded-md border px-2.5 py-1.5 text-xs cursor-pointer select-none transition-colors min-h-[30px]",
         "bg-white hover:border-gray-400",
@@ -340,10 +384,9 @@ export function MultiSelect({
               className="inline-flex items-center gap-1 bg-action-subtle text-action-muted rounded-sm px-1.5 py-0.5 text-xs font-medium"
             >
               <span className="truncate max-w-[80px]">{opt.label}</span>
-              <X
-                className="w-2.5 h-2.5 cursor-pointer hover:text-orange-900 shrink-0"
-                onClick={(e) => handleRemoveTag(e, opt.value)}
-              />
+              <button type="button" aria-label={`Remove ${opt.label}`} className="shrink-0 rounded-sm hover:text-orange-900" onClick={(e) => handleRemoveTag(e, opt.value)}>
+                <X className="w-2.5 h-2.5" aria-hidden="true" />
+              </button>
             </span>
           ))
         ) : (
@@ -363,10 +406,10 @@ export function MultiSelect({
 
   return (
     <>
-      {label ? <Field label={label} error={error}>{trigger}</Field> : trigger}
+      {label ? <Field label={label} htmlFor={triggerId} error={error}>{trigger}</Field> : trigger}
 
       {open && createPortal(
-        <div id="multiselect-portal" style={dropdownStyle} className="bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999] animate-in fade-in zoom-in-95 duration-150 flex flex-col">
+        <div id={listboxId} role="listbox" aria-multiselectable="true" style={dropdownStyle} className="bg-white rounded-surface shadow-lg border border-gray-200 py-1 z-[9999] animate-in fade-in zoom-in-95 duration-150 flex flex-col">
           {/* Search input */}
           <div className="px-2 pb-1 border-b border-gray-100">
             <div className="relative">
@@ -381,10 +424,9 @@ export function MultiSelect({
                 onKeyDown={(e) => e.stopPropagation()}
               />
               {searchText && (
-                <X
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 cursor-pointer hover:text-gray-600"
-                  onClick={() => setSearchText("")}
-                />
+                <button type="button" aria-label="Clear search" className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-gray-600" onClick={() => setSearchText("")}>
+                  <X className="w-3 h-3" aria-hidden="true" />
+                </button>
               )}
             </div>
           </div>
@@ -427,11 +469,14 @@ export function MultiSelect({
               filteredOptions.map((opt) => {
                 const isSelected = value.includes(opt.value);
                 return (
-                  <div
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
                     key={opt.value}
                     onClick={() => handleSelect(opt.value)}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer transition-colors",
+                      "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/35",
                       isSelected
                         ? "bg-action-subtle text-action-muted font-medium"
                         : "text-gray-700 hover:bg-gray-50",
@@ -444,7 +489,7 @@ export function MultiSelect({
                       {isSelected && <Check className="w-2.5 h-2.5 text-white stroke-[3]" />}
                     </div>
                     <span className="truncate">{opt.label}</span>
-                  </div>
+                  </button>
                 );
               })
             )}

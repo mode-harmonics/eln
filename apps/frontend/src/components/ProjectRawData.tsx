@@ -52,6 +52,16 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
     { key: "htcycle", label: t("tab_htcycle", "高温循环") },
   ];
 
+  const dataCounts: Record<string, number> = {
+    process: props.processData.length,
+    calendar: props.calendarLife.length,
+    swelling: props.storageSwelling.length,
+    efficiency: props.energyEfficiency.length,
+    dcr: props.dcrTest.length,
+    fastcharge: props.fastCharge.length,
+    htcycle: props.htCycle.length,
+  };
+
   const handleExport = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -78,15 +88,16 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded shadow-sm mb-8 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 flex flex-col xl:flex-row justify-between xl:items-center gap-4 bg-gray-50">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-900 tracking-tight flex items-center gap-2">
-            <Database className="w-5 h-5 text-gray-500" />
+    <section className="mb-8 overflow-hidden rounded-surface border border-border bg-surface">
+      <div className="flex flex-col gap-4 border-b border-border bg-surface-subtle px-5 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-gray-900">
+            <Database className="h-4 w-4 text-action" />
             项目全量数据汇总
           </h2>
+          <p className="mt-1 text-xs text-gray-500">按数据类型浏览项目记录，并集中导入或导出 Excel 数据。</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             ref={uploadInputRef}
             type="file"
@@ -106,12 +117,12 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
         </div>
       </div>
       <Tabs
-        items={tabs}
+        items={tabs.map((tab) => ({ ...tab, label: `${tab.label} ${dataCounts[tab.key] ?? 0}` }))}
         activeKey={activeTab}
         onChange={setActiveTab}
-        className="px-2 bg-white"
+        className="bg-white px-3 sm:px-4"
       />
-      <div className="bg-white">
+      <div className="min-h-72 bg-white">
         {activeTab === "process" && <ProcessDataTable staticData={props.processData} />}
         {activeTab === "calendar" && <CalendarLifeTable staticData={props.calendarLife} />}
         {activeTab === "swelling" && <StorageSwellingTable staticData={props.storageSwelling} />}
@@ -120,6 +131,6 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
         {activeTab === "fastcharge" && <FastChargeTable staticData={props.fastCharge} />}
         {activeTab === "htcycle" && <HtCycleTable staticData={props.htCycle} />}
       </div>
-    </div>
+    </section>
   );
 }

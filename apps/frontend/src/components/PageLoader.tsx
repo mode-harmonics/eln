@@ -9,8 +9,9 @@ interface PageLoaderProps {
 
 export function PageLoader({ className, iconClassName }: PageLoaderProps) {
   return (
-    <div className={cn("flex items-center justify-center py-24", className)}>
-      <Loader2 className={cn("w-6 h-6 animate-spin text-gray-500", iconClassName)} />
+    <div className={cn("flex items-center justify-center py-24", className)} role="status">
+      <Loader2 className={cn("w-6 h-6 animate-spin text-gray-500", iconClassName)} aria-hidden="true" />
+      <span className="sr-only">Loading</span>
     </div>
   );
 }

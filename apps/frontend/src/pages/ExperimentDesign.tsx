@@ -438,11 +438,11 @@ export function ExperimentDesign() {
                   groups.map((row, i) => {
                     const editing = editingIndex === i || batchEditing;
                     return (
-                      <TableRow key={i} className={batchEditing ? "bg-gray-50" : ""}>
+                      <TableRow key={i} className={cn("h-11", batchEditing && "bg-gray-50")}>
                         <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
                         <TableCell>
                           {batchEditing ? (
-                            <input className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                            <input className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
                               value={batchDraft[i]?.group ?? ""}
                               onChange={(e) => handleBatchFieldChange(i, "group", e.target.value)}
                               autoFocus={i === 0}
@@ -460,7 +460,7 @@ export function ExperimentDesign() {
                         </TableCell>
                         <TableCell>
                           {batchEditing ? (
-                            <input className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                            <input className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
                               value={batchDraft[i]?.moleculeName ?? ""}
                               onChange={(e) => handleBatchFieldChange(i, "moleculeName", e.target.value)}
                             />
@@ -477,7 +477,7 @@ export function ExperimentDesign() {
                         </TableCell>
                         <TableCell>
                           {batchEditing ? (
-                            <input className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                            <input className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
                               value={batchDraft[i]?.chineseName ?? ""}
                               onChange={(e) => handleBatchFieldChange(i, "chineseName", e.target.value)}
                             />
@@ -494,7 +494,7 @@ export function ExperimentDesign() {
                         </TableCell>
                         <TableCell>
                           {batchEditing ? (
-                            <input className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                            <input className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
                               value={batchDraft[i]?.cas ?? ""}
                               onChange={(e) => handleBatchFieldChange(i, "cas", e.target.value)}
                             />
@@ -511,7 +511,7 @@ export function ExperimentDesign() {
                         </TableCell>
                         <TableCell>
                           {batchEditing ? (
-                            <input className="w-full min-w-24 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                            <input className="h-7 w-full min-w-24 rounded-control border-0 bg-gray-100 px-2 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
                               value={batchDraft[i]?.designPrinciple ?? ""}
                               onChange={(e) => handleBatchFieldChange(i, "designPrinciple", e.target.value)}
                             />
@@ -529,21 +529,21 @@ export function ExperimentDesign() {
                         </TableCell>
                         <TableCell>
                           {batchEditing ? (
-                            <input className="w-14 rounded border-0 bg-gray-100 px-1.5 py-1 text-center text-xs outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                            <input className="h-7 w-14 rounded-control border-0 bg-gray-100 px-1.5 text-center text-xs outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
                               type="number" min={0} max={50}
                               value={batchDraft[i]?.redundancyCount ?? 0}
                               onChange={(e) => handleBatchNumChange(i, e.target.value)}
                             />
                           ) : editingIndex === i ? (
                             <input
-                              className="w-14 rounded border-0 bg-gray-100 px-1.5 py-1 text-center text-xs outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+                              className="h-7 w-14 rounded-control border-0 bg-gray-100 px-1.5 text-center text-xs outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
                               type="number" min={0} max={50}
                               value={editForm?.redundancyCount ?? 0}
                               onChange={(e) => handleNumChange("redundancyCount", e.target.value)}
                             />
                           ) : (
                             <span
-                              className={cn("inline-flex items-center min-h-[28px] text-xs",
+                              className={cn("inline-flex h-7 items-center text-xs",
                                 designSubmitted ? "text-gray-700" : "cursor-pointer text-gray-700 hover:text-gray-950",
                               )}
                               onClick={() => !designSubmitted && startEditing(i)}
@@ -801,7 +801,7 @@ function CellText({
   if (editing)
     return (
       <input
-        className="w-full min-w-12 rounded border-0 bg-gray-100 px-2 py-1 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+        className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs font-mono outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
         value={editValue}
         onChange={(e) => onEdit(e.target.value)}
         autoFocus
@@ -810,7 +810,7 @@ function CellText({
   return (
     <span
       className={cn(
-        "cursor-pointer text-xs text-gray-700 hover:text-gray-950 inline-flex items-center min-h-[28px]",
+        "inline-flex h-7 items-center text-xs text-gray-700 cursor-pointer hover:text-gray-950",
         className,
       )}
       onClick={onClick}
@@ -848,7 +848,7 @@ function ProcCell({
   if (editing)
     return (
       <input
-        className="w-20 rounded border-0 bg-gray-100 px-2 py-1 text-xs outline-none focus:bg-white focus:ring-1 focus:ring-gray-400"
+        className="h-7 w-20 rounded-control border-0 bg-gray-100 px-2 text-xs outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => {
@@ -861,7 +861,7 @@ function ProcCell({
       />
     );
   return (
-    <span className={cn("text-xs min-w-[50px] inline-block", value ? "text-gray-700" : "text-gray-300 italic")}>
+    <span className={cn("inline-flex h-7 min-w-[50px] items-center text-xs", value ? "text-gray-700" : "text-gray-300 italic")}>
       {value || "—"}
       {saving && <Loader2 className="w-2.5 h-2.5 animate-spin inline ml-1" />}
     </span>

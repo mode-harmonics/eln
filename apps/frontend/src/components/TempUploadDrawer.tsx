@@ -34,7 +34,10 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
     fetch(`/api/v1/temp-files/${file.id}/download`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-      .then((r) => r.blob())
+      .then((response) => {
+        if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+        return response.blob();
+      })
       .then((blob) => {
         const url = URL.createObjectURL(blob);
         a.href = url;
@@ -68,8 +71,10 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
         <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
         <p className="text-xs text-gray-400">{formatBytes(file.size)}</p>
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
         <button
+          type="button"
+          aria-label={`下载 ${file.name}`}
           onClick={handleDownload}
           className="p-1.5 rounded-md text-gray-400 hover:text-action hover:bg-action-subtle transition-colors"
           title="下载"
@@ -77,6 +82,8 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
           <Download className="w-3.5 h-3.5" />
         </button>
         <button
+          type="button"
+          aria-label={`删除 ${file.name}`}
           onClick={handleDelete}
           disabled={deleting}
           className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
@@ -162,7 +169,7 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
       />
 
       {/* Drawer panel */}
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-96 bg-white shadow-2xl flex flex-col">
+      <div role="dialog" aria-modal="true" aria-labelledby="temp-files-title" className="fixed right-0 top-0 bottom-0 z-50 flex w-full max-w-sm flex-col bg-white shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -170,11 +177,13 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
               <CloudUpload className="w-4 h-4 text-action" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">临时文件</h3>
+              <h3 id="temp-files-title" className="text-sm font-semibold text-gray-900">临时文件</h3>
               <p className="text-xs text-gray-400">服务重启后自动清空</p>
             </div>
           </div>
           <button
+            type="button"
+            aria-label="关闭"
             onClick={onClose}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
           >
@@ -185,10 +194,19 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
         {/* Drop zone */}
         <div className="px-5 py-4 border-b border-gray-100">
           <div
+            role="button"
+            tabIndex={loading ? -1 : 0}
+            aria-disabled={loading}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onClick={() => !loading && fileInputRef.current?.click()}
+            onKeyDown={(event) => {
+              if (!loading && (event.key === "Enter" || event.key === " ")) {
+                event.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
             className={cn(
               "relative flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-8 cursor-pointer transition-all",
               dragging

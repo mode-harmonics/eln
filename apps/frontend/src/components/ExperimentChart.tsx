@@ -272,15 +272,19 @@ export function ExperimentChart({ assayType, experimentId, projectId, title }: E
 
   useEffect(() => {
     const type = TYPE_MAP[assayType];
+    setData([]);
     if (!type || !experimentId) return;
+    let active = true;
     const url = `/api/v1/data/${type}/${experimentId}`;
 
     api.get<any>(url)
       .then((res) => {
+        if (!active) return;
         if (res && res.rows) { setData(res.rows); }
         else { setData(Array.isArray(res) ? res : []); }
       })
-      .catch(() => setData([]));
+      .catch(() => { if (active) setData([]); });
+    return () => { active = false; };
   }, [assayType, experimentId, projectId]);
 
   const renderChart = () => {

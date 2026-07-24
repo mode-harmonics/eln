@@ -25,6 +25,7 @@ const bgColors: Record<ToastType, string> = {
 
 let toastId = 0;
 let addToastFn: ((t: ToastItem) => void) | null = null;
+const pendingToasts: ToastItem[] = [];
 
 interface ToastFunction {
   (message: string, type?: ToastType): void;
@@ -34,7 +35,9 @@ interface ToastFunction {
 }
 
 export const toast: ToastFunction = (message: string, type: ToastType = "info") => {
-  addToastFn?.({ id: ++toastId, type, message });
+  const item = { id: ++toastId, type, message };
+  if (addToastFn) addToastFn(item);
+  else pendingToasts.push(item);
 };
 
 toast.success = (message: string) => toast(message, "success");
@@ -63,6 +66,7 @@ export function ToastContainer() {
 
   useEffect(() => {
     addToastFn = add;
+    pendingToasts.splice(0).forEach(add);
     return () => { addToastFn = null; };
   }, [add]);
 
@@ -73,7 +77,7 @@ export function ToastContainer() {
   if (items.length === 0) return null;
 
   return createPortal(
-    <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed left-4 right-4 top-4 z-[9999] flex flex-col items-end gap-2 pointer-events-none sm:left-auto">
       <style>{`
         @keyframes toast-progress-anim {
           0% { width: 0%; }
@@ -83,17 +87,17 @@ export function ToastContainer() {
       {items.map((item) => (
         <div
           key={item.id}
+          role={item.type === "error" ? "alert" : "status"}
           className={cn(
-            "pointer-events-auto relative overflow-hidden flex items-start gap-2.5 px-4 py-3 rounded-md shadow-sm border",
+            "pointer-events-auto relative flex w-full max-w-[420px] items-start gap-2.5 overflow-hidden rounded-control border px-4 py-3 shadow-sm",
             "animate-in slide-in-from-right-2 fade-in duration-200",
             bgColors[item.type],
           )}
-          style={{ minWidth: 280, maxWidth: 420 }}
         >
           {icons[item.type]}
           <p className="text-[13px] font-medium text-gray-700 flex-1 leading-5 pt-0.5">{item.message}</p>
-          <button onClick={() => remove(item.id)} className="text-gray-400 hover:text-gray-900 transition-colors shrink-0 p-1">
-            <X className="w-4 h-4 stroke-[2]" />
+          <button type="button" aria-label="Dismiss notification" onClick={() => remove(item.id)} className="text-gray-400 hover:text-gray-900 transition-colors shrink-0 p-1 rounded-control focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35">
+            <X className="w-4 h-4 stroke-[2]" aria-hidden="true" />
           </button>
           
           <div 

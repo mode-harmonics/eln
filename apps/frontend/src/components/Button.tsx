@@ -32,6 +32,7 @@ const sizeStyles: Record<ButtonSize, string> = {
 };
 
 export function Button({
+  type = "button",
   variant = "primary",
   size = "md",
   loading = false,
@@ -42,6 +43,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
+      type={type}
       disabled={disabled || loading}
       className={cn(
         "inline-flex items-center justify-center gap-2 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35 focus-visible:ring-offset-1 disabled:opacity-60 disabled:cursor-not-allowed",
@@ -51,7 +53,7 @@ export function Button({
       )}
       {...props}
     >
-      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+      {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
       {children}
     </button>
   );

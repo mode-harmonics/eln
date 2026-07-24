@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Bell, Check, Trash2, ExternalLink } from "lucide-react";
+import { Bell, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { Dropdown } from "./Dropdown";
-import { Button } from "./Button";
 import { formatDistanceToNow } from "date-fns";
 
 interface Notification {
@@ -131,21 +130,22 @@ export function NotificationBell() {
     <Dropdown
       onOpenChange={setIsOpen}
       trigger={
-        <button className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors mr-2">
-          <Bell className="w-5 h-5" />
+        <button type="button" aria-label={t("notifications", "Notifications")} className="relative p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors mr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35">
+          <Bell className="w-5 h-5" aria-hidden="true" />
           {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-red-500 rounded-full" style={{lineHeight: 16}}>
+            <span aria-label={`${unreadCount} unread`} className="absolute top-1 right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-red-500 rounded-full" style={{lineHeight: 16}}>
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}
         </button>
       }
     >
-      <div className="w-80 max-h-96 flex flex-col bg-white">
+      <div className="flex max-h-96 w-[min(20rem,calc(100vw-1rem))] flex-col bg-white">
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
           <h3 className="font-semibold text-gray-900 text-sm">{t('notifications', 'Notifications')}</h3>
           {unreadCount > 0 && (
             <button
+              type="button"
               onClick={handleMarkAllRead}
               className="flex items-center gap-1 text-xs font-medium text-action-muted hover:text-action-hover"
             >
@@ -161,12 +161,13 @@ export function NotificationBell() {
           ) : (
             <ul className="divide-y divide-gray-100">
               {notifications.map(notif => (
-                <li
-                  key={notif.id}
-                  onClick={() => handleNotificationClick(notif)}
-                  className={`px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors ${!notif.isRead ? 'bg-action-subtle/60' : ''}`}
-                >
-                  <div className="flex items-start gap-3">
+                <li key={notif.id}>
+                  <button
+                    type="button"
+                    onClick={() => handleNotificationClick(notif)}
+                    className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus/35 ${!notif.isRead ? 'bg-action-subtle/60' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
                     {!notif.isRead && <span className="inline-flex items-center h-4 shrink-0"><span className="w-2 h-2 rounded-full bg-action" /></span>}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate leading-4">
@@ -176,7 +177,8 @@ export function NotificationBell() {
                         {formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true })}
                       </p>
                     </div>
-                  </div>
+                    </div>
+                  </button>
                 </li>
               ))}
             </ul>

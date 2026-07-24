@@ -334,7 +334,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
       const items = ssByCell[cellName].sort((a, b) => a.dayCount - b.dayCount);
       const latest = items[items.length - 1];
       if (latest && latest.dayCount > 0) {
-        addMetric(g, "gas_volume", cellName, parseFloat(latest.gasVolume || "0"));
+        addMetric(g, "gas_volume", cellName, parseFloat(latest.vg || "0"));
       }
     });
 
@@ -425,20 +425,21 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
   });
 
   return (
-    <div className="bg-white border border-gray-200 rounded shadow-sm mb-8 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100 flex flex-col xl:flex-row justify-between xl:items-center gap-4 bg-gray-50">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-900 tracking-tight flex items-center gap-2">
-            <Settings2 className="w-5 h-5 text-gray-500" />
+    <section className="mb-8 overflow-hidden rounded-surface border border-border bg-surface">
+      <div className="flex flex-col gap-4 border-b border-border bg-surface-subtle px-5 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-gray-900">
+            <Settings2 className="h-4 w-4 text-action" />
             {t("data_aggregation_heatmap")}
           </h2>
+          <p className="mt-1 text-xs text-gray-500">按实验分组对比关键指标均值；展开指标可查看电芯分布与离群值。</p>
         </div>
-        <div className="flex items-center gap-2 bg-white px-3 py-1.5 border border-gray-200 rounded-md shadow-sm">
-            <label className="text-[10px] font-medium text-gray-500 whitespace-nowrap uppercase">
+        <div className="flex items-center gap-3 self-start rounded-control border border-border bg-white px-3 py-2 xl:self-auto">
+            <label className="whitespace-nowrap text-xs font-medium text-gray-500">
               {t("base_group")}:
             </label>
             <select
-              className="text-xs border-none bg-transparent font-medium text-[#1d74f5] focus:ring-0 cursor-pointer p-0 pr-4"
+              className="cursor-pointer border-none bg-transparent p-0 pr-5 text-xs font-semibold text-action-muted focus:outline-none focus:ring-0"
               value={displayBaseGroup}
               onChange={(e) => setBaseGroup(e.target.value)}
             >
@@ -543,6 +544,6 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
         </table>
       </div>
 
-    </div>
+    </section>
   );
 };

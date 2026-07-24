@@ -16,21 +16,26 @@ function useTableData<T>(type: string, experimentId: string) {
 
   useEffect(() => {
     if (!experimentId) {
+      setData([]);
+      setError(null);
       setLoading(false);
       return;
     }
-    if (data.length === 0) setLoading(true);
+    let active = true;
+    setLoading(true);
+    setError(null);
     api.get<T[]>(`/api/v1/data/${type}/${experimentId}`)
-      .then(setData)
-      .catch((err) => setError(err?.message ?? "加载失败"))
-      .finally(() => setLoading(false));
+      .then((result) => { if (active) setData(result); })
+      .catch((err) => { if (active) setError(err?.message ?? "加载失败"); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [type, experimentId, ref]);
 
   return { data, loading, error, refresh };
 }
 
 function TableShell({ loading, error, children }: { loading: boolean; error: string | null; children: React.ReactNode }) {
-  if (loading) return <div className="flex items-center justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>;
+  if (loading) return <div className="flex items-center justify-center py-12" role="status"><Loader2 className="w-5 h-5 animate-spin text-gray-400" aria-hidden="true" /><span className="sr-only">Loading</span></div>;
   if (error) return <div className="p-6 text-center text-sm text-red-500">{error}</div>;
   return <>{children}</>;
 }
@@ -340,14 +345,14 @@ export function ProcessDataTable({ experimentId, stepName, staticData, readOnly 
                 <tr key={d.id} className={isEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70'}>
                   <td className="sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap text-[13px] text-gray-900">{d.cellId}</td>
                   {renderCells(visiblePCols, d, P_CELL, isEditing, editForm, handleChange)}
-                  <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[70px] min-w-[70px] max-w-[70px]">
-                    {staticData ? null : <RowActions row={d} type="process" onRefresh={refresh}
+                  {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[70px] min-w-[70px] max-w-[70px]">
+                    <RowActions row={d} type="process" onRefresh={refresh}
                       editing={isEditing}
                       onStartEdit={() => startEditing(d)}
                       onSave={() => handleSave(d.id, refresh)}
                       onCancel={cancelEditing}
-                      saving={saving} readOnly={readOnly} />}
-                  </td>
+                      saving={saving} readOnly={readOnly} />
+                  </td>}
                 </tr>
               );
             })}
@@ -405,14 +410,14 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, static
               <tr key={keyFn?.(d) ?? d.id} className={isEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70'}>
                 <td className={`sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap text-[13px] ${cellColorMap[firstCol.field] || 'text-gray-900'}`}>{String(d[firstCol.field] ?? '')}</td>
                 {renderCells(restCols, d, cellColorMap, isEditing, editForm, handleChange)}
-                <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[70px] min-w-[70px] max-w-[70px]">
-                  {staticData ? null : <RowActions row={d} type={type} onRefresh={refresh}
+                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[70px] min-w-[70px] max-w-[70px]">
+                  <RowActions row={d} type={type} onRefresh={refresh}
                     editing={isEditing}
                     onStartEdit={() => startEditing(d)}
                     onSave={() => handleSave(d.id, refresh)}
                     onCancel={cancelEditing}
-                    saving={saving} readOnly={readOnly} />}
-                </td>
+                    saving={saving} readOnly={readOnly} />
+                </td>}
               </tr>
             );
           })}
@@ -587,14 +592,15 @@ export function FastChargeTable({ experimentId, staticData, readOnly }: { experi
                     {r.computedFastChargeTime ? `${r.computedFastChargeTime} min` : 'N/A'}
                   </td>
                 ) : null}
-                <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap border-l border-gray-100 w-[70px] min-w-[70px] max-w-[70px]">
-                  {staticData ? null : <RowActions row={r} type="fastcharge" onRefresh={refresh}
+                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap border-l border-gray-100 w-[70px] min-w-[70px] max-w-[70px]">
+                  <RowActions row={r} type="fastcharge" onRefresh={refresh}
+                    readOnly={readOnly}
                     editing={isEditing}
                     onStartEdit={() => startEditing(r)}
                     onSave={() => handleSave(r)}
                     onCancel={cancelEditing}
-                    saving={saving} />}
-                </td>
+                    saving={saving} />
+                </td>}
               </tr>
             );
           })}
@@ -637,14 +643,14 @@ export function HtCycleTable({ experimentId, staticData, readOnly }: { experimen
               <tr key={d.id} className={isEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70'}>
                 <td className={`sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm ${htColors[htFirst.field] || 'text-gray-900'} font-medium`}>{String(d[htFirst.field] ?? '')}</td>
                 {renderCells(htRest, d, htColors, isEditing, editForm, handleChange)}
-                <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)] w-[70px] min-w-[70px] max-w-[70px]">
-                  {staticData ? null : <RowActions row={d} type="htcycle" onRefresh={refresh}
+                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap shadow-[-4px_0_12px_rgba(0,0,0,0.05)] w-[70px] min-w-[70px] max-w-[70px]">
+                  <RowActions row={d} type="htcycle" onRefresh={refresh}
                     editing={isEditing}
                     onStartEdit={() => startEditing(d)}
                     onSave={() => handleSave(d.id, refresh)}
                     onCancel={cancelEditing}
-                    saving={saving} readOnly={readOnly} />}
-                </td>
+                    saving={saving} readOnly={readOnly} />
+                </td>}
               </tr>
             );
           })}

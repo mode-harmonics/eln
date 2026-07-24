@@ -28,10 +28,12 @@ export function ButtonGroup({ items, activeId, className, size = "sm" }: ButtonG
         const btn = (
           <button
             key={item.id}
+            type="button"
             onClick={item.onClick}
             title={item.title}
+            aria-pressed={activeId !== undefined ? isActive : undefined}
             className={cn(
-              "flex items-center justify-center gap-1.5 rounded-md transition-all focus:outline-none whitespace-nowrap",
+              "flex items-center justify-center gap-1.5 rounded-control transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/35 whitespace-nowrap",
               size === "sm" ? "px-2 py-1.5 text-xs h-7" : "px-3 py-2 text-sm h-8",
               isActive
                 ? "bg-white text-gray-900 shadow-sm border border-gray-200/60"
@@ -40,7 +42,7 @@ export function ButtonGroup({ items, activeId, className, size = "sm" }: ButtonG
             )}
           >
             {item.icon && <span className="flex-shrink-0">{item.icon}</span>}
-            <span className={cn(item.icon ? "hidden sm:inline" : "inline")}>{item.label}</span>
+            <span className={cn(item.icon ? "sr-only sm:not-sr-only" : "inline")}>{item.label}</span>
             {item.badge}
           </button>
         );

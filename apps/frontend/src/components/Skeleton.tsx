@@ -8,7 +8,8 @@ interface SkeletonProps {
 export function Skeleton({ className }: SkeletonProps) {
   return (
     <div
-      className={cn("bg-gray-200 animate-pulse rounded", className)}
+      aria-hidden="true"
+      className={cn("bg-gray-200 motion-safe:animate-pulse rounded-control", className)}
     />
   );
 }
