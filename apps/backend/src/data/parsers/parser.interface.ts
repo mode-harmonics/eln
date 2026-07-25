@@ -94,7 +94,7 @@ export function normalizeHeaders(headers: string[]): string[] {
     const h = String(header ?? '').trim().toLowerCase();
     
     // Direct Chinese -> English translations
-    if (h === '电池编号' || h === '电芯编号' || h === '电芯id' || h === '电池id' || h === '电芯名称' || h === '电池名称') {
+    if (h === '电池编号' || h === '电池编号' || h === '电池id' || h === '电池id' || h === '电池名称' || h === '电池名称') {
       result[i] = 'cellid';
       continue;
     }

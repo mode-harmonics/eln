@@ -5,6 +5,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  HttpCode,
   Param,
   Post,
   Put,
@@ -244,6 +245,29 @@ export class DataController {
       );
     }
     return this.dataService.createRow(type, expId, body);
+  }
+
+  /** Batch update rows of a business table — single PUT /api/v1/data/:type/batch */
+  @Put(':type/batch')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Batch update rows of a business table. Accepts { rows: [{ id, ...fields }] }.',
+  })
+  async batchUpdate(
+    @Param('type') type: string,
+    @Body() body: { rows: Record<string, unknown>[] },
+    @CurrentUser() user: RequestUser,
+  ) {
+    const requiredPermission = `data_${type}:write`;
+    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
+    const hasGeneral = hasPermission(user.permissionList, 'data:write');
+    if (!hasSpecific && !hasGeneral) {
+      throw new ForbiddenException(
+        `You do not have the required permission: ${requiredPermission} or data:write`,
+      );
+    }
+    const count = await this.dataService.batchUpdateRows(type, body.rows);
+    return { success: true, data: { updated: count } };
   }
 
   @Put(':type/:id')

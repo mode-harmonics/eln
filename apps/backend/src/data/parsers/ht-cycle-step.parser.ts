@@ -4,7 +4,7 @@ import { HtCycle } from '../../entities/ht-cycle.entity';
 import { RawStepData } from '../../entities/raw-step-data.entity';
 import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOrNull } from './parser.interface';
 
-const CELL_NAME_KEYS = ['cellname', 'cellid', 'batteryid', 'cell', '电芯名称', '电芯'];
+const CELL_NAME_KEYS = ['cellname', 'cellid', 'batteryid', 'cell', '电池名称', '电池'];
 
 /**
  * HtCycleStepParser — 读取机器导出的「循环层」cycle sheet，

@@ -358,7 +358,7 @@ export function ExperimentDesign() {
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                {t("design_cell_count", "电芯数")}: {totalCells}
+                {t("design_cell_count", "电池数")}: {totalCells}
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">

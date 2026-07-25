@@ -58,7 +58,7 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
       setCells(mapped);
       setSelected(initSelected);
       setLoading(false);
-    }).catch(() => { setLoading(false); toast("加载电芯数据失败", "error"); });
+    }).catch(() => { setLoading(false); toast("加载电池数据失败", "error"); });
   }, [open, processExperimentId, projectId]);
 
   const handleAssign = (cellId: string, testType: string) => {
@@ -86,7 +86,7 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
         }
       });
       setSelected(newSelected);
-      toast(`系统已自动分配 ${Object.keys(newSelected).length} 个电芯，你可继续手动调整`, "success");
+      toast(`系统已自动分配 ${Object.keys(newSelected).length} 个电池，你可继续手动调整`, "success");
     } catch (err: any) {
       toast(err?.message ?? "自动挑选失败", "error");
     } finally {
@@ -114,7 +114,7 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
       }
 
       onComplete?.(assignments.map(a => a.cellId));
-      toast(`已挑选并分配 ${assignments.length} 个电芯`, "success");
+      toast(`已挑选并分配 ${assignments.length} 个电池`, "success");
       onClose();
     } catch (err: any) {
       toast(err?.message ?? "操作失败", "error");
@@ -137,14 +137,14 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
     <Drawer
       open={open}
       onClose={onClose}
-      title="挑选与分配电芯"
-      description="选择后续测试使用的电芯并分配测试类型"
+      title="挑选与分配电池"
+      description="选择后续测试使用的电池并分配测试类型"
       icon={<Layers className="w-4 h-4 text-action" />}
       size="max-w-xl"
       footer={
         <div className="flex items-center justify-between w-full">
           <p className="text-sm text-gray-500">
-            共 <span className="font-semibold text-gray-900">{cells.length}</span> 个可用电芯，已分配 <span className="font-semibold text-action-muted">{assignedCount}</span>
+            共 <span className="font-semibold text-gray-900">{cells.length}</span> 个可用电池，已分配 <span className="font-semibold text-action-muted">{assignedCount}</span>
           </p>
           <div className="flex items-center gap-3">
             <Button variant="secondary" onClick={onClose} disabled={syncing}>{readonly ? "关闭" : "取消"}</Button>
@@ -191,7 +191,7 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
         ) : cells.length === 0 ? (
           <div className="text-center py-16 text-gray-400">
             <Layers className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">暂无可挑选的电芯</p>
+            <p className="text-sm">暂无可挑选的电池</p>
             <p className="text-xs mt-1">请先上传制成工步数据</p>
           </div>
         ) : (

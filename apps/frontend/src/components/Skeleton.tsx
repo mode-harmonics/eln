@@ -20,7 +20,7 @@ export function SkeletonBlock({ className }: SkeletonProps) {
 
 export function SkeletonCard({ rows = 4, className }: { rows?: number } & SkeletonProps) {
   return (
-    <div className={cn("bg-white border border-gray-200 rounded shadow-sm overflow-hidden", className)}>
+    <div className={cn("bg-white border border-gray-200 rounded overflow-hidden", className)}>
       <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
         <Skeleton className="h-5 w-48" />
       </div>

@@ -123,16 +123,16 @@
 
 ## 二、 业务实验数据表 (Battery / Lab Data Models)
 
-为了应对电芯不同工序流转中产生的高度专业化结构数据，以下梳理了 7 张具体的实验解析表。设计上将时间序列表（如日历寿命、胀气）从宽表拍平为**纵向高维表 (Vertical Tables)**，极大提升关系型数据库（如 PostgreSQL/MySQL）的检索与扩展效率。
+为了应对电池不同工序流转中产生的高度专业化结构数据，以下梳理了 7 张具体的实验解析表。设计上将时间序列表（如日历寿命、胀气）从宽表拍平为**纵向高维表 (Vertical Tables)**，极大提升关系型数据库（如 PostgreSQL/MySQL）的检索与扩展效率。
 
 ### 9. `processData` (制程数据表)
 
-记录电芯出厂前各阶段的基础工艺参数（如重量、厚度、极耳长度等）。
+记录电池出厂前各阶段的基础工艺参数（如重量、厚度、极耳长度等）。
 | 字段名 | 类型 | 说明 | 约束 / 逻辑关联 |
 |:---|:---|:---|:---|
 | `id` | VARCHAR(36) | 数据行标识 | **主键 (PK)** |
 | `experimentId`| VARCHAR(36) | 归属批次/实验ID | 逻辑关联 `experiments.id` |
-| `cellId` | VARCHAR(64) | 电芯唯一编码 (batteryId) | |
+| `cellId` | VARCHAR(64) | 电池唯一编码 (batteryId) | |
 | `m0`, `m1`, `m2` | DECIMAL | 化成前等重量阶段测量参数 | |
 | `v0`, `v1` | DECIMAL | 各阶段电压参数 (V0, V1) | |
 | `fu0`, `fr0` | DECIMAL | 化成前工序电压与内阻 | |
@@ -147,12 +147,12 @@
 
 ### 10. `calendarLife` (日历寿命数据表)
 
-记录电芯在特定时间节点（0d, 7d, 14d 等）下的多维指标。动态解析横向表头生成对应天数的字段。
+记录电池在特定时间节点（0d, 7d, 14d 等）下的多维指标。动态解析横向表头生成对应天数的字段。
 | 字段名 | 类型 | 说明 | 约束 / 逻辑关联 |
 |:---|:---|:---|:---|
 | `id` | VARCHAR(36) | 数据行标识 | **主键 (PK)** |
 | `experimentId`| VARCHAR(36) | 归属批次/实验ID | 逻辑关联 `experiments.id` |
-| `cellName` | VARCHAR(64) | 电芯唯一编码 | |
+| `cellName` | VARCHAR(64) | 电池唯一编码 | |
 | `isHorizontal`| BOOLEAN | 标记是否为横向铺开的数据 | |
 | `dayCount` | INT | 测量天数 (0, 7, 14, 21, 28, 35, 42 等) | 通过动态字段如 q_0d 拍平 |
 | `q` | DECIMAL | 测量容量 (如 q_0d, q_7d) | |
@@ -171,12 +171,12 @@
 
 ### 11. `storageSwelling` (60℃存储胀气数据表)
 
-监测高温存储周期内的电芯气胀体积膨胀率，同日历寿命类似提取。
+监测高温存储周期内的电池气胀体积膨胀率，同日历寿命类似提取。
 | 字段名 | 类型 | 说明 | 约束 / 逻辑关联 |
 |:---|:---|:---|:---|
 | `id` | VARCHAR(36) | 数据行标识 | **主键 (PK)** |
 | `experimentId`| VARCHAR(36) | 归属批次/实验ID | 逻辑关联 `experiments.id` |
-| `cellName` | VARCHAR(64) | 电芯唯一编码 | |
+| `cellName` | VARCHAR(64) | 电池唯一编码 | |
 | `qd1st` | DECIMAL | 首圈/初始参考容量 (qd_1st) | |
 | `dayCount` | INT | 存储测量天数 | |
 | `v` | DECIMAL | 该时间点的气胀体积 (如 v_0d, v_7d) | |
@@ -189,7 +189,7 @@
 |:---|:---|:---|:---|
 | `id` | VARCHAR(36) | 数据行标识 | **主键 (PK)** |
 | `experimentId`| VARCHAR(36) | 归属批次/实验ID | 逻辑关联 `experiments.id` |
-| `cellName` | VARCHAR(64) | 电芯唯一编码 | |
+| `cellName` | VARCHAR(64) | 电池唯一编码 | |
 | `de` | DECIMAL | 放电能量 (Discharge Energy) | |
 | `ce` | DECIMAL | 充电能量 (Charge Energy) | |
 | `notes` | VARCHAR(255) | 异常备注说明 | |
@@ -202,7 +202,7 @@
 |:---|:---|:---|:---|
 | `id` | VARCHAR(36) | 数据行标识 | **主键 (PK)** |
 | `experimentId`| VARCHAR(36) | 归属批次/实验ID | 逻辑关联 `experiments.id` |
-| `cellName` | VARCHAR(64) | 电芯唯一编码 | |
+| `cellName` | VARCHAR(64) | 电池唯一编码 | |
 | `q0` | DECIMAL | 测试 SOC 点前容量 | |
 | `du0`, `du1` | DECIMAL | 放电脉冲前电压，放电脉冲后电压| |
 | `di` | DECIMAL | 放电脉冲电流 | |
@@ -217,7 +217,7 @@
 |:---|:---|:---|:---|
 | `id` | VARCHAR(36) | 数据行标识 | **主键 (PK)** |
 | `experimentId`| VARCHAR(36) | 归属批次/实验ID | 逻辑关联 `experiments.id` |
-| `cellName` | VARCHAR(64) | 电芯唯一编码 | |
+| `cellName` | VARCHAR(64) | 电池唯一编码 | |
 | `c0` | DECIMAL | 标称容量 (通常 3.0 或自定义)| |
 | `providedFastChargeTime` | DECIMAL | 解析出的实际快充时间总计 (Min)| |
 | `steps` | JSONB | 存放数组：`[{ stepNo, rate, cutOffVoltage, current, stepCapacity, stepTime }]` | 横向结构折叠 |
@@ -225,7 +225,7 @@
 
 ### 15. `htCycle` (高温循环数据表)
 
-长周期衰减验证数据（以循环周次为时间轴，反转拍平为按 cycleNo 组织的行，列为各电芯容量）。
+长周期衰减验证数据（以循环周次为时间轴，反转拍平为按 cycleNo 组织的行，列为各电池容量）。
 | 字段名 | 类型 | 说明 | 约束 / 逻辑关联 |
 |:---|:---|:---|:---|
 | `id` | VARCHAR(36) | 数据行标识 | **主键 (PK)** |

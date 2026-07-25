@@ -32,7 +32,7 @@ export class HtCycle {
   cycle!: number;
 
   @Index()
-  @Column({ type: 'varchar', length: 64, comment: '电芯名称' })
+  @Column({ type: 'varchar', length: 64, comment: '电池名称' })
   cellName!: string;
 
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '铁溶出量' })

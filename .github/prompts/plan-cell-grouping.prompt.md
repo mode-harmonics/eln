@@ -3,7 +3,7 @@
 **TL;DR**: 实现项目级别的电池分组系统（前缀自动匹配 / 手动指定），新增 `cell_groups` 数据表与 CRUD API，重构所有 7 类图表使用统一分组配色，改造 DataSummary 使用数据库驱动的分组。
 
 **已确认的设计决策**:
-- DCR / 能效图：保留每个电芯独立柱子（像现在），按分组统一颜色
+- DCR / 能效图：保留每个电池独立柱子（像现在），按分组统一颜色
 - 分组管理 UI：独立页面 (`/projects/:projectId/groups`)，非 Modal
 
 ---
@@ -30,7 +30,7 @@ cell_groups (电池分组定义表)
   matchValue      VARCHAR(128) — prefix 模式下存前缀值
   createdAt       TIMESTAMP
 
-cell_group_members (手动分组电芯表)
+cell_group_members (手动分组电池表)
   id              UUID PK
   groupId         UUID — 逻辑关联 cell_groups.id, INDEX
   cellIdentifier  VARCHAR(128) — cellName 或 cellId
@@ -47,7 +47,7 @@ GROUP_PALETTE = [
 ]
 ```
 
-未分组电芯统一使用灰色 `#9ca3af`。
+未分组电池统一使用灰色 `#9ca3af`。
 
 ---
 
@@ -74,7 +74,7 @@ GROUP_PALETTE = [
      - `create(dto)` — 创建分组（自动分配颜色）
      - `update(id, dto)` — 更新分组
      - `delete(id)` — 删除分组及其 members
-     - `resolve(projectId)` — 根据项目下所有实验的 cell 数据，按 prefix 规则动态分辨电芯归属
+     - `resolve(projectId)` — 根据项目下所有实验的 cell 数据，按 prefix 规则动态分辨电池归属
      - `getGroupForCell(cellIdentifier, projectId)` — 查询单个 cell 的分组（先查手动成员表，未命中则按 prefix 匹配）
    - `groups.controller.ts` — REST 端点
      - `GET /api/v1/projects/:projectId/groups`
@@ -111,7 +111,7 @@ GROUP_PALETTE = [
      - 面包屑导航：项目 → 分组管理
      - 现有分组列表（名称 + 色块 + 匹配规则 + 操作按钮）
      - "添加分组"表单：名称、匹配模式 (前缀/手动)、前缀值
-     - 手动模式：搜索并勾选电芯
+     - 手动模式：搜索并勾选电池
      - 删除分组确认
    - CRUD 调用 `/api/v1/projects/:projectId/groups` 端点
 
@@ -192,7 +192,7 @@ GROUP_PALETTE = [
 | 文件 | 操作 | 说明 |
 |------|------|------|
 | `apps/backend/src/entities/cell-group.entity.ts` | **新建** | 分组定义实体 |
-| `apps/backend/src/entities/cell-group-member.entity.ts` | **新建** | 手动分组电芯实体 |
+| `apps/backend/src/entities/cell-group-member.entity.ts` | **新建** | 手动分组电池实体 |
 | `apps/backend/src/entities/index.ts` | 修改 | 新增 barrel export |
 | `apps/backend/src/migrations/*-AddCellGroups.ts` | **新建** | migration 文件 |
 | `apps/backend/src/groups/*` | **新建目录** | module/service/controller/dto |
@@ -233,7 +233,7 @@ GROUP_PALETTE = [
 1. `pnpm --filter @eln/backend run typeorm:run` — 确保新 migration 成功
 2. `pnpm run test` — 所有单元测试通过
 3. 启动后端 → Swagger UI 验证新分组 CRUD 端点
-4. 前端：项目详情页 → 导航到分组管理页 → 创建分组 → 上传含多前缀电芯的 Excel → 切换到各图表验证配色一致性
+4. 前端：项目详情页 → 导航到分组管理页 → 创建分组 → 上传含多前缀电池的 Excel → 切换到各图表验证配色一致性
 5. DataSummary tab → 验证按组统计正确
 
 ---

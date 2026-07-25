@@ -32,17 +32,17 @@ export class ProcessData {
 
   /** Cell unique code (aka batteryId in source workbooks). */
   @Index()
-  @Column({ type: 'varchar', length: 64, comment: '电芯编码' })
+  @Column({ type: 'varchar', length: 64, comment: '电池编码' })
   cellId!: string;
 
   // --- Pre-formation weight stages ---
-  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '注液前电芯重(m0)' })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '注液前电池重(m0)' })
   m0!: string | null;
 
-  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '预充后电芯重(m1)' })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '预充后电池重(m1)' })
   m1!: string | null;
 
-  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '二封后电芯重(m2)' })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '二封后电池重(m2)' })
   m2!: string | null;
 
   // --- Stage voltages ---

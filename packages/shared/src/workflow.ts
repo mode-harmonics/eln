@@ -93,7 +93,7 @@ export const STEP_DATA_TYPE: Record<string, string> = {
 // ─── Chinese label map (for step display without i18n) ─────────────────
 export const STEP_NAME_MAP: Record<string, string> = {
   experiment_design: '实验设计',
-  battery_selection: '电芯选取',
+  battery_selection: '电池选取',
   drying_injection: '干燥/注液',
   formation: '化成',
   second_sealing: '二封',

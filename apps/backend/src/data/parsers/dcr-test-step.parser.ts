@@ -7,7 +7,7 @@ import { isStepSheet, readStepSheet } from './step-parser.shared';
 
 /**
  * DcrTestStepParser �?读取机器导出的「工步层」step sheet�?
- * 提取 4C DCR 测试指标汇总为 DcrTest 业务行（每个电芯一行）�?
+ * 提取 4C DCR 测试指标汇总为 DcrTest 业务行（每个电池一行）�?
  *
  * 提取规则:
  *   Q0  = stepNo=7 容量（第三次放电�?

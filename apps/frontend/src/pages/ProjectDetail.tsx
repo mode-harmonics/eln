@@ -495,7 +495,7 @@ export function ProjectDetail() {
                     {focusedStep.stepName === "battery_selection" && (
                       <Button variant="primary" className="w-full" onClick={() => setCellPickerOpen(true)}>
                         <Layers className="h-4 w-4" />
-                        挑选实验电芯 ({pickedCells.length})
+                        挑选实验电池 ({pickedCells.length})
                         <ChevronRight className="ml-auto h-4 w-4" />
                       </Button>
                     )}

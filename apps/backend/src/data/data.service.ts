@@ -92,6 +92,61 @@ export function computeProcessDataDerivedFields(p: Record<string, any>, ctx: Rec
   p.ceFirst = ceFirst !== null ? ceFirst.toFixed(6) : null;
 }
 
+const n = (v: any) => (v == null || v === '') ? null : Number(v);
+
+function computeCalendarDerivedFields(rows: any[]) {
+  const day0 = rows.find((r: any) => r.dayCount === 0);
+  if (!day0) return;
+  const q0 = n(day0.q);
+  const ddcr0 = n(day0.ddcr);
+  const cdcr0 = n(day0.cdcr);
+  const u0 = n(day0.u);
+  const r0 = n(day0.r);
+  for (const cur of rows) {
+    const dqVal = n(cur.dq), qVal = n(cur.q), ddcrVal = n(cur.ddcr), cdcrVal = n(cur.cdcr), uVal = n(cur.u), rVal = n(cur.r);
+    if (cur.dayCount === 0) {
+      cur.qRetention = q0 != null ? '100.000000' : null;
+      cur.qRecovery  = q0 != null ? '100.000000' : null;
+      cur.ddcrGrowth = '0.000000';
+      cur.cdcrGrowth = '0.000000';
+      cur.uGrowth    = '0.000000';
+      cur.rGrowth    = '0.000000';
+    } else {
+      cur.qRetention = (dqVal != null && q0) ? ((dqVal / q0) * 100).toFixed(6) : null;
+      cur.qRecovery  = (qVal != null && q0)  ? ((qVal / q0) * 100).toFixed(6) : null;
+      cur.ddcrGrowth = (ddcrVal != null && ddcr0) ? ((ddcrVal / ddcr0 - 1) * 100).toFixed(6) : null;
+      cur.cdcrGrowth = (cdcrVal != null && cdcr0) ? ((cdcrVal / cdcr0 - 1) * 100).toFixed(6) : null;
+      cur.uGrowth    = (uVal != null && u0) ? ((uVal / u0 - 1) * 100).toFixed(6) : null;
+      cur.rGrowth    = (rVal != null && r0) ? ((rVal / r0 - 1) * 100).toFixed(6) : null;
+    }
+  }
+}
+
+function computeSwellingDerivedFields(rows: any[]) {
+  const day0 = rows.find((r: any) => r.dayCount === 0);
+  if (!day0) return;
+  const v0 = n(day0.v);
+  for (const cur of rows) {
+    const vNd = n(cur.v);
+    const qd1st = n(cur.qd1st);
+    if (cur.dayCount === 0) {
+      cur.vg = '0.000000';
+    } else {
+      cur.vg = (vNd != null && v0 != null && qd1st != null && qd1st !== 0) ? ((vNd - v0) / qd1st).toFixed(6) : null;
+    }
+  }
+}
+
+function computeHtCycleDerivedFields(rows: any[]) {
+  const baseCycle = rows.find((r: any) => r.cycle === 1 || r.cycleNo === 1);
+  if (!baseCycle) return;
+  const baseCap = n(baseCycle.dischargeCapacity);
+  for (const cur of rows) {
+    const cap = n(cur.dischargeCapacity);
+    cur.capacityRetention = (cap != null && baseCap != null && baseCap !== 0) ? ((cap / baseCap) * 100).toFixed(6) : null;
+  }
+}
+
 @Injectable()
 export class DataService {
   private readonly logger = new Logger(DataService.name);
@@ -621,7 +676,7 @@ export class DataService {
     }
 
     if (records.length === 0) {
-      throw new BadRequestException('没有找到可用的电芯数据。');
+      throw new BadRequestException('没有找到可用的电池数据。');
     }
 
     // Sort: primary by QD1st (desc), secondary by fqTotal (desc)
@@ -1059,6 +1114,177 @@ export class DataService {
     }
 
     return repo.save(row);
+  }
+
+  /** PUT /data/:type/batch — update multiple rows and recompute derived fields. */
+  async batchUpdateRows(type: string, rows: Record<string, unknown>[]): Promise<number> {
+    if (!rows || rows.length === 0) return 0;
+
+    const EntityClass = TYPE_PARAM_TO_ENTITY[type];
+    if (!EntityClass) {
+      throw new BadRequestException(
+        `Unknown data type "${type}". Expected one of: ${Object.keys(TYPE_PARAM_TO_ENTITY).join(', ')}.`,
+      );
+    }
+
+    const repo = this.dataSource.getRepository(EntityClass);
+    const allowedFields = repo.metadata.columns
+      .map((col) => col.propertyName)
+      .filter((col) => !['id', 'experimentId', 'createdAt'].includes(col));
+
+    // Load all targeted rows
+    const ids = rows.map((r) => r.id as string).filter(Boolean);
+    const loadedRows = await repo.find({
+      where: { id: In(ids) } as Record<string, unknown>,
+    });
+    const rowMap = new Map(loadedRows.map((r: any) => [r.id, r]));
+
+    // Apply payload values
+    for (const rowPayload of rows) {
+      const id = rowPayload.id as string;
+      const row = rowMap.get(id);
+      if (!row) continue;
+      for (const [key, value] of Object.entries(rowPayload)) {
+        if (allowedFields.includes(key)) {
+          (row as Record<string, unknown>)[key] = value;
+        }
+      }
+    }
+
+    // ── compute derived fields per-type ──
+    const isProcess = type === 'process';
+    const isFastCharge = type === 'fastcharge' || type === 'fastCharge';
+    const isDcr = type === 'dcr' || type === 'dcrTest';
+    const isEfficiency = type === 'efficiency' || type === 'energyEfficiency';
+    const isCalendar = type === 'calendar' || type === 'calendarLife';
+    const isSwelling = type === 'swelling' || type === 'storageSwelling';
+    const isHtCycle = type === 'htcycle' || type === 'htCycle';
+
+    // Map the URL type param to the assayType string used by getProjectRows
+    const assayTypeMap: Record<string, string> = {
+      process: 'ProcessData', calendar: 'CalendarLife', swelling: 'StorageSwelling',
+      efficiency: 'EnergyEfficiency', dcr: 'DcrTest', fastcharge: 'FastCharge', htcycle: 'HtCycle',
+      calendarLife: 'CalendarLife', storageSwelling: 'StorageSwelling', energyEfficiency: 'EnergyEfficiency',
+      dcrTest: 'DcrTest', fastCharge: 'FastCharge', htCycle: 'HtCycle',
+    };
+    const assayType = assayTypeMap[type] ?? type;
+
+    if (isProcess) {
+      // Row-local derived fields; collect context from sibling rows per cellId
+      const expId = (loadedRows[0] as any)?.experimentId;
+      if (expId) {
+        const cellIds = [...new Set(loadedRows.map((r: any) => r.cellId).filter(Boolean))] as string[];
+        for (const cellId of cellIds) {
+          const ctx: Record<string, unknown> = {};
+          const siblingRows = await this.getProjectRows(expId, assayType, ProcessData, { cellId });
+          for (const r of siblingRows) {
+            for (const [k, v] of Object.entries(r)) {
+              if (v != null && v !== '') ctx[k] = v;
+            }
+          }
+          // Merge changed values into siblingRows before computing
+          for (const sr of siblingRows) {
+            const changed = rowMap.get((sr as any).id);
+            if (changed) {
+              for (const [key, value] of Object.entries(changed as Record<string, unknown>)) {
+                if (allowedFields.includes(key)) (sr as any)[key] = value;
+              }
+            }
+          }
+          for (const sr of siblingRows) {
+            computeProcessDataDerivedFields(sr as Record<string, any>, ctx);
+          }
+          // Save updated sibling rows
+          await repo.save(siblingRows);
+        }
+        return rows.length;
+      }
+    }
+
+    if (isFastCharge) {
+      for (const row of loadedRows) {
+        const fc = row as any;
+        const c0 = parseFloat(fc.c0 || '3.0');
+        let cumulativeSoc = 0;
+        if (fc.steps && Array.isArray(fc.steps)) {
+          fc.steps.sort((a: any, b: any) => a.stepNo - b.stepNo);
+          fc.steps.forEach((s: any) => {
+            const capAh = (s.stepCapacity !== null && s.stepCapacity > 15) ? s.stepCapacity / 1000 : s.stepCapacity;
+            s.stepSoc = (capAh !== null && c0 > 0) ? Number((capAh / c0).toFixed(6)) : null;
+            cumulativeSoc += s.stepSoc ?? 0;
+            s.cumulativeSoc = Number(cumulativeSoc.toFixed(6));
+          });
+          const finalTime = computeFastChargeTime(c0, fc.steps);
+          fc.computedFastChargeTime = finalTime !== null ? finalTime.toFixed(6) : null;
+        }
+      }
+    }
+
+    if (isDcr) {
+      for (const row of loadedRows) {
+        const p = row as any;
+        const n = (v: any) => (v == null || v === '') ? null : Number(v);
+        let q0 = n(p.q0);
+        if (q0 == null && p.experimentId) {
+          const processRows = await this.getProjectRows(p.experimentId, 'ProcessData', ProcessData, { cellId: p.cellName }) as any[];
+          for (const pr of processRows) {
+            if (pr.gqd1 != null) { q0 = Number(pr.gqd1); break; }
+          }
+        }
+        const du0 = n(p.du0), du1 = n(p.du1), di = n(p.di);
+        const cu0 = n(p.cu0), cu1 = n(p.cu1), ci = n(p.ci);
+        const ddcr = (du0 != null && du1 != null && di != null && di !== 0) ? Math.abs(du1 - du0) / Math.abs(di) : null;
+        const cdcr = (cu0 != null && cu1 != null && ci != null && ci !== 0) ? Math.abs(cu1 - cu0) / Math.abs(ci) : null;
+        p.ddcr = ddcr != null ? ddcr.toFixed(6) : null;
+        p.cdcr = cdcr != null ? cdcr.toFixed(6) : null;
+        p.dRcProduct = (q0 != null && ddcr != null) ? (q0 * ddcr).toFixed(6) : null;
+        p.cRcProduct = (q0 != null && cdcr != null) ? (q0 * cdcr).toFixed(6) : null;
+      }
+    }
+
+    if (isEfficiency) {
+      for (const row of loadedRows) {
+        const p = row as any;
+        const n = (v: any) => (v == null || v === '') ? null : Number(v);
+        const de = n(p.de), ce = n(p.ce);
+        p.ee = (de != null && ce != null && ce !== 0) ? (de / ce).toFixed(6) : null;
+      }
+    }
+
+    // ── cross-row derived fields (calendar / swelling / htcycle) ──
+    const crossRowTypes = [
+      { match: isCalendar, entity: CalendarLife as any, cellField: 'cellName', compute: computeCalendarDerivedFields },
+      { match: isSwelling, entity: StorageSwelling as any, cellField: 'cellName', compute: computeSwellingDerivedFields },
+      { match: isHtCycle, entity: HtCycle as any, cellField: 'cellName', compute: computeHtCycleDerivedFields },
+    ];
+
+    for (const ct of crossRowTypes) {
+      if (!ct.match) continue;
+      const expId = (loadedRows[0] as any)?.experimentId;
+      if (!expId) continue;
+      // Collect affected cellNames from changed rows
+      const affectedCells = [...new Set(loadedRows.map((r: any) => r[ct.cellField]).filter(Boolean))] as string[];
+      for (const cellName of affectedCells) {
+        const allCellRows = await this.getProjectRows(expId, assayType, ct.entity, { [ct.cellField]: cellName }) as any[];
+        // Merge changed values into the full set
+        for (const allRow of allCellRows) {
+          const changed = rowMap.get(allRow.id);
+          if (changed) {
+            for (const [key, value] of Object.entries(changed as Record<string, unknown>)) {
+              if (allowedFields.includes(key)) allRow[key] = value;
+            }
+          }
+        }
+        ct.compute(allCellRows);
+        await repo.save(allCellRows);
+      }
+      // Don't save loadedRows again for cross-row types — they were already saved above
+      return rows.length;
+    }
+
+    // Save all rows for non-cross-row types
+    await repo.save(loadedRows);
+    return rows.length;
   }
 
   /** DELETE /data/:type/:id delete a single data row. */

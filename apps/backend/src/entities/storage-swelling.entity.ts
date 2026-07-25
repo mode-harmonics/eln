@@ -24,7 +24,7 @@ export class StorageSwelling {
   attachmentId!: string | null;
 
   @Index()
-  @Column({ type: 'varchar', length: 64, comment: '电芯名称' })
+  @Column({ type: 'varchar', length: 64, comment: '电池名称' })
   cellName!: string;
 
   /** First-cycle / baseline reference capacity (qd_1st). */

@@ -342,13 +342,13 @@ export function ExperimentDetail() {
 
   const renderTable = () => {
     switch (assayType) {
-      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} readOnly={stepCompleted} />;
-      case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
-      case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
-      case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
-      case "DcrTest": return <DcrTestTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
-      case "FastCharge": return <FastChargeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
-      case "HtCycle": return <HtCycleTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} />;
+      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} readOnly={stepCompleted} showBatchEdit />;
+      case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
+      case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
+      case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
+      case "DcrTest": return <DcrTestTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
+      case "FastCharge": return <FastChargeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
+      case "HtCycle": return <HtCycleTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
       default:
         return (
           <div className="p-8 text-center text-sm text-gray-500">
@@ -567,7 +567,7 @@ export function ExperimentDetail() {
                         { label: t("col_step_no", "工步号"), field: "stepNo" },
                         { label: "工步序号", field: "stepSeqNo" },
                         { label: t("col_raw_cycle", "循环号"), field: "cycleNo" },
-                        { label: t("col_raw_cell", "电芯"), field: "cellName", sticky: true },
+                        { label: t("col_raw_cell", "电池"), field: "cellName", sticky: true },
                         { label: t("col_raw_step_type", "工步类型"), field: "stepType" },
                         { label: t("col_raw_capacity", "容量"), field: "capacity", numeric: true },
                         { label: "起始电压", field: "startVoltage", numeric: true },

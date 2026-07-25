@@ -130,7 +130,7 @@ export const HT_CYCLE_COLUMNS: Record<string, string> = {
 
 /** Maps DB field name → Chinese display label for RawStepData */
 export const RAW_STEP_COLUMNS: Record<string, string> = {
-  cellName: '电芯名称',
+  cellName: '电池名称',
   cycleNo: '循环号',
   stepNo: '工步号',
   stepSeqNo: '工步序号',

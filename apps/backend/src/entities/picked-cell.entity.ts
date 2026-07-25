@@ -16,7 +16,7 @@ export class PickedCell {
   projectId!: string;
 
   @Index()
-  @Column({ type: 'varchar', length: 64, comment: '电芯编号' })
+  @Column({ type: 'varchar', length: 64, comment: '电池编号' })
   cellId!: string;
 
   /** 'auto' = system auto-pick, 'manual' = user manually selected */
