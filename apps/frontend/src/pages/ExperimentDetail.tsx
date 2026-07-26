@@ -527,13 +527,6 @@ export function ExperimentDetail() {
 
       {hasReadPermission ? (
         <div className="space-y-6">
-          <ExperimentChart 
-            assayType={assayType || "Unknown"} 
-            experimentId={experiment.id} 
-            projectId={experiment.projectId} 
-            title={experiment.workflowStepName ? `${assayType !== 'ProcessData' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType || "Unknown"] || assayType)} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined}
-          />
-
           {/* Data Section */}
           <div className="overflow-hidden rounded-lg bg-white">
             <div className="flex items-center justify-between bg-gray-50 px-4 py-3">
@@ -574,7 +567,15 @@ export function ExperimentDetail() {
             </div>
 
             {dataView === "summary" ? (
-              <div key={refreshCounter}>{renderTable()}</div>
+              <div key={refreshCounter} className="p-4 space-y-4">
+                <ExperimentChart 
+                  assayType={assayType || "Unknown"} 
+                  experimentId={experiment.id} 
+                  projectId={experiment.projectId} 
+                  title={experiment.workflowStepName ? `${assayType !== 'ProcessData' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType || "Unknown"] || assayType)} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined}
+                />
+                {renderTable()}
+              </div>
             ) : rawLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="w-5 h-5 animate-spin text-gray-400" />

@@ -123,7 +123,7 @@ export function TooltipTh({
   return (
     <th
       className={cn(
-        "px-3 py-2.5 w-[150px] min-w-[150px] max-w-[150px] text-left text-[11px] font-semibold text-gray-500 whitespace-nowrap",
+        "px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 bg-gray-50/90 whitespace-nowrap",
         className,
       )}
     >

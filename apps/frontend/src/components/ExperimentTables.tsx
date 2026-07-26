@@ -36,35 +36,46 @@ function useTableData<T>(type: string, experimentId: string) {
   return { data, loading, error, refresh };
 }
 
+type SourceType = 'manual' | 'device' | 'computed';
+
+interface ColDef {
+  field: string;
+  i18nKey: string;
+  label?: string;
+  tooltip?: string;
+  sourceType?: SourceType;
+  editable?: boolean;
+  /** Render cell value using a custom function instead of `row[field]` */
+  render?: (val: unknown, row: Record<string, unknown>) => React.ReactNode;
+}
+
+function getSourceColorClass(c: ColDef): { hdr: string; cell: string } {
+  const type = c.sourceType || (c.tooltip && c.tooltip.includes('=') ? 'computed' : c.editable ? 'manual' : undefined);
+  if (type === 'manual') return { hdr: 'text-amber-700 font-semibold', cell: 'text-amber-800 font-medium' };
+  if (type === 'device') return { hdr: 'text-sky-700 font-semibold', cell: 'text-sky-800 font-medium' };
+  if (type === 'computed') return { hdr: 'text-emerald-700 font-semibold', cell: 'text-emerald-800 font-medium' };
+  return { hdr: 'text-gray-700 font-semibold', cell: 'text-gray-900' };
+}
+
 function TableShell({ loading, error, children }: { loading: boolean; error: string | null; children: React.ReactNode }) {
   if (loading) return <div className="flex items-center justify-center py-12" role="status"><Loader2 className="w-5 h-5 animate-spin text-gray-400" aria-hidden="true" /><span className="sr-only">Loading</span></div>;
   if (error) return <div className="p-6 text-center text-sm text-red-500">{error}</div>;
   return <>{children}</>;
 }
 
-// ─── Shared Row Edit / Delete Components ──────────────────────────────────────
-
-
-
-// ─── Data-driven column config ────────────────────────────────────────────────
-interface ColDef {
-  field: string;
-  i18nKey: string;
-  tooltip?: string;
-  editable?: boolean;
-  /** Render cell value using a custom function instead of `row[field]` */
-  render?: (val: unknown, row: Record<string, unknown>) => React.ReactNode;
-}
-
 /** Render table headers from column definitions (plain <th> or <TooltipTh>). */
-function renderHeaders(cols: ColDef[], t: (k: string) => string, colorMap?: Record<string, string>, cellClassName?: string): React.ReactNode[] {
+function renderHeaders(cols: ColDef[], t: (k: string) => string, cellClassName?: string): React.ReactNode[] {
   return cols.map((c) => {
-    const colorCls = colorMap?.[c.field];
-    const headerText = (c.field !== 'cellId' && c.field !== 'cellName') ? `${t(c.i18nKey)} (${c.field})` : t(c.i18nKey);
+    const colors = getSourceColorClass(c);
+    const headerText = c.label || t(c.i18nKey);
     if (c.tooltip) {
-      return <TooltipTh key={c.field} content={c.tooltip} label={headerText} className={cn(colorCls, cellClassName)} />;
+      return <TooltipTh key={c.field} content={c.tooltip} label={headerText} className={cn(colors.hdr, cellClassName)} />;
     }
-    return <th key={c.field} className={cn("px-3 py-2.5 w-[150px] min-w-[150px] max-w-[150px] text-left text-[11px] font-semibold whitespace-nowrap", colorCls || 'text-gray-500', cellClassName)}>{headerText}</th>;
+    return (
+      <th key={c.field} className={cn("px-4 py-3 min-w-[140px] text-left text-xs font-semibold whitespace-nowrap bg-gray-50/90", colors.hdr, cellClassName)}>
+        {headerText}
+      </th>
+    );
   });
 }
 
@@ -76,17 +87,17 @@ function renderCells(
   cellClassName?: string,
 ): React.ReactNode[] {
   return cols.map((c) => {
-    const colorCls = colorMap?.[c.field];
+    const colors = getSourceColorClass(c);
     const isEditing = (editing && c.editable && editForm) || (batchChange && c.editable);
     const cellValue = isEditing && editForm ? editForm[c.field] ?? '' : String(row[c.field] ?? '');
     return (
-      <td key={c.field} className={cn("px-3 py-2 whitespace-nowrap text-[13px]", colorCls || 'text-gray-600', isEditing && 'cursor-text', cellClassName)}>
+      <td key={c.field} className={cn("px-3 py-2 whitespace-nowrap text-[13px]", colors.cell, isEditing && 'cursor-text', cellClassName)}>
         {isEditing ? (
           <input
             type="text"
             value={cellValue}
             onChange={(e) => (batchChange || onEdit)!(c.field, e.target.value)}
-            className="-my-1 w-full min-w-12 rounded border border-gray-300 bg-white px-1.5 py-1 text-[13px] font-mono outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-300"
+            className="-my-1 w-full min-w-12 rounded border border-gray-300 bg-white px-1.5 py-1 text-[13px] font-mono outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
             onClick={(e) => e.stopPropagation()}
           />
         ) : c.render ? (
@@ -276,61 +287,44 @@ function RowActions({ row, type, onRefresh, editing, onStartEdit, onSave, onCanc
 // ─── ProcessData: column config + color grouping ────────────────────────────
 // 黄色(手动输入) | 蓝色(设备获取) | 绿色(计算获取)
 // border-r 加在每组最后一列上，形成竖向分隔线
-const P_HDR: Record<string, string> = {
-  m0: 'text-amber-600', m1: 'text-amber-600', m2: 'text-amber-600',
-  m3: 'text-amber-600', m4: 'text-amber-600',
-  v0: 'text-amber-600', v1: 'text-amber-600',
-  fu0: 'text-amber-600', fr0: 'text-amber-600',
-  fu1: 'text-amber-600', fr1: 'text-amber-600',
-  fu2: 'text-amber-600', fr2: 'text-amber-600',
-  gu0: 'text-amber-600', gr0: 'text-amber-600',
-  fq1: 'text-sky-600', fq2: 'text-sky-600',
-  gqc1: 'text-sky-600', gqd1: 'text-sky-600', gqc2: 'text-sky-600',
-  gu1: 'text-sky-600', gr1: 'text-sky-600',
-  mIn: 'text-emerald-600', mLoss: 'text-emerald-600', mHold: 'text-emerald-600',
-  fq: 'text-emerald-600', fvg: 'text-emerald-600', ku: 'text-emerald-600',
-  qcFirst: 'text-emerald-600', qdFirst: 'text-emerald-600', ceFirst: 'text-emerald-600',
-};
+const P_HDR: Record<string, string> = {};
 const P_CELL: Record<string, string> = {};
-for (const [k, v] of Object.entries(P_HDR)) {
-  P_CELL[k] = v.replace(/^bg-\S+ /, ''); // keep only text color
-}
 
 const P_COLS: ColDef[] = [
   { field: 'cellId', i18nKey: 'col_cell_id' },
   // ── 注液 ──
-  { field: 'm0', i18nKey: 'col_m0', editable: true },
-  { field: 'm1', i18nKey: 'col_m1', editable: true },
-  { field: 'mIn', i18nKey: 'col_comp_mIn', tooltip: 'Injection Mass = m1 - m0' },
-  { field: 'm2', i18nKey: 'col_m2', editable: true },
-  { field: 'mLoss', i18nKey: 'col_comp_mLoss', tooltip: 'Loss Mass = m1 - m2' },
+  { field: 'm0', i18nKey: 'col_m0', editable: true, sourceType: 'manual', tooltip: '注液前电池重 (m0, g)' },
+  { field: 'm1', i18nKey: 'col_m1', editable: true, sourceType: 'manual', tooltip: '预充后电池重 (m1, g)' },
+  { field: 'mIn', i18nKey: 'col_comp_mIn', sourceType: 'computed', tooltip: '注液量 = m1 - m0 (g)' },
+  { field: 'm2', i18nKey: 'col_m2', editable: true, sourceType: 'manual', tooltip: '二封后电池重 (m2, g)' },
+  { field: 'mLoss', i18nKey: 'col_comp_mLoss', sourceType: 'computed', tooltip: '失液量 = m1 - m2 (g)' },
   // ── 化成 ──
-  { field: 'v0', i18nKey: 'col_v0', editable: true },
-  { field: 'fu0', i18nKey: 'col_fu0', editable: true },
-  { field: 'fr0', i18nKey: 'col_fr0', editable: true },
-  { field: 'fq1', i18nKey: 'col_fq1', editable: true },
-  { field: 'fq2', i18nKey: 'col_fq2', editable: true },
-  { field: 'fq', i18nKey: 'col_comp_fq', tooltip: 'Formation Charge Capacity = fq1 + fq2' },
-  { field: 'v1', i18nKey: 'col_v1', editable: true },
-  { field: 'fvg', i18nKey: 'col_comp_fvg', tooltip: 'Formation Gas Volume = (v1 - v0) / qdFirst' },
-  { field: 'fu1', i18nKey: 'col_fu1', editable: true },
-  { field: 'fr1', i18nKey: 'col_fr1', editable: true },
-  { field: 'fu2', i18nKey: 'col_fu2', editable: true },
-  { field: 'fr2', i18nKey: 'col_fr2', editable: true },
-  { field: 'ku', i18nKey: 'col_comp_ku', tooltip: 'Aging Voltage Drop = fu1 - fu2' },
-  { field: 'm3', i18nKey: 'col_m3', editable: true },
-  { field: 'm4', i18nKey: 'col_m4', editable: true },
-  { field: 'mHold', i18nKey: 'col_comp_mHold', tooltip: 'Hold Mass = m4 - m0' },
-  { field: 'gu0', i18nKey: 'col_gu0', editable: true },
-  { field: 'gr0', i18nKey: 'col_gr0', editable: true },
-  { field: 'gqc1', i18nKey: 'col_gqc1', editable: true },
-  { field: 'gqd1', i18nKey: 'col_gqd1', editable: true },
-  { field: 'gqc2', i18nKey: 'col_gqc2', editable: true },
-  { field: 'gu1', i18nKey: 'col_gu1', editable: true },
-  { field: 'gr1', i18nKey: 'col_gr1', editable: true },
-  { field: 'qcFirst', i18nKey: 'col_comp_qcFirst', tooltip: '1st Charge Capacity = fq + gqc1' },
-  { field: 'qdFirst', i18nKey: 'col_comp_qdFirst', tooltip: '1st Discharge Capacity = gqd1' },
-  { field: 'ceFirst', i18nKey: 'col_comp_ceFirst', tooltip: '1st Coulombic Efficiency = qdFirst / qcFirst * 100' },
+  { field: 'v0', i18nKey: 'col_v0', editable: true, sourceType: 'manual', tooltip: '二封前 OCV (v0, V)' },
+  { field: 'fu0', i18nKey: 'col_fu0', editable: true, sourceType: 'manual', tooltip: '化成前 OCV (fu0, V)' },
+  { field: 'fr0', i18nKey: 'col_fr0', editable: true, sourceType: 'manual', tooltip: '化成前 ACIR (fr0, mΩ)' },
+  { field: 'fq1', i18nKey: 'col_fq1', editable: true, sourceType: 'device', tooltip: '化成充电容量 (fq1, Ah)' },
+  { field: 'fq2', i18nKey: 'col_fq2', editable: true, sourceType: 'device', tooltip: '化成放电容量 (fq2, Ah)' },
+  { field: 'fq', i18nKey: 'col_comp_fq', sourceType: 'computed', tooltip: '化成充总容量 = fq1 + fq2 (Ah)' },
+  { field: 'v1', i18nKey: 'col_v1', editable: true, sourceType: 'manual', tooltip: '二封后 OCV (v1, V)' },
+  { field: 'fvg', i18nKey: 'col_comp_fvg', sourceType: 'computed', tooltip: '化成产气量 = (v1 - v0) / qdFirst (mL/Ah)' },
+  { field: 'fu1', i18nKey: 'col_fu1', editable: true, sourceType: 'manual', tooltip: '老化前电压 (fu1, V)' },
+  { field: 'fr1', i18nKey: 'col_fr1', editable: true, sourceType: 'manual', tooltip: '老化前电阻 (fr1, mΩ)' },
+  { field: 'fu2', i18nKey: 'col_fu2', editable: true, sourceType: 'manual', tooltip: '老化后电压 (fu2, V)' },
+  { field: 'fr2', i18nKey: 'col_fr2', editable: true, sourceType: 'manual', tooltip: '老化后电阻 (fr2, mΩ)' },
+  { field: 'ku', i18nKey: 'col_comp_ku', sourceType: 'computed', tooltip: '老化电压降 = fu1 - fu2 (V)' },
+  { field: 'm3', i18nKey: 'col_m3', editable: true, sourceType: 'manual', tooltip: '二封前电池质量 (m3, g)' },
+  { field: 'm4', i18nKey: 'col_m4', editable: true, sourceType: 'manual', tooltip: '二封后电池质量 (m4, g)' },
+  { field: 'mHold', i18nKey: 'col_comp_mHold', sourceType: 'computed', tooltip: '保液量 = m4 - m0 (g)' },
+  { field: 'gu0', i18nKey: 'col_gu0', editable: true, sourceType: 'manual', tooltip: '定容前 OCV (gu0, V)' },
+  { field: 'gr0', i18nKey: 'col_gr0', editable: true, sourceType: 'manual', tooltip: '定容前 ACIR (gr0, mΩ)' },
+  { field: 'gqc1', i18nKey: 'col_gqc1', editable: true, sourceType: 'device', tooltip: '第一步分容充电容量 (gqc1, Ah)' },
+  { field: 'gqd1', i18nKey: 'col_gqd1', editable: true, sourceType: 'device', tooltip: '第一步分容放电容量 (gqd1, Ah)' },
+  { field: 'gqc2', i18nKey: 'col_gqc2', editable: true, sourceType: 'device', tooltip: '第二步分容充电容量 (gqc2, Ah)' },
+  { field: 'gu1', i18nKey: 'col_gu1', editable: true, sourceType: 'device', tooltip: '定容后电压 (gu1, V)' },
+  { field: 'gr1', i18nKey: 'col_gr1', editable: true, sourceType: 'device', tooltip: '定容后电阻 (gr1, mΩ)' },
+  { field: 'qcFirst', i18nKey: 'col_comp_qcFirst', sourceType: 'computed', tooltip: '首次充电容量 = fq + gqc1 (Ah)' },
+  { field: 'qdFirst', i18nKey: 'col_comp_qdFirst', sourceType: 'computed', tooltip: '首次放电容量 = gqd1 (Ah)' },
+  { field: 'ceFirst', i18nKey: 'col_comp_ceFirst', sourceType: 'computed', tooltip: '首圈库比效率 = qdFirst / qcFirst * 100 (%)' },
 ];
 
 // Step name → section index filter for ProcessData steps
@@ -415,9 +409,9 @@ export function ProcessDataTable({ experimentId, stepName, staticData, readOnly,
           <thead className="bg-gray-50 sticky top-0 z-20">
             {/* Column header row */}
             <tr>
-              <th className="sticky left-0 z-20 bg-gray-50 px-3 py-2.5 min-w-[120px] text-left text-[11px] font-semibold text-gray-500 whitespace-nowrap border-r border-gray-100">{t('col_cell_id')}</th>
-              {renderHeaders(visiblePCols, t, P_HDR, 'border-r border-gray-100')}
-              {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-2.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-[11px] font-semibold text-gray-500 whitespace-nowrap">{t('actions')}</th>}
+              <th className="sticky left-0 z-20 bg-gray-50/90 px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-100">{t('col_cell_id')}</th>
+              {renderHeaders(visiblePCols, t, 'border-r border-gray-100')}
+              {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50/90 px-2 py-3 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
             </tr></thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {data.map((d: any, idx: number) => {
@@ -516,9 +510,9 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, static
       )}
       <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-100">
         <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-          <th className={`sticky left-0 z-20 bg-gray-50 px-3 py-2.5 min-w-[120px] text-left text-[11px] font-semibold whitespace-nowrap ${cellColorMap[firstCol.field] || 'text-gray-500'}`}>{t(firstCol.i18nKey)}</th>
-          {renderHeaders(restCols, t, colorMap)}
-          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-2.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-[11px] font-semibold text-gray-500 whitespace-nowrap">{t('actions')}</th>}
+          <th className="sticky left-0 z-20 bg-gray-50/90 px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 whitespace-nowrap">{t(firstCol.i18nKey)}</th>
+          {renderHeaders(restCols, t)}
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50/90 px-2 py-3 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
         </tr></thead>
         <tbody className="bg-white divide-y divide-gray-100">
           {data.map((d: any, idx: number) => {
@@ -556,19 +550,19 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, static
 // ─── CalendarLife ───────────────────────────────────────────────────────────
 const CAL_COLS: ColDef[] = [
   { field: 'cellName', i18nKey: 'col_cell_name' },
-  { field: 'dayCount', i18nKey: 'col_day', editable: true },
-  { field: 'dq', i18nKey: 'col_dq_loss', editable: true },
-  { field: 'q', i18nKey: 'col_q_cap', editable: true },
-  { field: 'qRetention', i18nKey: 'col_comp_qRetention', tooltip: 'Capacity Retention = (dq / q_0d) * 100' },
-  { field: 'qRecovery', i18nKey: 'col_comp_qRecovery', tooltip: 'Capacity Recovery = (q / q_0d) * 100' },
-  { field: 'ddcr', i18nKey: 'col_ddcr', editable: true },
-  { field: 'ddcrGrowth', i18nKey: 'col_comp_ddcrGrowth', tooltip: 'D-DCR Increase = (ddcr / ddcr_0d - 1) * 100' },
-  { field: 'cdcr', i18nKey: 'col_cdcr', editable: true },
-  { field: 'cdcrGrowth', i18nKey: 'col_comp_cdcrGrowth', tooltip: 'C-DCR Increase = (cdcr / cdcr_0d - 1) * 100' },
-  { field: 'u', i18nKey: 'col_u_voltage', editable: true },
-  { field: 'uGrowth', i18nKey: 'col_comp_uGrowth', tooltip: 'Voltage Increase = (u / u_0d - 1) * 100' },
-  { field: 'r', i18nKey: 'col_r_acir', editable: true },
-  { field: 'rGrowth', i18nKey: 'col_comp_rGrowth', tooltip: 'Internal Resistance Increase = (r / r_0d - 1) * 100' },
+  { field: 'dayCount', i18nKey: 'col_day', tooltip: '测试天数 (天)', editable: true },
+  { field: 'dq', i18nKey: 'col_dq_loss', tooltip: '首次放电容量 (dq, Ah)', editable: true },
+  { field: 'q', i18nKey: 'col_q_cap', tooltip: '定容容量 (q, Ah)', editable: true },
+  { field: 'qRetention', i18nKey: 'col_comp_qRetention', tooltip: '容量保持率 = (dq / q_0d) * 100 (%)' },
+  { field: 'qRecovery', i18nKey: 'col_comp_qRecovery', tooltip: '容量恢复率 = (q / q_0d) * 100 (%)' },
+  { field: 'ddcr', i18nKey: 'col_ddcr', tooltip: '放电直流内阻 (ddcr, Ω)', editable: true },
+  { field: 'ddcrGrowth', i18nKey: 'col_comp_ddcrGrowth', tooltip: '放电 DCR 增长率 = (ddcr / ddcr_0d - 1) * 100 (%)' },
+  { field: 'cdcr', i18nKey: 'col_cdcr', tooltip: '充电直流内阻 (cdcr, Ω)', editable: true },
+  { field: 'cdcrGrowth', i18nKey: 'col_comp_cdcrGrowth', tooltip: '充电 DCR 增长率 = (cdcr / cdcr_0d - 1) * 100 (%)' },
+  { field: 'u', i18nKey: 'col_u_voltage', tooltip: '测试电压 (u, V)', editable: true },
+  { field: 'uGrowth', i18nKey: 'col_comp_uGrowth', tooltip: '电压增长率 = (u / u_0d - 1) * 100 (%)' },
+  { field: 'r', i18nKey: 'col_r_acir', tooltip: '交流内阻 (r, mΩ)', editable: true },
+  { field: 'rGrowth', i18nKey: 'col_comp_rGrowth', tooltip: '内阻增长率 = (r / r_0d - 1) * 100 (%)' },
 ];
 export function CalendarLifeTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
   const { t } = useTranslation();
@@ -579,10 +573,10 @@ export function CalendarLifeTable(props: { experimentId?: string; staticData?: a
 // ─── StorageSwelling ───────────────────────────────────────────────────────
 const SWELL_COLS: ColDef[] = [
   { field: 'cellName', i18nKey: 'col_cell_name' },
-  { field: 'dayCount', i18nKey: 'col_day', editable: true },
-  { field: 'qd1st', i18nKey: 'col_qd1st', editable: true },
-  { field: 'v', i18nKey: 'col_v_volume', editable: true },
-  { field: 'vg', i18nKey: 'col_comp_vg', tooltip: 'Gas Volume = (v - v_0d) / qd1st (mL/Ah)' },
+  { field: 'dayCount', i18nKey: 'col_day', tooltip: '存储天数 (天)', editable: true },
+  { field: 'qd1st', i18nKey: 'col_qd1st', tooltip: '首圈放电容量 (qd1st, Ah)', editable: true },
+  { field: 'v', i18nKey: 'col_v_volume', tooltip: '存储后电池体积 (v, mL)', editable: true },
+  { field: 'vg', i18nKey: 'col_comp_vg', tooltip: '存储产气量 = (v - v_0d) / qd1st (mL/Ah)' },
 ];
 export function StorageSwellingTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
   const { t } = useTranslation();
@@ -592,9 +586,9 @@ export function StorageSwellingTable(props: { experimentId?: string; staticData?
 // ─── EnergyEfficiency ──────────────────────────────────────────────────────
 const EFF_COLS: ColDef[] = [
   { field: 'cellName', i18nKey: 'col_cell_name' },
-  { field: 'de', i18nKey: 'col_de', editable: true },
-  { field: 'ce', i18nKey: 'col_ce', editable: true },
-  { field: 'ee', i18nKey: 'col_comp_ee', tooltip: 'Energy Efficiency Ratio = de / ce' },
+  { field: 'de', i18nKey: 'col_de', tooltip: '放电能量 (de, Wh)', editable: true },
+  { field: 'ce', i18nKey: 'col_ce', tooltip: '充电能量 (ce, Wh)', editable: true },
+  { field: 'ee', i18nKey: 'col_comp_ee', tooltip: '能量效率比 = de / ce' },
 ];
 export function EnergyEfficiencyTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
   const { t } = useTranslation();
@@ -604,17 +598,17 @@ export function EnergyEfficiencyTable(props: { experimentId?: string; staticData
 // ─── DcrTest ───────────────────────────────────────────────────────────────
 const DCR_COLS: ColDef[] = [
   { field: 'cellName', i18nKey: 'col_cell_name' },
-  { field: 'q0', i18nKey: 'col_q0', editable: true },
-  { field: 'du0', i18nKey: 'col_du0', editable: true },
-  { field: 'du1', i18nKey: 'col_du1', editable: true },
-  { field: 'di', i18nKey: 'col_di', editable: true },
-  { field: 'ddcr', i18nKey: 'col_comp_ddcr', tooltip: 'Discharge DCR = |du1 - du0| / di (Ω)' },
-  { field: 'cu0', i18nKey: 'col_cu0', editable: true },
-  { field: 'cu1', i18nKey: 'col_cu1', editable: true },
-  { field: 'ci', i18nKey: 'col_ci', editable: true },
-  { field: 'cdcr', i18nKey: 'col_comp_cdcr', tooltip: 'Charge DCR = |cu1 - cu0| / ci (Ω)' },
-  { field: 'dRcProduct', i18nKey: 'col_comp_dRcProduct', tooltip: 'Discharge R-C Product = q0 * ddcr (Ah·Ω)' },
-  { field: 'cRcProduct', i18nKey: 'col_comp_cRcProduct', tooltip: 'Charge R-C Product = q0 * cdcr (Ah·Ω)' },
+  { field: 'q0', i18nKey: 'col_q0', tooltip: '测试前容量 (q0, Ah)', editable: true },
+  { field: 'du0', i18nKey: 'col_du0', tooltip: '放电脉冲前电压 (du0, V)', editable: true },
+  { field: 'du1', i18nKey: 'col_du1', tooltip: '放电脉冲后电压 (du1, V)', editable: true },
+  { field: 'di', i18nKey: 'col_di', tooltip: '放电脉冲电流 (di, A)', editable: true },
+  { field: 'ddcr', i18nKey: 'col_comp_ddcr', tooltip: '放电直流内阻 = |du1 - du0| / di (Ω)' },
+  { field: 'cu0', i18nKey: 'col_cu0', tooltip: '充电脉冲前电压 (cu0, V)', editable: true },
+  { field: 'cu1', i18nKey: 'col_cu1', tooltip: '充电脉冲后电压 (cu1, V)', editable: true },
+  { field: 'ci', i18nKey: 'col_ci', tooltip: '充电脉冲电流 (ci, A)', editable: true },
+  { field: 'cdcr', i18nKey: 'col_comp_cdcr', tooltip: '充电直流内阻 = |cu1 - cu0| / ci (Ω)' },
+  { field: 'dRcProduct', i18nKey: 'col_comp_dRcProduct', tooltip: '放电 R-C 乘积 = q0 * ddcr (Ah·Ω)' },
+  { field: 'cRcProduct', i18nKey: 'col_comp_cRcProduct', tooltip: '充电 R-C 乘积 = q0 * cdcr (Ah·Ω)' },
 ];
 export function DcrTestTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
   const { t } = useTranslation();
@@ -623,14 +617,14 @@ export function DcrTestTable(props: { experimentId?: string; staticData?: any[];
 
 // ─── FastCharge (special: flatRows + computed time with custom cell render) ─
 const FC_COLS: ColDef[] = [
-  { field: 'stepNo', i18nKey: 'col_step_no' },
-  { field: 'cutOffVoltage', i18nKey: 'col_cutoff_voltage', editable: true },
-  { field: 'current', i18nKey: 'col_current', editable: true },
-  { field: 'rate', i18nKey: 'col_rate', editable: true },
-  { field: 'stepCapacity', i18nKey: 'col_step_capacity', editable: true },
-  { field: 'stepSoc', i18nKey: 'col_step_soc', render: (v) => v != null && v !== '-' ? (typeof v === 'number' ? v.toFixed(4) : String(v)) : '-' },
-  { field: 'cumulativeSoc', i18nKey: 'col_cumulative_soc', render: (v) => v != null && v !== '-' ? (typeof v === 'number' ? v.toFixed(4) : String(v)) : '-' },
-  { field: 'stepTime', i18nKey: 'col_step_time', editable: true },
+  { field: 'stepNo', i18nKey: 'col_step_no', tooltip: '工步序号' },
+  { field: 'cutOffVoltage', i18nKey: 'col_cutoff_voltage', tooltip: '全电截止电压 (V)', editable: true },
+  { field: 'current', i18nKey: 'col_current', tooltip: '充电电流 (A)', editable: true },
+  { field: 'rate', i18nKey: 'col_rate', tooltip: '充电倍率 (C)', editable: true },
+  { field: 'stepCapacity', i18nKey: 'col_step_capacity', tooltip: '单步充电容量 (Ah)', editable: true },
+  { field: 'stepSoc', i18nKey: 'col_step_soc', tooltip: '单步 SOC', render: (v) => v != null && v !== '-' ? (typeof v === 'number' ? v.toFixed(4) : String(v)) : '-' },
+  { field: 'cumulativeSoc', i18nKey: 'col_cumulative_soc', tooltip: '累计 SOC', render: (v) => v != null && v !== '-' ? (typeof v === 'number' ? v.toFixed(4) : String(v)) : '-' },
+  { field: 'stepTime', i18nKey: 'col_step_time', tooltip: '单步时间 (min)', editable: true },
 ];
 const FC_COMP = 'text-sky-600';
 
@@ -773,10 +767,10 @@ export function FastChargeTable({ experimentId, staticData, readOnly, showBatchE
       )}
       <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200 border-collapse">
         <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-          <th className="sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('col_cell_name')}</th>
+          <th className="sticky left-0 z-20 bg-gray-50 px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 whitespace-nowrap">{t('col_cell_name')}</th>
           {renderHeaders(FC_COLS, t)}
-          <TooltipTh content="10%-80% SOC Fast Charge Time (min)" label={t('col_comp_computedTime')} />
-          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>}
+          <TooltipTh content="10%-80% SOC 快充时间 (min)" label={t('col_comp_computedTime')} />
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-3 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
         </tr></thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {flatRows.map((r: any, idx: number) => {
@@ -824,10 +818,10 @@ export function FastChargeTable({ experimentId, staticData, readOnly, showBatchE
 // ─── HtCycle ────────────────────────────────────────────────────────────────
 const HT_COLS: ColDef[] = [
   { field: 'cellName', i18nKey: 'col_cell_name' },
-  { field: 'ironDissolution', i18nKey: 'col_iron_ppm', render: (v) => v != null ? `${v} ppm` : '-' },
-  { field: 'cycle', i18nKey: 'col_cycle', editable: true },
-  { field: 'dischargeCapacity', i18nKey: 'col_capacity', editable: true },
-  { field: 'capacityRetention', i18nKey: 'col_retention', render: (v) => v != null ? `${typeof v === 'number' ? v.toFixed(4) : v}%` : '-' },
+  { field: 'cycle', i18nKey: 'col_cycle', tooltip: '循环圈数', editable: true, sourceType: 'manual' },
+  { field: 'dischargeCapacity', i18nKey: 'col_capacity', tooltip: '放电容量 (Ah)', editable: true, sourceType: 'manual' },
+  { field: 'capacityRetention', i18nKey: 'col_retention', sourceType: 'computed', tooltip: '容量保持率 (%)', render: (v) => v != null ? `${typeof v === 'number' ? v.toFixed(4) : v}%` : '-' },
+  { field: 'ironDissolution', i18nKey: 'col_iron_ppm', sourceType: 'device', tooltip: '铁溶出量 (ppm)', render: (v) => v != null ? `${v} ppm` : '-' },
 ];
 export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit }: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
   const { t } = useTranslation();
@@ -866,9 +860,9 @@ export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit
       )}
       <div className="overflow-x-auto overflow-y-auto max-h-150"><table className="min-w-full divide-y divide-gray-200 border-collapse">
         <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-          <th className={`sticky left-0 z-20 bg-gray-50 px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap ${htColors[htFirst.field] || 'text-gray-500'}`}>{t(htFirst.i18nKey)}</th>
-          {renderHeaders(htRest, t, htColors)}
-          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-1.5 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">{t('actions')}</th>}
+          <th className="sticky left-0 z-20 bg-gray-50 px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 whitespace-nowrap">{t(htFirst.i18nKey)}</th>
+          {renderHeaders(htRest, t)}
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-3 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
         </tr></thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {sorted.map((d: any, idx: number) => {

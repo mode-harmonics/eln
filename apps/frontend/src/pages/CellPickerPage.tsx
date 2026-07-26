@@ -9,6 +9,8 @@ import { toast } from "../components/Toast";
 import { api } from "../lib/api";
 import { cn } from "../lib/utils";
 
+import { TooltipTh } from "../components/Tooltip";
+
 interface ColDef {
   field: string;
   label: string;
@@ -17,44 +19,53 @@ interface ColDef {
 
 const PD_COLS: ColDef[] = [
   { field: "cellId", label: "电池编号" },
-  { field: "m0", label: "m0" }, { field: "m1", label: "m1" },
-  { field: "mIn", label: "mIn (计算)", tooltip: "Injection Mass = m1 - m0" },
-  { field: "m2", label: "m2" },
-  { field: "mLoss", label: "mLoss (计算)", tooltip: "Loss Mass = m1 - m2" },
-  { field: "v0", label: "v0" },
-  { field: "fu0", label: "fu0" }, { field: "fr0", label: "fr0" },
-  { field: "fq1", label: "fq1" }, { field: "fq2", label: "fq2" },
-  { field: "fq", label: "fq (计算)", tooltip: "Formation Charge Capacity = fq1 + fq2" },
-  { field: "v1", label: "v1" },
-  { field: "fvg", label: "fvg (计算)", tooltip: "Gas Volume = (v1 - v0) / qdFirst" },
-  { field: "fu1", label: "fu1" }, { field: "fr1", label: "fr1" },
-  { field: "fu2", label: "fu2" }, { field: "fr2", label: "fr2" },
-  { field: "ku", label: "ku (计算)", tooltip: "Aging Voltage Drop = fu1 - fu2" },
-  { field: "m3", label: "m3" }, { field: "m4", label: "m4" },
-  { field: "mHold", label: "mHold (计算)", tooltip: "Hold Mass = m4 - m0" },
-  { field: "gu0", label: "gu0" }, { field: "gr0", label: "gr0" },
-  { field: "gqc1", label: "gqc1" }, { field: "gqd1", label: "gqd1" },
-  { field: "gqc2", label: "gqc2" },
-  { field: "gu1", label: "gu1" }, { field: "gr1", label: "gr1" },
-  { field: "qcFirst", label: "qcFirst (计算)", tooltip: "1st Charge = fq + gqc1" },
-  { field: "qdFirst", label: "qdFirst (计算)", tooltip: "1st Discharge = gqd1" },
-  { field: "ceFirst", label: "ceFirst (计算)", tooltip: "1st CE = qdFirst / qcFirst * 100" },
+  { field: "m0", label: "m0", tooltip: "注液前电池重 (m0, g)" },
+  { field: "m1", label: "m1", tooltip: "预充后电池重 (m1, g)" },
+  { field: "mIn", label: "mIn (计算)", tooltip: "注液量 = m1 - m0 (g)" },
+  { field: "m2", label: "m2", tooltip: "二封后电池重 (m2, g)" },
+  { field: "mLoss", label: "mLoss (计算)", tooltip: "失液量 = m1 - m2 (g)" },
+  { field: "v0", label: "v0", tooltip: "二封前 OCV (v0, V)" },
+  { field: "fu0", label: "fu0", tooltip: "化成前 OCV (fu0, V)" },
+  { field: "fr0", label: "fr0", tooltip: "化成前 ACIR (fr0, mΩ)" },
+  { field: "fq1", label: "fq1", tooltip: "化成充电容量 (fq1, Ah)" },
+  { field: "fq2", label: "fq2", tooltip: "化成放电容量 (fq2, Ah)" },
+  { field: "fq", label: "fq (计算)", tooltip: "化成充总容量 = fq1 + fq2 (Ah)" },
+  { field: "v1", label: "v1", tooltip: "二封后 OCV (v1, V)" },
+  { field: "fvg", label: "fvg (计算)", tooltip: "化成产气量 = (v1 - v0) / qdFirst (mL/Ah)" },
+  { field: "fu1", label: "fu1", tooltip: "老化前电压 (fu1, V)" },
+  { field: "fr1", label: "fr1", tooltip: "老化前电阻 (fr1, mΩ)" },
+  { field: "fu2", label: "fu2", tooltip: "老化后电压 (fu2, V)" },
+  { field: "fr2", label: "fr2", tooltip: "老化后电阻 (fr2, mΩ)" },
+  { field: "ku", label: "ku (计算)", tooltip: "老化电压降 = fu1 - fu2 (V)" },
+  { field: "m3", label: "m3", tooltip: "二封前电池质量 (m3, g)" },
+  { field: "m4", label: "m4", tooltip: "二封后电池质量 (m4, g)" },
+  { field: "mHold", label: "mHold (计算)", tooltip: "保液量 = m4 - m0 (g)" },
+  { field: "gu0", label: "gu0", tooltip: "定容前 OCV (gu0, V)" },
+  { field: "gr0", label: "gr0", tooltip: "定容前 ACIR (gr0, mΩ)" },
+  { field: "gqc1", label: "gqc1", tooltip: "第一步分容充电容量 (gqc1, Ah)" },
+  { field: "gqd1", label: "gqd1", tooltip: "第一步分容放电容量 (gqd1, Ah)" },
+  { field: "gqc2", label: "gqc2", tooltip: "第二步分容充电容量 (gqc2, Ah)" },
+  { field: "gu1", label: "gu1", tooltip: "定容后电压 (gu1, V)" },
+  { field: "gr1", label: "gr1", tooltip: "定容后电阻 (gr1, mΩ)" },
+  { field: "qcFirst", label: "qcFirst (计算)", tooltip: "首次充电容量 = fq + gqc1 (Ah)" },
+  { field: "qdFirst", label: "qdFirst (计算)", tooltip: "首次放电容量 = gqd1 (Ah)" },
+  { field: "ceFirst", label: "ceFirst (计算)", tooltip: "首圈库比效率 = qdFirst / qcFirst * 100 (%)" },
 ];
 
 const PD_COLOR: Record<string, string> = {
-  m0: "text-amber-600", m1: "text-amber-600", m2: "text-amber-600",
-  m3: "text-amber-600", m4: "text-amber-600",
-  v0: "text-amber-600", v1: "text-amber-600",
-  fu0: "text-amber-600", fr0: "text-amber-600",
-  fu1: "text-amber-600", fr1: "text-amber-600",
-  fu2: "text-amber-600", fr2: "text-amber-600",
-  gu0: "text-amber-600", gr0: "text-amber-600",
-  fq1: "text-sky-600", fq2: "text-sky-600",
-  gqc1: "text-sky-600", gqd1: "text-sky-600", gqc2: "text-sky-600",
-  gu1: "text-sky-600", gr1: "text-sky-600",
-  mIn: "text-emerald-600", mLoss: "text-emerald-600", mHold: "text-emerald-600",
-  fq: "text-emerald-600", fvg: "text-emerald-600", ku: "text-emerald-600",
-  qcFirst: "text-emerald-600", qdFirst: "text-emerald-600", ceFirst: "text-emerald-600",
+  m0: "text-amber-700", m1: "text-amber-700", m2: "text-amber-700",
+  m3: "text-amber-700", m4: "text-amber-700",
+  v0: "text-amber-700", v1: "text-amber-700",
+  fu0: "text-amber-700", fr0: "text-amber-700",
+  fu1: "text-amber-700", fr1: "text-amber-700",
+  fu2: "text-amber-700", fr2: "text-amber-700",
+  gu0: "text-amber-700", gr0: "text-amber-700",
+  fq1: "text-sky-700", fq2: "text-sky-700",
+  gqc1: "text-sky-700", gqd1: "text-sky-700", gqc2: "text-sky-700",
+  gu1: "text-sky-700", gr1: "text-sky-700",
+  mIn: "text-emerald-700", mLoss: "text-emerald-700", mHold: "text-emerald-700",
+  fq: "text-emerald-700", fvg: "text-emerald-700", ku: "text-emerald-700",
+  qcFirst: "text-emerald-700", qdFirst: "text-emerald-700", ceFirst: "text-emerald-700",
 };
 
 /** Extract group prefix from cellId: "A001" → "A", "B002" → "B" */
@@ -236,7 +247,13 @@ export function CellPickerPage() {
           <table className="min-w-max border-collapse">
             <thead className="bg-gray-50 sticky top-0 z-20"><tr>
               <th className={cn(thClass, "sticky left-0 z-20 min-w-[130px]")}>{t("cell_id")}</th>
-              {dataCols.map((c) => <th key={c.field} className={cn(thClass, PD_COLOR[c.field] ?? "", "min-w-[90px]")}>{c.label}</th>)}
+              {dataCols.map((c) => (
+                c.tooltip ? (
+                  <TooltipTh key={c.field} content={c.tooltip} label={c.label} className={cn(thClass, PD_COLOR[c.field] ?? "", "min-w-[90px]")} />
+                ) : (
+                  <th key={c.field} className={cn(thClass, PD_COLOR[c.field] ?? "", "min-w-[90px]")}>{c.label}</th>
+                )
+              ))}
               <th className="sticky right-0 z-20 bg-gray-50 px-3 py-2 w-44 text-center text-[11px] font-semibold text-gray-500 whitespace-nowrap">{t("assign_test_type")}</th>
             </tr></thead>
             <tbody className="bg-white divide-y divide-gray-100">

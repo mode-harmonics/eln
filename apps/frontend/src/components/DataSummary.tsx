@@ -425,16 +425,18 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
   });
 
   return (
-    <section className="mb-8 overflow-hidden rounded-surface border border-border bg-surface">
-      <div className="flex flex-col gap-4 border-b border-border bg-surface-subtle px-5 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-gray-900">
-            <Settings2 className="h-4 w-4 text-action" />
-            {t("data_aggregation_heatmap")}
-          </h2>
-          <p className="mt-1 text-xs text-gray-500">{t("data_summary_hint")}</p>
-        </div>
-        <div className="flex items-center gap-3 self-start rounded-control border border-border bg-white px-3 py-2 xl:self-auto">
+    <div className="space-y-5">
+      {/* Top Banner Card (matching Workflow progress header) */}
+      <section className="rounded-lg bg-gray-50 px-5 py-4 sm:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Settings2 className="h-4 w-4 text-gray-600" />
+              <h2 className="text-[15px] font-semibold text-gray-900">{t("data_aggregation_heatmap")}</h2>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">{t("data_summary_hint")}</p>
+          </div>
+          <div className="flex items-center gap-2.5 self-start rounded-lg bg-white px-3 py-1.5 shadow-sm border border-gray-200/60 text-xs sm:self-auto">
             <label className="whitespace-nowrap text-xs font-medium text-gray-500">
               {t("base_group")}:
             </label>
@@ -450,100 +452,103 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
               ))}
             </select>
           </div>
-      </div>
+        </div>
+      </section>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="w-8"></th>
-              <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider border-r border-gray-100">
-                {t("metric_name")}
-              </th>
-              <th className="px-6 py-3 text-center text-[10px] font-bold text-[#1d74f5] uppercase tracking-wider border-r border-gray-100 bg-[#f0f7ff]/50">
-                {displayBaseGroup} ({t("baseline")})
-              </th>
-              {displayGroups
-                .filter((g) => g !== displayBaseGroup)
-                .map((g) => (
-                  <th
-                    key={g}
-                    className="px-6 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider border-r border-gray-100"
-                  >
-                    {g} ({t("deviation")})
-                  </th>
-                ))}
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-100">
-            {metricDefs.map((def) => {
-              const baseStat = metrics.computedMetrics[def.key]?.[displayBaseGroup];
-              const dataType = METRIC_TO_TYPE[def.key];
-              const isRowLoading = props.loadedTypes ? !props.loadedTypes.includes(dataType) : false;
-              const hasAnyData = Object.keys(metrics.computedMetrics[def.key] || {}).length > 0;
+      {/* Heatmap Table Card */}
+      <div className="overflow-hidden rounded-lg bg-white shadow-sm border border-gray-100">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead>
+              <tr className="bg-gray-50/80 border-b border-gray-100">
+                <th className="w-8"></th>
+                <th className="px-6 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-wider border-r border-gray-100">
+                  {t("metric_name")}
+                </th>
+                <th className="px-6 py-3 text-center text-[10px] font-bold text-[#1d74f5] uppercase tracking-wider border-r border-gray-100 bg-[#f0f7ff]/60">
+                  {displayBaseGroup} ({t("baseline")})
+                </th>
+                {displayGroups
+                  .filter((g) => g !== displayBaseGroup)
+                  .map((g) => (
+                    <th
+                      key={g}
+                      className="px-6 py-3 text-center text-[10px] font-bold text-gray-500 uppercase tracking-wider border-r border-gray-100"
+                    >
+                      {g} ({t("deviation")})
+                    </th>
+                  ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-100">
+              {metricDefs.map((def) => {
+                const baseStat = metrics.computedMetrics[def.key]?.[displayBaseGroup];
+                const dataType = METRIC_TO_TYPE[def.key];
+                const isRowLoading = props.loadedTypes ? !props.loadedTypes.includes(dataType) : false;
+                const hasAnyData = Object.keys(metrics.computedMetrics[def.key] || {}).length > 0;
 
-              if (!hasAnyData && !isRowLoading) return null;
-              const isExpanded = expandedRows.has(def.key);
+                if (!hasAnyData && !isRowLoading) return null;
+                const isExpanded = expandedRows.has(def.key);
 
-              return (
-                <React.Fragment key={def.key}>
-                  <tr
-                    className="hover:bg-gray-50 transition-colors cursor-pointer group"
-                    onClick={() => setExpandedRows((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(def.key)) next.delete(def.key); else next.add(def.key);
-                      return next;
-                    })}
-                  >
-                    <td className="px-2 py-3 border-r border-gray-100 text-gray-400 text-center">
-                      {isExpanded ? <ChevronDown className="w-4 h-4 mx-auto" /> : <ChevronRight className="w-4 h-4 mx-auto" />}
-                    </td>
-                    <td className="px-6 py-3 whitespace-nowrap text-xs font-medium text-gray-900 border-r border-gray-100">
-                      {def.label}
-                    </td>
-                    <td className="px-6 py-3 whitespace-nowrap text-xs text-center text-[#1d74f5] font-mono font-semibold border-r border-gray-100 bg-[#f8fafc]">
-                      {isRowLoading ? (
-                        <div className="w-12 h-4 bg-gray-200 animate-pulse rounded mx-auto"></div>
-                      ) : baseStat ? (
-                        baseStat.finalMean.toFixed(2)
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    {displayGroups
-                      .filter((g) => g !== displayBaseGroup)
-                      .map((g) => {
-                        if (isRowLoading) {
-                          return (
-                            <td key={g} className="px-6 py-3 whitespace-nowrap text-xs text-center border-r border-gray-100 bg-gray-50">
-                              <div className="w-12 h-4 bg-gray-100 animate-pulse rounded mx-auto"></div>
-                            </td>
-                          );
-                        }
-                        const targetStat = metrics.computedMetrics[def.key]?.[g];
-                        if (!targetStat || !baseStat) {
-                          return <td key={g} className="px-6 py-3 text-center text-gray-400 border-r border-gray-100">-</td>;
-                        }
-                        return <HeatmapCell key={g} value={calculateRelativeDeviation(targetStat.finalMean, baseStat.finalMean)} isPositiveGood={def.isPositiveGood} />;
+                return (
+                  <React.Fragment key={def.key}>
+                    <tr
+                      className="hover:bg-gray-50 transition-colors cursor-pointer group"
+                      onClick={() => setExpandedRows((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(def.key)) next.delete(def.key); else next.add(def.key);
+                        return next;
                       })}
-                  </tr>
-                  {isExpanded && (
-                    <tr>
-                      <td colSpan={displayGroups.length + 2} className="p-0 border-b border-gray-200">
-                        <ExpandedRowDetails
-                          groups={displayGroups}
-                          computedMetrics={metrics.computedMetrics[def.key] || {}}
-                        />
+                    >
+                      <td className="px-2 py-3 border-r border-gray-100 text-gray-400 text-center">
+                        {isExpanded ? <ChevronDown className="w-4 h-4 mx-auto" /> : <ChevronRight className="w-4 h-4 mx-auto" />}
                       </td>
+                      <td className="px-6 py-3 whitespace-nowrap text-xs font-medium text-gray-900 border-r border-gray-100">
+                        {def.label}
+                      </td>
+                      <td className="px-6 py-3 whitespace-nowrap text-xs text-center text-[#1d74f5] font-mono font-semibold border-r border-gray-100 bg-[#f8fafc]">
+                        {isRowLoading ? (
+                          <div className="w-12 h-4 bg-gray-200 animate-pulse rounded mx-auto"></div>
+                        ) : baseStat ? (
+                          baseStat.finalMean.toFixed(2)
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                      {displayGroups
+                        .filter((g) => g !== displayBaseGroup)
+                        .map((g) => {
+                          if (isRowLoading) {
+                            return (
+                              <td key={g} className="px-6 py-3 whitespace-nowrap text-xs text-center border-r border-gray-100 bg-gray-50">
+                                <div className="w-12 h-4 bg-gray-100 animate-pulse rounded mx-auto"></div>
+                              </td>
+                            );
+                          }
+                          const targetStat = metrics.computedMetrics[def.key]?.[g];
+                          if (!targetStat || !baseStat) {
+                            return <td key={g} className="px-6 py-3 text-center text-gray-400 border-r border-gray-100">-</td>;
+                          }
+                          return <HeatmapCell key={g} value={calculateRelativeDeviation(targetStat.finalMean, baseStat.finalMean)} isPositiveGood={def.isPositiveGood} />;
+                        })}
                     </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={displayGroups.length + 2} className="p-0 border-b border-gray-200">
+                          <ExpandedRowDetails
+                            groups={displayGroups}
+                            computedMetrics={metrics.computedMetrics[def.key] || {}}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-
-    </section>
+    </div>
   );
 };
