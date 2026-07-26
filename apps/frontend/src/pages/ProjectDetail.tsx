@@ -156,14 +156,10 @@ export function ProjectDetail() {
   useEffect(() => { fetchWf(); }, [fetchWf, refetchTrigger]);
 
   // ── Derive visible steps ──
+  // Backend findByProject already filters steps by user visibility.
+  // Only filter out "skipped" status locally.
   const isCreator = project?.createdBy === currentUserId;
-  const visibleSteps = wf.steps.filter((s) => {
-    if (s.status === "skipped") return false;
-    if (isCreator) return true;
-    if (s.isParallelGroup) return true;
-    if (perms.visibleStepNames.includes(s.stepName)) return true;
-    return false;
-  });
+  const visibleSteps = wf.steps.filter((s) => s.status !== "skipped");
 
   // ── Current user steps ──
   const userActiveSteps = wf.steps.filter(
@@ -290,17 +286,21 @@ export function ProjectDetail() {
     ? wf.steps.find((step) => step.status === "in_progress" && !step.isParallelGroup) || null
     : null);
 
+  const isArchived = project.status === "Archived";
+
   return (
     <div className="flex min-h-0 flex-col space-y-4">
       <PageHeader
         title={project.name}
         description={project.description || t("no_description")}
         badges={<span className={cn(
-              "inline-flex items-center gap-1.5 rounded bg-gray-100 px-2 py-1 text-xs font-medium",
-              project.status === "Approved" ? "text-green-700" : "text-gray-700"
+              "inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium",
+              project.status === "Approved" && "bg-green-50 text-green-700 border border-green-200",
+              isArchived && "bg-gray-50 text-gray-400 border border-gray-200",
+              !project.status || (project.status !== "Approved" && !isArchived) && "bg-gray-100 text-gray-700"
             )}>
-              <span className={cn("h-1.5 w-1.5 rounded-full", project.status === "Approved" ? "bg-green-500" : "bg-gray-500")}></span>
-              {t(project.status === "Approved" ? "status_approved" : project.status === "Active" ? "status_active" : project.status === "Draft" ? "status_draft" : project.status === "In Review" ? "status_in_review" : "status_active")}
+              <span className={cn("h-1.5 w-1.5 rounded-full", project.status === "Approved" ? "bg-green-500" : isArchived ? "bg-gray-400" : "bg-gray-500")} />
+              {t(project.status === "Approved" ? "status_approved" : isArchived ? "status_inactive" : project.status === "Active" || !project.status ? "status_active" : project.status === "Draft" ? "status_draft" : project.status === "In Review" ? "status_in_review" : "status_active")}
             </span>}
         actions={currentStep ? (
           <div className="flex shrink-0 items-center gap-2 text-[13px] sm:pt-1">
@@ -373,21 +373,22 @@ export function ProjectDetail() {
                     const isInProgress = step.status === "in_progress";
                     const isPending = step.status === "pending";
                     const route = isPending ? null : stepRoute(step.stepName, projectId!, experiments);
-                    const canOpen = !!route || (step.stepName === "battery_selection" && !isPending);
+                    const canOpen = !isArchived && (!!route || (step.stepName === "battery_selection" && !isPending));
 
                     return (
                       <div key={step.stepName} className={cn("relative rounded-surface px-3 py-3 transition-colors sm:px-4", isInProgress && "bg-action-subtle/60")}>
                         {index < stepParents.length - 1 && <div className="absolute bottom-[-6px] left-7 top-11 w-px -translate-x-1/2 bg-gray-200 sm:left-8" aria-hidden="true" />}
                         <Link
-                          to={route || "#"}
+                          to={isArchived ? "#" : (route || "#")}
                           aria-current={isInProgress ? "step" : undefined}
                           onClick={(event) => {
+                            if (isArchived) { event.preventDefault(); return; }
                             if (!route) event.preventDefault();
                             if (step.stepName === "battery_selection" && !isPending) navigate(`/projects/${projectId}/cell-picker`);
                           }}
                           className={cn(
                             "group flex min-w-0 items-center gap-3 no-underline",
-                            canOpen ? "cursor-pointer" : isPending ? "cursor-not-allowed" : "cursor-default",
+                            canOpen ? "cursor-pointer" : isPending || isArchived ? "cursor-not-allowed" : "cursor-default",
                           )}
                         >
                           <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
@@ -422,15 +423,16 @@ export function ProjectDetail() {
                               const childMeta = STEP_META[child.stepName] || { label: child.stepName, icon: <Circle className="h-3 w-3" /> };
                               const childPending = child.status === "pending";
                               const childRoute = childPending ? null : stepRoute(child.stepName, projectId!, experiments);
+                              const childCanOpen = !isArchived && !!childRoute;
                               return (
                                 <Link
                                   key={child.stepName}
-                                  to={childRoute || "#"}
-                                  onClick={(event) => { if (!childRoute) event.preventDefault(); }}
+                                  to={isArchived ? "#" : (childRoute || "#")}
+                                  onClick={(event) => { if (!childCanOpen) event.preventDefault(); }}
                                   className={cn(
                                     "group flex min-w-0 items-center gap-3 px-3 py-2.5 no-underline transition-colors",
                                     childIndex > 0 && "mt-0.5",
-                                    childRoute ? "rounded hover:bg-white" : childPending ? "cursor-not-allowed" : "cursor-default",
+                                    childCanOpen ? "rounded hover:bg-white" : "cursor-not-allowed",
                                   )}
                                 >
                                   <div className={cn(
@@ -447,7 +449,7 @@ export function ProjectDetail() {
                                     {child.assignedUserId && <p className="mt-0.5 truncate text-[11px] text-gray-400">{t("assignee", "执行人")}: {(child as any).assignedUserName || `用户 #${child.assignedUserId.slice(0, 6)}`}</p>}
                                   </div>
                                   <StatusBadge status={child.status} />
-                                  {childRoute && <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-gray-700" />}
+                                  {childCanOpen && <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-gray-700" />}
                                 </Link>
                               );
                             })}
@@ -489,32 +491,53 @@ export function ProjectDetail() {
                     )}
 
                     {focusedStep.stepName === "experiment_design" && (
-                      <Link to={`/projects/${projectId}/design`} className="block no-underline">
-                        <Button variant="primary" className="w-full">
-                          <FileText className="h-4 w-4" />
-                          前往实验设计
-                          <ChevronRight className="ml-auto h-4 w-4" />
+                      isArchived ? (
+                        <Button variant="secondary" className="w-full" disabled>
+                          <LockKeyhole className="h-4 w-4" />
+                          实验设计已归档
                         </Button>
-                      </Link>
+                      ) : (
+                        <Link to={`/projects/${projectId}/design`} className="block no-underline">
+                          <Button variant="primary" className="w-full">
+                            <FileText className="h-4 w-4" />
+                            前往实验设计
+                            <ChevronRight className="ml-auto h-4 w-4" />
+                          </Button>
+                        </Link>
+                      )
                     )}
 
                     {focusedStep.stepName === "battery_selection" && (
-                      <Button variant="primary" className="w-full" onClick={() => navigate(`/projects/${projectId}/cell-picker`)}>
-                        <Layers className="h-4 w-4" />
-                        挑选实验电池 ({pickedCells.length})
-                        <ChevronRight className="ml-auto h-4 w-4" />
-                      </Button>
+                      isArchived ? (
+                        <Button variant="secondary" className="w-full" disabled>
+                          <LockKeyhole className="h-4 w-4" />
+                          挑选已归档
+                        </Button>
+                      ) : (
+                        <Button variant="primary" className="w-full" onClick={() => navigate(`/projects/${projectId}/cell-picker`)}>
+                          <Layers className="h-4 w-4" />
+                          挑选实验电池 ({pickedCells.length})
+                          <ChevronRight className="ml-auto h-4 w-4" />
+                        </Button>
+                      )
                     )}
 
                     {!['experiment_design', 'battery_selection', 'testing'].includes(focusedStep.stepName) && (() => {
                       const taskRoute = stepRoute(focusedStep.stepName, projectId!, experiments);
                       return taskRoute ? (
-                        <Link to={taskRoute} className="block no-underline">
-                          <Button variant="primary" className="w-full">
-                            打开实验记录
-                            <ChevronRight className="ml-auto h-4 w-4" />
+                        isArchived ? (
+                          <Button variant="secondary" className="w-full" disabled>
+                            <LockKeyhole className="h-4 w-4" />
+                            记录已归档
                           </Button>
-                        </Link>
+                        ) : (
+                          <Link to={taskRoute} className="block no-underline">
+                            <Button variant="primary" className="w-full">
+                              打开实验记录
+                              <ChevronRight className="ml-auto h-4 w-4" />
+                            </Button>
+                          </Link>
+                        )
                       ) : null;
                     })()}
                   </div>

@@ -264,7 +264,7 @@ export function Dashboard() {
                           {activity.action}
                         </p>
                         <span className="text-xs text-gray-500 whitespace-nowrap ml-4">
-                          {format(new Date(activity.timestamp), "MMM dd, HH:mm")}
+                          {format(new Date(activity.timestamp), "M月d日 HH:mm")}
                         </span>
                       </div>
                       {activity.experimentTitle && (

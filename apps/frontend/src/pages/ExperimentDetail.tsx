@@ -420,7 +420,7 @@ export function ExperimentDetail() {
             </span>
           </>}
         metadata={<div className="flex items-center gap-3">
-            <span>{t("updated")} {format(new Date(experiment.updatedAt), "MMM d, yyyy")}</span>
+            <span>{t("updated")} {format(new Date(experiment.updatedAt), "yyyy年M月d日")}</span>
             <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
             <span>v{experiment.versionNo}</span>
           </div>}
@@ -790,7 +790,7 @@ export function ExperimentDetail() {
                 return (
                   <div key={c.id} className={cn("flex flex-col max-w-[85%]", isMe ? "ml-auto items-end" : "mr-auto items-start")}>
                     <span className="text-[11px] text-gray-500 mb-1 px-1">
-                      {isMe ? t("you", "我") : t("collaborator", "协作者")} • {format(new Date(c.createdAt), "MMM d, HH:mm")}
+                      {isMe ? t("you", "我") : t("collaborator", "协作者")} • {format(new Date(c.createdAt), "M月d日 HH:mm")}
                     </span>
                     <div className={cn("rounded-lg px-4 py-2.5 text-sm", isMe ? "bg-action text-white" : "bg-gray-100 text-gray-900")}>
                       {c.content}

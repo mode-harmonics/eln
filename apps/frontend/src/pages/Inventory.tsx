@@ -205,7 +205,7 @@ export function Inventory() {
                       </span>
                     </TableCell>
                     <TableCell>
-                      {item.lastUsedAt ? format(new Date(item.lastUsedAt), "MMM d, yyyy") : "Never"}
+                      {item.lastUsedAt ? format(new Date(item.lastUsedAt), "yyyy年M月d日") : "从未"}
                     </TableCell>
                     {hasPermission("data:write") && (
                       <TableCell className="text-right space-x-3 sticky right-0 z-10 bg-white group-hover:bg-gray-50">
@@ -272,7 +272,7 @@ export function Inventory() {
                   </div>
                   <div>
                     <div className="text-gray-400 text-xs mb-1">Last Used</div>
-                    <div>{item.lastUsedAt ? format(new Date(item.lastUsedAt), "MMM d, yyyy") : "Never"}</div>
+                    <div>{item.lastUsedAt ? format(new Date(item.lastUsedAt), "yyyy年M月d日") : "从未"}</div>
                   </div>
                 </CardContent>
 

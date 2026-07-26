@@ -48,7 +48,7 @@ export function VersionDiffViewer({ versions }: { versions: any[] }) {
             >
               <div>
                 <div className="font-medium text-gray-900">Version {v.versionNumber}</div>
-                <div className="text-xs text-gray-500 mt-0.5">{format(new Date(v.updatedAt || v.createdAt), 'MMM d, yyyy HH:mm')}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{format(new Date(v.updatedAt || v.createdAt), 'yyyy年M月d日 HH:mm')}</div>
               </div>
               {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
             </button>

@@ -34,14 +34,17 @@ import { toast } from "../components/Toast";
 
 function projectStatusBadge(project: any, t: (key: string) => string) {
   const wf = project.workflowStatus;
-  const cls = wf === "Completed" ? "bg-green-50 text-green-700"
+  const projStatus = project.status;
+  const cls = projStatus === "Archived" ? "bg-gray-50 text-gray-400"
+    : wf === "Completed" ? "bg-green-50 text-green-700"
     : wf === "Active" ? "bg-action-subtle text-action-muted"
-      : wf === "Paused" ? "bg-amber-50 text-amber-700"
-        : "bg-gray-100 text-gray-400";
-  const label = wf === "Completed" ? t("status_completed")
+    : wf === "Paused" ? "bg-amber-50 text-amber-700"
+    : "bg-gray-100 text-gray-400";
+  const label = projStatus === "Archived" ? t("status_inactive")
+    : wf === "Completed" ? t("status_completed")
     : wf === "Active" ? t("status_active")
-      : wf === "Paused" ? t("status_paused")
-        : t("status_not_configured");
+    : wf === "Paused" ? t("status_paused")
+    : t("status_not_configured");
   return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }
 
@@ -313,7 +316,7 @@ export function Projects() {
                   <TableCell>
                     {projectStatusBadge(project, t)}
                   </TableCell>
-                  <TableCell>{format(new Date(project.createdAt), "MMM d, yyyy")}</TableCell>
+                  <TableCell>{format(new Date(project.createdAt), "yyyy年M月d日")}</TableCell>
                   {hasPermission("projects:write") && (
                     <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                       <div className="flex items-center justify-end gap-3">
@@ -553,7 +556,7 @@ export function Projects() {
             onChange={(e) => setEditStatus(e.target.value)}
           >
             <option value="Active">{t("status_active")}</option>
-            <option value="Inactive">{t("status_inactive")}</option>
+            <option value="Archived">{t("status_inactive")}</option>
           </FormSelect>
         </form>
       </Modal>
