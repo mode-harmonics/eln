@@ -40,7 +40,7 @@ export function Tabs({ items, activeKey, onChange, className, variant = "underli
   }
 
   return (
-    <div className={cn("overflow-x-auto border-b border-gray-200", className)}>
+    <div className={cn("border-b border-gray-200", className)}>
       <nav className="-mb-px flex min-w-max space-x-1" role="tablist">
         {items.map((item, index) => (
           <button

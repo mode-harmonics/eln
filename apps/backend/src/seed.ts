@@ -15,36 +15,14 @@ import { FastCharge } from './entities/fast-charge.entity';
 import { HtCycle } from './entities/ht-cycle.entity';
 import { RawStepData } from './entities/raw-step-data.entity';
 import { WorkflowTemplate } from './entities/workflow-template.entity';
+import { ROLE_DEFAULT_PERMISSIONS, PERMISSION_RESOURCES } from '@eln/shared';
 
+// Merge @eln/shared defaults with any extra seed-specific permissions
 const ROLE_DEFS: Array<{ name: string; permissionList: string[] }> = [
-  {
-    name: 'Owner',
-    permissionList: [
-      'projects:*', 'experiments:*', 'data:*', 'users:*', 'roles:*',
-      'workflow:*', 'workflow_template:*', 'experiment_design:*', 'procurement:*',
-    ],
-  },
-  {
-    name: 'Admin',
-    permissionList: [
-      'projects:read', 'projects:write', 'experiments:*', 'data:*', 'users:read',
-      'workflow:*', 'experiment_design:*', 'procurement:*',
-    ],
-  },
-  {
-    name: 'Editor',
-    permissionList: [
-      'projects:read', 'experiments:read', 'experiments:write',
-      'data:read', 'data:write',
-      'workflow:read', 'workflow:transition',
-      'experiment_design:read', 'experiment_design:write',
-      'procurement:read', 'procurement:write',
-    ],
-  },
-  {
-    name: 'Viewer',
-    permissionList: ['projects:read', 'experiments:read', 'data:read'],
-  },
+  { name: 'Owner', permissionList: ROLE_DEFAULT_PERMISSIONS.Owner },
+  { name: 'Admin', permissionList: ROLE_DEFAULT_PERMISSIONS.Admin },
+  { name: 'Editor', permissionList: ROLE_DEFAULT_PERMISSIONS.Editor },
+  { name: 'Viewer', permissionList: ROLE_DEFAULT_PERMISSIONS.Viewer },
 ];
 
 async function seed(): Promise<void> {

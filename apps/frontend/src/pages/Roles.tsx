@@ -64,12 +64,30 @@ export function Roles() {
   useEffect(() => {
     if (editingRole) {
       const raw = editingRole.permissionList || [];
-      // Expand implied child permissions for the "data" parent group
+      const expanded = new Set(raw);
+
+      // Expand wildcard permissions into individual checkboxes for the editor
+      const expandableResources = [
+        { wildcard: 'experiment_design:*', actions: ['read', 'write'] },
+        { wildcard: 'procurement:*', actions: ['read', 'write'] },
+        { wildcard: 'dashboard:*', actions: ['read'] },
+        { wildcard: 'projects:*', actions: ['read', 'write'] },
+        { wildcard: 'experiments:*', actions: ['read', 'write'] },
+        { wildcard: 'workflow:*', actions: ['read', 'write'] },
+        { wildcard: 'users:*', actions: ['read', 'write'] },
+        { wildcard: 'roles:*', actions: ['read', 'write'] },
+      ];
+      for (const { wildcard, actions } of expandableResources) {
+        if (raw.includes(wildcard)) {
+          for (const act of actions) expanded.add(wildcard.replace(':*', `:${act}`));
+        }
+      }
+
+      // data child permissions (data_${type}:action)
       const childKeys = [
         "data_process", "data_calendar", "data_swelling", "data_efficiency",
         "data_dcr", "data_fastcharge", "data_htcycle",
       ];
-      const expanded = new Set(raw);
 
       // data:* → all child perms (all actions)
       if (raw.includes("data:*")) {
@@ -499,6 +517,9 @@ export function Roles() {
                 {specialActionRow("workflow", "transition", "提交步骤 (Transition)")}
                 {permRow("users", t("user_management"))}
                 {permRow("roles", t("role_management"))}
+                {permRow("experiment_design", "实验设计")}
+                {permRow("procurement", "试剂采购")}
+                {permRow("dashboard", "仪表盘")}
               </TableBody>
             </Table>
           </TableWrapper>

@@ -20,6 +20,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard, hasPermission } from '../common/guards/permissions.guard';
+import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { DataService } from './data.service';
 import { RECORD_TYPE_TO_API_TYPE as RECORD_TYPE_TO_PERMISSION } from '@eln/shared';
@@ -80,6 +81,7 @@ export class DataController {
   }
 
   @Post('upload-project/:projectId')
+  @RequirePermission('data:write')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Upload Excel workbooks to a project. Auto-routes data to the correct experiments by matching assayType.',
@@ -131,6 +133,7 @@ export class DataController {
   }
 
   @Get('export/summary/:expId')
+  @RequirePermission('data:read')
   @ApiOperation({ summary: 'Export summary data for an experiment.' })
   async exportSummary(@Param('expId') expId: string) {
     const buffer = await this.dataService.exportSummaryBuffer(expId);
@@ -144,6 +147,7 @@ export class DataController {
   }
 
   @Get('export/raw/:expId')
+  @RequirePermission('data:read')
   @ApiOperation({ summary: 'Export raw data for an experiment.' })
   async exportRaw(@Param('expId') expId: string) {
     const buffer = await this.dataService.exportRawBuffer(expId);
@@ -157,6 +161,7 @@ export class DataController {
   }
 
   @Get('export/project/:projectId')
+  @RequirePermission('data:read')
   @ApiOperation({ summary: 'Export ALL business data for a project as an Excel workbook with Chinese headers.' })
   async exportProjectData(@Param('projectId') projectId: string) {
     const buffer = await this.dataService.exportProjectBuffer(projectId);
@@ -170,6 +175,7 @@ export class DataController {
   }
 
   @Get('raw/:expId')
+  @RequirePermission('data:read')
   @ApiOperation({ summary: 'Query raw step data rows for an experiment. Optional ?source=formation|grading to filter by data source.' })
   async findRawSteps(
     @Param('expId') expId: string,
@@ -179,6 +185,7 @@ export class DataController {
   }
 
   @Post('pick-cells/:projectId')
+  @RequirePermission('data:write')
   @ApiOperation({ summary: 'Auto or manual pick cells for a project (project-scoped).' })
   async pickCells(
     @Param('projectId') projectId: string,
@@ -192,12 +199,14 @@ export class DataController {
   }
 
   @Get('picked-cells/:projectId')
+  @RequirePermission('data:read')
   @ApiOperation({ summary: 'Get picked cells for a project.' })
   async getPickedCells(@Param('projectId') projectId: string) {
     return this.dataService.getPickedCells(projectId);
   }
 
   @Post('sync-cells/:projectId')
+  @RequirePermission('data:write')
   @ApiOperation({ summary: 'Sync picked cells to all 6 target business tables (project-scoped, destructive).' })
   async syncCells(
     @Param('projectId') projectId: string,

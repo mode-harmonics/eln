@@ -18,12 +18,14 @@ export class ExperimentsController {
   constructor(private readonly experimentsService: ExperimentsService) {}
 
   @Get(':id')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get experiment detail including attachments and collaborators.' })
   async findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.experimentsService.findDetail(id, userId);
   }
 
   @Put(':id')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Auto-save edit with optimistic-lock check on versionNo.' })
   async update(
     @Param('id') id: string,
@@ -41,6 +43,7 @@ export class ExperimentsController {
   }
 
   @Post(':id/submit')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Submit for review: Draft -> In Review, and lock.' })
   async submit(
     @Param('id') id: string,
@@ -94,12 +97,14 @@ export class ExperimentsController {
   }
 
   @Get(':id/collaborators')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get collaborators for an experiment.' })
   async getCollaborators(@Param('id') id: string) {
     return this.experimentsService.getCollaborators(id);
   }
 
   @Post(':id/collaborators')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Add a collaborator to an experiment.' })
   async addCollaborator(
     @Param('id') id: string,
@@ -109,6 +114,7 @@ export class ExperimentsController {
   }
 
   @Delete(':id/collaborators/:userId')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Remove a collaborator from an experiment.' })
   async removeCollaborator(
     @Param('id') id: string,
@@ -120,6 +126,7 @@ export class ExperimentsController {
   // --- Version History ---
 
   @Get(':id/versions')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get version history for an experiment.' })
   async getVersions(@Param('id') id: string) {
     return this.experimentsService.getVersions(id);
@@ -128,6 +135,7 @@ export class ExperimentsController {
   // --- Attachments ---
 
   @Get(':id/attachments')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get attachments for an experiment.' })
   async getAttachments(@Param('id') id: string) {
     const detail = await this.experimentsService.findDetail(id);
@@ -135,6 +143,7 @@ export class ExperimentsController {
   }
 
   @Post(':id/attachments')
+  @RequirePermission('experiments:write')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload an attachment to an experiment.' })
   async uploadAttachment(
@@ -147,6 +156,7 @@ export class ExperimentsController {
   }
 
   @Get(':id/attachments/:attachmentId/download')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Download an attachment.' })
   async downloadAttachment(
     @Param('attachmentId') attachmentId: string,
@@ -162,6 +172,7 @@ export class ExperimentsController {
   }
 
   @Delete(':id/attachments/:attachmentId')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Delete an attachment.' })
   async deleteAttachment(@Param('attachmentId') attachmentId: string) {
     return this.experimentsService.deleteAttachment(attachmentId);
@@ -170,12 +181,14 @@ export class ExperimentsController {
   // --- Comments ---
 
   @Get(':id/comments')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get comments for an experiment.' })
   async getComments(@Param('id') id: string) {
     return this.experimentsService.getComments(id);
   }
 
   @Post(':id/comments')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Add a comment to an experiment.' })
   async addComment(
     @Param('id') id: string,

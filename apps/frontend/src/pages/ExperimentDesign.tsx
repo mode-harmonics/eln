@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Button } from "../components/Button";
 import { cn } from "../lib/utils";
+import { usePermissions } from "../hooks/usePermissions";
 import { Modal } from "../components/Modal";
 import { Switch } from "../components/Switch";
 import { Popconfirm } from "../components/Popconfirm";
@@ -85,6 +86,9 @@ function EMPTY_GROUP(existing: DesignRow[] = []): DesignRow {
 
 export function ExperimentDesign() {
   const { t } = useTranslation();
+  const { hasPermission } = usePermissions();
+  const canEditDesign = hasPermission("experiment_design:write");
+  const canEditProcurement = hasPermission("procurement:write");
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -384,7 +388,7 @@ export function ExperimentDesign() {
                     </Button>
                   </Popconfirm>
                 </>
-              ) : (
+              ) : canEditDesign ? (
                 <>
                   <Button variant="secondary" size="sm" onClick={enterBatchEdit}>
                     <Edit3 className="w-3.5 h-3.5" />
@@ -401,6 +405,11 @@ export function ExperimentDesign() {
                     </Button>
                   </Popconfirm>
                 </>
+              ) : (
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {t("no_permission", "无编辑权限")}
+                </span>
               )}
             </div>
           </div>
@@ -611,7 +620,7 @@ export function ExperimentDesign() {
                   <Lock className="w-3 h-3" />
                   {t("procurement_submitted", "Procurement Submitted")}
                 </span>
-              ) : (
+              ) : canEditProcurement ? (
                 <Popconfirm
                   title={t("procurement_confirm", "确认提交试剂采购？提交后将推进工作流，不可撤回。")}
                   onConfirm={handleSubmitProcurement}
@@ -622,6 +631,11 @@ export function ExperimentDesign() {
                     {t("design_submit")}
                   </Button>
                 </Popconfirm>
+              ) : (
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <Lock className="w-3 h-3" />
+                  {t("no_permission", "无编辑权限")}
+                </span>
               )}
             </div>
           </div>

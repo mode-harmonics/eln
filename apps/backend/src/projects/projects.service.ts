@@ -28,7 +28,7 @@ export class ProjectsService {
     limit?: number,
     search?: string,
   ): Promise<{ items: Project[]; total?: number } | Project[]> {
-    const query = this.buildVisibleProjectsQuery(userId).leftJoinAndSelect('project.creator', 'creator');
+    const query = (await this.buildVisibleProjectsQuery(userId)).leftJoinAndSelect('project.creator', 'creator');
 
     if (search && search.trim() !== '') {
       const searchPattern = `%${search.trim().toLowerCase()}%`;
@@ -49,7 +49,7 @@ export class ProjectsService {
     return query.getMany();
   }
 
-  private buildVisibleProjectsQuery(userId: string) {
+  private async buildVisibleProjectsQuery(userId: string) {
     const collabSubQuery = this.projectsRepo.manager
       .createQueryBuilder(Experiment, 'experiment')
       .select('experiment.projectId')
@@ -57,17 +57,39 @@ export class ProjectsService {
       .where('collaborator.userId = :userId');
 
     // Sub-query: workflow instances where user is assigned a step
-    const wfSubQuery = this.projectsRepo.manager
+    const wfAssignedSubQuery = this.projectsRepo.manager
       .createQueryBuilder(WorkflowInstance, 'wi')
       .select('wi.projectId')
       .innerJoin(WorkflowStepAssignment, 'wsa', 'wsa.workflowInstanceId = wi.id')
       .where('wsa.assignedUserId = :userId');
 
+    // Sub-query: workflow instances where user is in visibleToUserIds of any step
+    // (raw SQL because TypeORM chokes on JSONB @> operator inside .where())
+    const wfVisibleRowResult = await this.projectsRepo.manager.query(
+      `SELECT DISTINCT wi."projectId"
+       FROM "workflowInstance" wi
+       INNER JOIN "workflowStepAssignment" wsa ON wsa."workflowInstanceId" = wi.id
+       WHERE wsa."visibleToUserIds" @> $1`,
+      [JSON.stringify([userId])],
+    );
+    const wfVisibleIds = (wfVisibleRowResult as { projectId: string }[]).map((r) => r.projectId);
+
+    const params: Record<string, unknown> = { userId };
+    let visibleClause = '';
+    if (wfVisibleIds.length > 0) {
+      visibleClause = ` OR project.id IN (:...wfVisibleIds)`;
+      params.wfVisibleIds = wfVisibleIds;
+    }
+
     return this.projectsRepo
       .createQueryBuilder('project')
       .where(
-        '(project.createdBy = :userId OR project.id IN (' + collabSubQuery.getQuery() + ') OR project.id IN (' + wfSubQuery.getQuery() + '))',
-        { userId },
+        '(project.createdBy = :userId'
+        + ' OR project.id IN (' + collabSubQuery.getQuery() + ')'
+        + ' OR project.id IN (' + wfAssignedSubQuery.getQuery() + ')'
+        + visibleClause
+        + ')',
+        params,
       );
   }
 
@@ -88,7 +110,7 @@ export class ProjectsService {
    * Checks whether a user can see a project (creator, collaborator, or workflow assignee).
    */
   private async isVisibleToUser(projectId: string, userId: string): Promise<boolean> {
-    return this.buildVisibleProjectsQuery(userId)
+    return (await this.buildVisibleProjectsQuery(userId))
       .andWhere('project.id = :projectId', { projectId })
       .getExists();
   }
