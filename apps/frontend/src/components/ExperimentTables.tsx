@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Check, Edit3, Loader2, Lock, Pencil, Save, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { cn } from "../lib/utils";
+import { cn, isCellInvalid } from "../lib/utils";
 import { api } from "../lib/api";
 import { Button } from "./Button";
 import { Tooltip, TooltipTh } from "./Tooltip";
@@ -351,10 +351,14 @@ const P_SECTIONS: Array<{ labelKey: string; fallback: string; start: number; end
   { labelKey: 'lab_firstCycle', fallback: '首圈数据', start: 28, end: 31 },       // qcFirst, qdFirst, ceFirst = 3 cols
 ];
 
-export function ProcessDataTable({ experimentId, stepName, staticData, readOnly, showBatchEdit }: { experimentId?: string; stepName?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
+export function ProcessDataTable({ experimentId, stepName, staticData, readOnly, showBatchEdit, invalidInternalCodes }: { experimentId?: string; stepName?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; invalidInternalCodes?: string[] }) {
   const { t } = useTranslation();
   const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>('process', experimentId || '');
-  const data = staticData || fetchData;
+  // Filter out rows from invalid procurement groups (matches group name and internalCode)
+  const rawData = staticData || fetchData;
+  const data = invalidInternalCodes && invalidInternalCodes.length > 0
+    ? rawData.filter((row: any) => !isCellInvalid(row.cellId, invalidInternalCodes))
+    : rawData;
   const loading = staticData ? false : fetchLoading;
   const error = staticData ? null : fetchErr;
   const { editingId, editForm, saving, startEditing, cancelEditing, handleChange, handleSave } = useInlineEdit('process');

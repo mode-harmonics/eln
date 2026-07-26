@@ -18,7 +18,6 @@ import { ButtonGroup } from "../components/ButtonGroup";
 import { Dropdown } from "../components/Dropdown";
 import { Modal } from "../components/Modal";
 import { Drawer } from "../components/Drawer";
-import { MarkdownEditor } from "../components/MarkdownEditor";
 import { VersionDiffViewer } from "../components/VersionDiffViewer";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -62,6 +61,14 @@ export function ExperimentDetail() {
   // Delete confirm state
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Scrap state
+  const [scrapping, setScrapping] = useState(false);
+  const [scrapReason, setScrapReason] = useState("");
+  const [scrapModalOpen, setScrapModalOpen] = useState(false);
+
+  // Invalid procurement internalCodes — used to filter ProcessData rows
+  const [invalidInternalCodes, setInvalidInternalCodes] = useState<string[]>([]);
 
   const openEditModal = () => {
     if (!experiment) return;
@@ -221,6 +228,25 @@ export function ExperimentDetail() {
     }
   };
 
+  const handleScrapExperiment = async () => {
+    if (!experiment) return;
+    setScrapping(true);
+    try {
+      const updated = await api.post<typeof experiment>(`/api/v1/experiments/${experiment.id}/scrap`, {
+        reason: scrapReason.trim() || undefined,
+      });
+      setExperiment({ ...experiment, ...updated });
+      setStepCompleted(true);
+      setScrapModalOpen(false);
+      setScrapReason("");
+      toast.success(t("scrap_success", "实验已报废，工作流已自动推进至下一工步"));
+    } catch (err: any) {
+      toast.error(err?.message ?? t("scrap_failed", "报废失败"));
+    } finally {
+      setScrapping(false);
+    }
+  };
+
   const [completingStep, setCompletingStep] = useState(false);
   const [stepCompleted, setStepCompleted] = useState(false);
 
@@ -269,6 +295,7 @@ export function ExperimentDetail() {
     return <div className="p-10 text-sm text-red-500">{error ?? t("experiment_not_found")}</div>;
   }
 
+  const isReadOnly = stepCompleted || experiment.status === "Scrapped";
   const assayType = experiment.metadata?.assayType;
   const permissionType = assayType ? ASSAY_TYPE_TO_PERMISSION[assayType] : null;
   const hasReadPermission =
@@ -332,6 +359,7 @@ export function ExperimentDetail() {
       toast(t("upload_success", "上传成功"), "success");
       setUploadDataOpen(false);
       setUploadDataFiles([]);
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
       setRefreshCounter((n) => n + 1);
     } catch (err: any) {
       toast(err?.message ?? t("upload_failed", "上传失败"), "error");
@@ -340,9 +368,19 @@ export function ExperimentDetail() {
     }
   };
 
+  // Load invalid internalCodes for ProcessData experiments so we can hide
+  // cells from procurement groups that have been marked invalid.
+  useEffect(() => {
+    if (!experiment?.projectId || experiment.metadata?.assayType !== "ProcessData") return;
+    api
+      .get<string[]>(`/api/v1/projects/${experiment.projectId}/procurement/invalid-internalcodes`)
+      .then((codes) => setInvalidInternalCodes(Array.isArray(codes) ? codes : []))
+      .catch(() => setInvalidInternalCodes([]));
+  }, [experiment?.projectId, experiment?.metadata?.assayType]);
+
   const renderTable = () => {
     switch (assayType) {
-      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} readOnly={stepCompleted} showBatchEdit />;
+      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} readOnly={stepCompleted} showBatchEdit invalidInternalCodes={invalidInternalCodes} />;
       case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
       case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
       case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
@@ -375,7 +413,8 @@ export function ExperimentDetail() {
               experiment.status === "In Review" && "bg-amber-50 text-amber-700 border-amber-200",
               experiment.status === "Approved" && "bg-green-50 text-green-700 border-green-200",
               experiment.status === "Rejected" && "bg-rose-50 text-rose-700 border-rose-200",
-              experiment.status === "Archived" && "bg-slate-50 text-slate-700 border-slate-200"
+              experiment.status === "Archived" && "bg-slate-50 text-slate-700 border-slate-200",
+              experiment.status === "Scrapped" && "bg-red-50 text-red-700 border-red-200"
             )}>
               {t(`status_${experiment.status.toLowerCase().replace(" ", "_")}`, experiment.status)}
             </span>
@@ -385,8 +424,8 @@ export function ExperimentDetail() {
             <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
             <span>v{experiment.versionNo}</span>
           </div>}
-        actions={<>
-          {experiment.projectId && canWrite && !stepCompleted && (
+        actions={<div className="flex items-center gap-2">
+          {experiment.projectId && canWrite && !isReadOnly && (
             <Popconfirm
               title={t("complete_step_confirm", "确认提交当前工步？提交后将推进工作流至下一环节。")}
               onConfirm={handleCompleteStep}
@@ -394,67 +433,30 @@ export function ExperimentDetail() {
             >
               <Button size="sm" variant="primary" loading={completingStep} disabled={completingStep}>
                 <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-                {t("complete_step", "提交")}
+                {t("complete_step", "提交工步")}
               </Button>
             </Popconfirm>
           )}
-          {stepCompleted && (
-            <span className="text-xs text-green-600 flex items-center gap-1">
+          {isReadOnly && experiment.status !== "Scrapped" && (
+            <span className="text-xs text-green-600 bg-green-50 border border-green-200 px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium shrink-0">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              {t("step_already_completed", "已提交")}
+              {t("step_already_completed", "工步已提交")}
             </span>
           )}
-          {/* Quick drawer toggles */}
-          <ButtonGroup
-            items={[
-              ...(canWrite && !stepCompleted ? [{
-                id: "edit",
-                label: "编辑",
-                icon: <Edit3 className="w-4 h-4 text-gray-500" />,
-                title: t("edit", "编辑信息"),
-                onClick: openEditModal
-              }] : []),
-              {
-                id: "history",
-                label: "历史",
-                icon: <History className="w-4 h-4" />,
-                title: t("history", "历史版本"),
-                onClick: () => { setActiveDrawer("versions"); setVersionsDrawerOpen(true); }
-              },
-              {
-                id: "attachments",
-                label: "附件",
-                icon: <Paperclip className="w-4 h-4" />,
-                title: t("attachments", "附件"),
-                onClick: () => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); },
-                badge: attachments.length > 0 ? <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gray-600" /> : undefined,
-                className: "relative"
-              },
-              {
-                id: "comments",
-                label: "讨论",
-                icon: <MessageSquare className="w-4 h-4" />,
-                title: t("comments", "评论"),
-                onClick: () => { setActiveDrawer("comments"); setCommentsDrawerOpen(true); },
-                badge: comments.length > 0 ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 absolute top-1 right-1" /> : undefined,
-                className: "relative"
-              }
-            ]}
-          />
 
           {/* Import / Export */}
           <ButtonGroup
             items={[
-              ...(hasRawData && canWrite && !stepCompleted ? [{
+              ...(hasRawData && canWrite && !isReadOnly ? [{
                 id: "import",
-                label: t("import_raw", "导入原始数据"),
-                icon: <UploadCloud className="w-3.5 h-3.5" />,
+                label: t("import_raw", "导入数据"),
+                icon: <UploadCloud className="w-3.5 h-3.5 text-gray-500" />,
                 onClick: () => setUploadDataOpen(true),
               }] : []),
               {
                 id: "export",
                 label: t("export", "导出"),
-                icon: <Download className="w-3.5 h-3.5" />,
+                icon: <Download className="w-3.5 h-3.5 text-gray-500" />,
                 onClick: () => { },
                 badge: <ChevronDown className="w-3 h-3 opacity-50 ml-0.5" />,
                 dropdownContent: (
@@ -474,7 +476,42 @@ export function ExperimentDetail() {
               }
             ]}
           />
-        </>}
+
+          {/* Quick drawer & Edit info toggles */}
+          <ButtonGroup
+            items={[
+              ...(canWrite && !isReadOnly ? [{
+                id: "edit",
+                label: "编辑",
+                icon: <Edit3 className="w-3.5 h-3.5 text-gray-500" />,
+                title: t("edit", "编辑信息"),
+                onClick: openEditModal
+              }] : []),
+              {
+                id: "attachments",
+                label: "附件",
+                icon: <Paperclip className="w-3.5 h-3.5 text-gray-500" />,
+                title: t("attachments", "附件"),
+                onClick: () => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); },
+                badge: attachments.length > 0 ? <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gray-600" /> : undefined,
+                className: "relative"
+              }
+            ]}
+          />
+
+
+          {/* Scrap button */}
+          {canWrite && experiment.status !== "Scrapped" && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="!text-red-600 hover:!bg-red-50 hover:!border-red-200 shrink-0"
+              onClick={() => setScrapModalOpen(true)}
+            >
+              {t("scrap", "报废")}
+            </Button>
+          )}
+        </div>}
         bordered
       />
 
@@ -636,8 +673,15 @@ export function ExperimentDetail() {
               className="block w-full rounded border border-gray-300 px-3 py-2 text-gray-900 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300 sm:text-sm" disabled={saving} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t("notes")}</label>
-            <MarkdownEditor value={editContent} onChange={setEditContent} disabled={saving} />
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("notes", "备注 / 描述")}</label>
+            <textarea
+              rows={5}
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              placeholder={t("notes_placeholder", "请输入实验备注或详细描述...")}
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300 resize-y"
+              disabled={saving}
+            />
           </div>
         </form>
       </Modal>
@@ -647,7 +691,7 @@ export function ExperimentDetail() {
       <Modal open={uploadDataOpen} onClose={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} title={t("import_raw", "导入原始数据")}
         footer={
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={() => { setUploadDataOpen(false); setUploadDataFiles([]); }} disabled={uploadDataSubmitting}>{t("cancel")}</Button>
+            <Button variant="secondary" size="sm" onClick={() => { setUploadDataOpen(false); setUploadDataFiles([]); if (uploadInputRef.current) uploadInputRef.current.value = ""; }} disabled={uploadDataSubmitting}>{t("cancel")}</Button>
             <Button variant="primary" size="sm" onClick={handleDataUpload} loading={uploadDataSubmitting} disabled={uploadDataSubmitting || uploadDataFiles.length === 0}>
               {uploadDataSubmitting ? t("uploading", "上传中...") : t("import_raw", "导入原始数据")}
             </Button>
@@ -777,6 +821,52 @@ export function ExperimentDetail() {
       <Drawer open={versionsDrawerOpen || activeDrawer === "versions"} onClose={() => { setVersionsDrawerOpen(false); setActiveDrawer(null); }} title={t("history", "Version History")}>
         <VersionDiffViewer versions={versions} />
       </Drawer>
+
+      {/* Scrap Modal */}
+      <Modal
+        open={scrapModalOpen}
+        onClose={() => { setScrapModalOpen(false); setScrapReason(""); }}
+        title={t("scrap_experiment", "报废实验")}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => { setScrapModalOpen(false); setScrapReason(""); }} disabled={scrapping}>
+              {t("cancel", "取消")}
+            </Button>
+            <Button
+              variant="primary"
+              className="!bg-red-600 hover:!bg-red-700 !border-red-600"
+              loading={scrapping}
+              disabled={scrapping}
+              onClick={handleScrapExperiment}
+            >
+              {t("confirm_scrap", "确认报废")}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg bg-red-50 border border-red-100 px-4 py-3">
+            <span className="text-red-500 mt-0.5 shrink-0">⚠</span>
+            <p className="text-sm text-red-700 leading-5">
+              {t("scrap_warning", "报废后实验将变为只读状态，此操作不可撤回，请谨慎操作。")}
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              {t("scrap_reason", "报废原因")}
+              <span className="ml-1 text-xs text-gray-400 font-normal">（可选）</span>
+            </label>
+            <textarea
+              rows={3}
+              value={scrapReason}
+              onChange={(e) => setScrapReason(e.target.value)}
+              placeholder={t("scrap_reason_placeholder", "请说明报废原因，例如：试剂无效、实验中止等...")}
+              className="block w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300 resize-none"
+              disabled={scrapping}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

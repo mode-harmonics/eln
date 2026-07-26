@@ -45,6 +45,12 @@ function n(v: any): number {
   return isNaN(parsed) ? 0 : parsed;
 }
 
+/** Extract group from cellId: "A001" → "A", "B002" → "B" */
+function getGroupFromCellId(cellId: string): string {
+  const m = cellId.match(/^([A-Za-z]+)/);
+  return m ? m[1] : cellId;
+}
+
 /** Pivot CalendarLife rows */
 function pivotCalendarLife(data: any[], metric: string): any[] {
   const cells = [...new Set(data.map((r) => r.cellName))];
@@ -97,20 +103,58 @@ const TOOLTIP_STYLE: React.CSSProperties = {
 /* ── chart sub-components ─────────────────────────────── */
 
 function ProcessChart({ data }: { data: any[] }) {
+  // Group cells by prefix: A001→A, B001→B, etc.
+  const groups = useMemo(() => {
+    const map = new Map<string, { cellId: string; fq: number }[]>();
+    const order: string[] = [];
+    for (const d of data) {
+      if (!d.cellId) continue;
+      const g = getGroupFromCellId(d.cellId);
+      if (!map.has(g)) { map.set(g, []); order.push(g); }
+      map.get(g)!.push({ cellId: d.cellId, fq: n(d.fq) });
+    }
+    return { map, order };
+  }, [data]);
+
+  // Single cell → show per-cell bar (legacy behavior)
+  if (groups.order.length <= 1) {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <CartesianGrid {...GRID_STYLE} />
+          <XAxis dataKey="cellId" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
+          <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
+          <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={TOOLTIP_STYLE}
+            formatter={(value: any) => [n(value).toFixed(3), 'fq']}
+          />
+          <Bar dataKey="fq" radius={[4, 4, 0, 0]} maxBarSize={40}>
+            {data.map((_, idx) => (<Cell key={idx} fill={cellColor(idx)} />))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+
+  // Multiple groups → one bar per group (max / avg of fq)
+  const groupChartData = groups.order.map((g) => ({
+    group: g,
+    maxFq: Math.max(...groups.map.get(g)!.map((c) => c.fq)),
+    avgFq: groups.map.get(g)!.reduce((s, c) => s + c.fq, 0) / groups.map.get(g)!.length,
+    count: groups.map.get(g)!.length,
+  }));
+
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+      <BarChart data={groupChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
         <CartesianGrid {...GRID_STYLE} />
-        <XAxis dataKey="cellId" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
+        <XAxis dataKey="group" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
         <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
         <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={TOOLTIP_STYLE}
-          formatter={(value: any) => [n(value).toFixed(3), 'fq (Capacity)']}
+          formatter={(value: any, name: any) => [n(value).toFixed(3), name === 'maxFq' ? 'Max fq' : name === 'avgFq' ? 'Avg fq' : name]}
         />
-        <Bar dataKey="fq" radius={[4, 4, 0, 0]} maxBarSize={40}>
-          {data.map((entry, idx) => (
-            <Cell key={idx} fill={cellColor(idx)} />
-          ))}
-        </Bar>
+        <Legend wrapperStyle={{ fontSize: '12px' }} />
+        <Bar dataKey="maxFq" name="Max fq" radius={[4, 4, 0, 0]} maxBarSize={50} fill={CHART_COLORS[0]} />
+        <Bar dataKey="avgFq" name="Avg fq" radius={[4, 4, 0, 0]} maxBarSize={50} fill={CHART_COLORS[1]} />
       </BarChart>
     </ResponsiveContainer>
   );

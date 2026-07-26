@@ -12,6 +12,7 @@ import { Inventory } from "./pages/Inventory";
 import { Users } from "./pages/Users";
 import { Roles } from "./pages/Roles";
 import { Profile } from "./pages/Profile";
+import { CellPickerPage } from "./pages/CellPickerPage";
 import { api } from "./lib/api";
 import { Dashboard } from "./pages/Dashboard";
 import type { Project } from "./types";
@@ -68,6 +69,11 @@ const router = createBrowserRouter([
                 path: "design",
                 element: <ExperimentDesign />,
                 handle: { breadcrumb: "experiment_design" },
+              },
+              {
+                path: "cell-picker",
+                element: <CellPickerPage />,
+                handle: { breadcrumb: "cell_picker" },
               },
               {
                 path: "procurement",

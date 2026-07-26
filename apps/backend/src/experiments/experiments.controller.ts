@@ -7,7 +7,7 @@ import { CurrentUser, RequestUser } from '../common/decorators/current-user.deco
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
-import { SubmitExperimentDto, UpdateExperimentDto, ApproveExperimentDto, RejectExperimentDto } from './dto';
+import { SubmitExperimentDto, UpdateExperimentDto, ApproveExperimentDto, RejectExperimentDto, ScrapExperimentDto } from './dto';
 import { ExperimentsService } from './experiments.service';
 
 @ApiTags('experiments')
@@ -80,6 +80,17 @@ export class ExperimentsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.experimentsService.archive(id, user.id);
+  }
+
+  @Post(':id/scrap')
+  @RequirePermission('experiments:write')
+  @ApiOperation({ summary: '报废实验（终态，不可恢复）' })
+  async scrap(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: ScrapExperimentDto,
+  ) {
+    return this.experimentsService.scrap(id, user.id, dto.reason);
   }
 
   @Get(':id/collaborators')

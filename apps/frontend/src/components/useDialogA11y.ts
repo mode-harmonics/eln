@@ -11,6 +11,11 @@ const focusableSelector = [
 
 export function useDialogA11y(open: boolean, onClose: () => void) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Keep a stable ref to onClose so the focus/keyboard effect doesn't
+  // re-run (and steal focus) whenever the parent re-renders with a new
+  // function reference — e.g. every keystroke in a controlled input.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -19,15 +24,30 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    // Set initial focus once when the dialog opens. Skip the close button
+    // (first focusable element in the header) and prefer the first focusable
+    // element inside the modal body / form instead.
     const frame = requestAnimationFrame(() => {
-      const focusTarget = dialogRef.current?.querySelector<HTMLElement>(focusableSelector);
-      (focusTarget ?? dialogRef.current)?.focus();
+      if (!dialogRef.current) return;
+      const allFocusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector),
+      ).filter((el) => !el.hasAttribute("hidden"));
+
+      // The close button is the very first focusable element in the DOM order.
+      // Prefer the second one (first real form field) when it exists so that
+      // typing immediately goes into the input rather than the close button.
+      const closeBtn = allFocusable[0];
+      const preferred = allFocusable.find(
+        (el) => el !== closeBtn && el.tagName !== "BUTTON",
+      ) ?? allFocusable[1] ?? closeBtn ?? dialogRef.current;
+
+      preferred?.focus();
     });
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab" || !dialogRef.current) return;
@@ -59,7 +79,8 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus();
     };
-  }, [open, onClose]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]); // intentionally omit onClose — use onCloseRef instead
 
   return dialogRef;
-}
+}

@@ -31,6 +31,24 @@ export class ReagentProcurementController {
     };
   }
 
+  @Get('projects/:projectId/procurement/valid-groups')
+  @RequirePermission('procurement:read')
+  async validGroups(@Param('projectId') projectId: string) {
+    return {
+      success: true,
+      data: await this.procurementService.findValidGroupNames(projectId),
+    };
+  }
+
+  @Get('projects/:projectId/procurement/invalid-internalcodes')
+  @RequirePermission('procurement:read')
+  async invalidInternalCodes(@Param('projectId') projectId: string) {
+    return {
+      success: true,
+      data: await this.procurementService.findInvalidInternalCodes(projectId),
+    };
+  }
+
   @Put('projects/:projectId/procurement/:id')
   @RequirePermission('procurement:write')
   async update(

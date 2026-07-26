@@ -11,11 +11,13 @@ import { ExperimentsController } from './experiments.controller';
 import { ExperimentsService } from './experiments.service';
 
 import { NotificationsModule } from '../notifications/notifications.module';
+import { WorkflowModule } from '../workflow/workflow.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Experiment, Attachment, ExperimentCollaborator, VersionHistory, ExperimentComment, WorkflowStepAssignment, WorkflowInstance]),
     NotificationsModule,
+    WorkflowModule,
   ],
   controllers: [ExperimentsController],
   providers: [ExperimentsService],

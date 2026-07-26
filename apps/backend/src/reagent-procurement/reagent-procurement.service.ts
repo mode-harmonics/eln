@@ -51,6 +51,49 @@ export class ReagentProcurementService {
     });
   }
 
+  async getValidGroups(projectId: string): Promise<string[]> {
+    const records = await this.procurementRepo.find({
+      where: { projectId },
+    });
+    return records
+      .filter((r) => r.isValid)
+      .map((r) => {
+        // Join with design to get group name
+        return r.experimentDesignId;
+      })
+      .filter(Boolean) as string[];
+  }
+
+  async findValidGroupNames(projectId: string): Promise<string[]> {
+    const records = await this.procurementRepo.find({ where: { projectId } });
+    const designs = await this.designRepo.find({ where: { projectId } });
+    const designMap = new Map(designs.map((d) => [d.id, d]));
+
+    return records
+      .filter((r) => r.isValid && r.experimentDesignId)
+      .map((r) => designMap.get(r.experimentDesignId!)?.group)
+      .filter((g): g is string => !!g);
+  }
+
+  async findInvalidInternalCodes(projectId: string): Promise<string[]> {
+    const records = await this.procurementRepo.find({ where: { projectId } });
+    const designs = await this.designRepo.find({ where: { projectId } });
+    const designMap = new Map(designs.map((d) => [d.id, d]));
+
+    const result = new Set<string>();
+    for (const r of records) {
+      if (!r.isValid && r.experimentDesignId) {
+        const design = designMap.get(r.experimentDesignId);
+        if (design) {
+          if (design.group) result.add(design.group);
+          if (design.internalCode) result.add(design.internalCode);
+        }
+      }
+    }
+    return Array.from(result);
+  }
+
+
   async update(
     projectId: string,
     id: string,

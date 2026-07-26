@@ -35,6 +35,17 @@ export class ProcessData {
   @Column({ type: 'varchar', length: 64, comment: '电池编码' })
   cellId!: string;
 
+  /** Logical FK -> experimentDesign.id */
+  @Index()
+  @Column({ name: 'experimentDesignId', type: 'uuid', nullable: true, comment: '关联实验设计ID' })
+  experimentDesignId!: string | null;
+
+  /** Experiment design group name (e.g. "A", "B", "组1") */
+  @Index()
+  @Column({ name: 'groupName', type: 'varchar', length: 128, nullable: true, comment: '实验设计分组名称' })
+  groupName!: string | null;
+
+
   // --- Pre-formation weight stages ---
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '注液前电池重(m0)' })
   m0!: string | null;

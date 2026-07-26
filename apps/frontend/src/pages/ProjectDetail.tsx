@@ -7,13 +7,12 @@ import {
   ChevronRight, User, AlertCircle, LockKeyhole, ListChecks
 } from "lucide-react";
 import { Button } from "../components/Button";
-import { cn } from "../lib/utils";
+import { cn, isCellInvalid } from "../lib/utils";
 import { usePermissions } from "../hooks/usePermissions";
 import { Tabs } from "../components/Tabs";
 import { DataSummary } from "../components/DataSummary";
 import { ProjectRawData } from "../components/ProjectRawData";
 import { SkeletonCard } from "../components/Skeleton";
-import { CellPicker } from "../components/CellPicker";
 import { Popconfirm } from "../components/Popconfirm";
 import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
@@ -99,7 +98,6 @@ export function ProjectDetail() {
   // Cell groups removed - experiment design groups are used instead
   const [pickedCells, setPickedCells] = useState<string[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
-  const [cellPickerOpen, setCellPickerOpen] = useState(false);
 
   // ── User ID ──
   useEffect(() => {
@@ -209,34 +207,41 @@ export function ProjectDetail() {
       const expIdsByType: Record<string, string[]> = {};
       for (const exp of allExps) { const at = exp.metadata?.assayType as string; if (at && RECORD_TYPE_TO_API_TYPE[at]) { if (!expIdsByType[at]) expIdsByType[at] = []; expIdsByType[at].push(exp.id); } }
       const setters: Record<string, any> = { ProcessData: ["process", setProcessData], CalendarLife: ["calendar", setCalendarLife], StorageSwelling: ["swelling", setStorageSwelling], EnergyEfficiency: ["efficiency", setEnergyEfficiency], DcrTest: ["dcr", setDcrTest], FastCharge: ["fastcharge", setFastCharge], HtCycle: ["htcycle", setHtCycle] };
-      const tasks = Object.entries(setters).map(([at, [apiType, setter]]) => {
-        const ids = expIdsByType[at] || [];
-        if (!ids.length) { setter([]); setLoadedTypes((p) => [...p, apiType]); return; }
-        return Promise.all(ids.map((eid: string) => api.get<any[]>(`/api/v1/data/${apiType}/${eid}`).catch(() => []))).then((rs) => {
-          if (!cancelled) {
-            let rows = rs.flat();
-            // Deduplicate ProcessData by cellId (multiple experiments may share the same cellId)
-            if (at === "ProcessData") {
-              const seen = new Map<string, any>();
-              for (const row of rows) {
-                const key = row.cellId || row.id;
-                if (!seen.has(key)) seen.set(key, row);
-                else {
-                  // Merge non-null fields from later rows
-                  const existing = seen.get(key);
-                  for (const [k, v] of Object.entries(row)) {
-                    if (v != null && v !== '' && (existing[k] == null || existing[k] === '')) existing[k] = v;
+      api.get<string[]>(`/api/v1/projects/${projectId}/procurement/invalid-internalcodes`).catch(() => []).then((invalidCodesData) => {
+        const invalidCodes = Array.isArray(invalidCodesData) ? invalidCodesData : [];
+        const tasks = Object.entries(setters).map(([at, [apiType, setter]]) => {
+          const ids = expIdsByType[at] || [];
+          if (!ids.length) { setter([]); setLoadedTypes((p) => [...p, apiType]); return; }
+          return Promise.all(ids.map((eid: string) => api.get<any[]>(`/api/v1/data/${apiType}/${eid}`).catch(() => []))).then((rs) => {
+            if (!cancelled) {
+              let rows = rs.flat();
+              // Deduplicate ProcessData by cellId (multiple experiments may share the same cellId)
+              if (at === "ProcessData") {
+                const seen = new Map<string, any>();
+                for (const row of rows) {
+                  const key = row.cellId || row.id;
+                  if (!seen.has(key)) seen.set(key, row);
+                  else {
+                    // Merge non-null fields from later rows
+                    const existing = seen.get(key);
+                    for (const [k, v] of Object.entries(row)) {
+                      if (v != null && v !== '' && (existing[k] == null || existing[k] === '')) existing[k] = v;
+                    }
                   }
                 }
+                rows = Array.from(seen.values());
               }
-              rows = Array.from(seen.values());
+              // Exclude rows belonging to invalid procurement groups
+              if (invalidCodes.length > 0) {
+                rows = rows.filter((r: any) => !isCellInvalid(r.cellId || r.cellName, invalidCodes));
+              }
+              setter(rows);
+              setLoadedTypes((p) => [...p, apiType]);
             }
-            setter(rows);
-            setLoadedTypes((p) => [...p, apiType]);
-          }
+          });
         });
+        Promise.all(tasks.filter(Boolean)).finally(() => { if (!cancelled) setDataLoading(false); });
       });
-      Promise.all(tasks.filter(Boolean)).finally(() => { if (!cancelled) setDataLoading(false); });
     }).catch(() => { });
     return () => { cancelled = true; };
   }, [projectId, activeTab, refetchTrigger]);
@@ -377,7 +382,7 @@ export function ProjectDetail() {
                           aria-current={isInProgress ? "step" : undefined}
                           onClick={(event) => {
                             if (!route) event.preventDefault();
-                            if (step.stepName === "battery_selection" && !isPending) setCellPickerOpen(true);
+                            if (step.stepName === "battery_selection" && !isPending) navigate(`/projects/${projectId}/cell-picker`);
                           }}
                           className={cn(
                             "group flex min-w-0 items-center gap-3 no-underline",
@@ -493,7 +498,7 @@ export function ProjectDetail() {
                     )}
 
                     {focusedStep.stepName === "battery_selection" && (
-                      <Button variant="primary" className="w-full" onClick={() => setCellPickerOpen(true)}>
+                      <Button variant="primary" className="w-full" onClick={() => navigate(`/projects/${projectId}/cell-picker`)}>
                         <Layers className="h-4 w-4" />
                         挑选实验电池 ({pickedCells.length})
                         <ChevronRight className="ml-auto h-4 w-4" />
@@ -539,13 +544,6 @@ export function ProjectDetail() {
           fastCharge={fastCharge} htCycle={htCycle} projectId={projectId!} />
       )}
 
-
-      {/* CellPicker */}
-      {(() => {
-        const pe = experiments.find((e) => (e as any).metadata?.assayType === "ProcessData") as any;
-        const isBatterySelectionCompleted = visibleSteps.find((s) => s.stepName === "battery_selection")?.status === "completed";
-        return pe ? <CellPicker open={cellPickerOpen} onClose={() => setCellPickerOpen(false)} projectId={projectId!} processExperimentId={pe.id} readonly={isBatterySelectionCompleted} onComplete={(cells) => { setPickedCells(cells); setRefetchTrigger((n) => n + 1); }} /> : null;
-      })()}
     </div>
   );
 }

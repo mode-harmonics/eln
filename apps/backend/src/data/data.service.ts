@@ -16,6 +16,8 @@ import { HtCycle } from '../entities/ht-cycle.entity';
 import { ProcessData } from '../entities/process-data.entity';
 import { StorageSwelling } from '../entities/storage-swelling.entity';
 import { Experiment } from '../entities/experiment.entity';
+import { ReagentProcurement } from '../entities/reagent-procurement.entity';
+import { ExperimentDesign } from '../entities/experiment-design.entity';
 
 import { ParserRegistry } from './parsers/parser.registry';
 import { CalendarLifeStepParser } from './parsers/calendar-life-step.parser';
@@ -92,6 +94,42 @@ export function computeProcessDataDerivedFields(p: Record<string, any>, ctx: Rec
   p.ceFirst = ceFirst !== null ? ceFirst.toFixed(6) : null;
 }
 
+export function matchCellToDesign(
+  cellId: string,
+  designs: ExperimentDesign[],
+): ExperimentDesign | undefined {
+  if (!cellId || !designs || designs.length === 0) return undefined;
+  const target = cellId.trim().toLowerCase();
+
+  // 1. Exact match on internalCode or group
+  const exact = designs.find(
+    (d) =>
+      (d.internalCode && d.internalCode.trim().toLowerCase() === target) ||
+      (d.group && d.group.trim().toLowerCase() === target),
+  );
+  if (exact) return exact;
+
+  // 2. Prefix match on group or internalCode with delimiter (-, _, .)
+  const prefixDelim = designs.find((d) => {
+    const g = d.group?.trim().toLowerCase();
+    const ic = d.internalCode?.trim().toLowerCase();
+    if (g && (target.startsWith(g + '-') || target.startsWith(g + '_') || target.startsWith(g + '.'))) return true;
+    if (ic && (target.startsWith(ic + '-') || target.startsWith(ic + '_') || target.startsWith(ic + '.'))) return true;
+    return false;
+  });
+  if (prefixDelim) return prefixDelim;
+
+  // 3. Fallback: prefix match
+  return designs.find((d) => {
+    const g = d.group?.trim().toLowerCase();
+    const ic = d.internalCode?.trim().toLowerCase();
+    if (g && target.startsWith(g)) return true;
+    if (ic && target.startsWith(ic)) return true;
+    return false;
+  });
+}
+
+
 const n = (v: any) => (v == null || v === '') ? null : Number(v);
 
 function computeCalendarDerivedFields(rows: any[]) {
@@ -145,6 +183,107 @@ function computeHtCycleDerivedFields(rows: any[]) {
     const cap = n(cur.dischargeCapacity);
     cur.capacityRetention = (cap != null && baseCap != null && baseCap !== 0) ? ((cap / baseCap) * 100).toFixed(6) : null;
   }
+}
+
+/** Count C(n, k) without computing all combinations. */
+function combinationsCount(n: number, k: number): number {
+  if (k > n) return 0;
+  let result = 1;
+  for (let i = 1; i <= k; i++) {
+    result = (result * (n - k + i)) / i;
+    if (result > 1e12) return Infinity; // cap at absurdly large
+  }
+  return result;
+}
+
+/** Generator: yield all k-element combinations from arr, in order. */
+function* combinations<T>(arr: T[], k: number): Generator<T[]> {
+  if (k === 0) { yield []; return; }
+  for (let i = 0; i <= arr.length - k; i++) {
+    for (const rest of combinations(arr.slice(i + 1), k - 1)) {
+      yield [arr[i], ...rest];
+    }
+  }
+}
+
+// ── Battery picking algorithm (matches battery_selector.py) ──
+
+interface CellRecord { cellId: string; QD1st: number; GR1: number; FVG: number; KU: number; groupName: string; }
+
+interface PickRule { testType: string; label: string; count: number; }
+
+const DEFAULT_PICK_RULES: PickRule[] = [
+  { testType: 'HtCycle',          label: '高温循环',        count: 5 },
+  { testType: 'DcrTest',          label: '4C DCR',           count: 2 },
+  { testType: 'EnergyEfficiency', label: '能效',              count: 1 },
+  { testType: 'CalendarLife',     label: '日历寿命',         count: 3 },
+  { testType: 'StorageSwelling',  label: '60℃存储胀气',     count: 3 },
+  { testType: 'FastCharge',       label: '快充时间',         count: 3 },
+];
+
+const PICK_METRICS = ['QD1st', 'GR1', 'FVG', 'KU'] as const;
+const PICK_MAX_COMBINATIONS = 50000;
+
+function pickCellsForGroup(groupCells: CellRecord[]): Record<string, string> {
+  const totalNeeded = DEFAULT_PICK_RULES.reduce((s, g) => s + g.count, 0);
+  const result: Record<string, string> = {};
+  if (groupCells.length < totalNeeded) return result;
+
+  // 1. z-score outlier removal on QD1st (abs(z) >= 2)
+  const qdValues = groupCells.map((r) => r.QD1st);
+  const mean = qdValues.reduce((s, v) => s + v, 0) / qdValues.length;
+  const variance = qdValues.reduce((s, v) => s + (v - mean) ** 2, 0) / qdValues.length;
+  const std = Math.sqrt(variance);
+  let candidates = groupCells.filter((_r, i) => { const z = std === 0 ? 0 : (qdValues[i] - mean) / std; return Math.abs(z) < 2; });
+  if (candidates.length < totalNeeded) candidates = groupCells;
+
+  // 2. global min-max normalization
+  const bounds: Record<string, { min: number; max: number }> = {};
+  for (const m of PICK_METRICS) { const vals = candidates.map((r) => r[m]); bounds[m] = { min: Math.min(...vals), max: Math.max(...vals) }; }
+  const normalized = new Map<string, Record<string, number>>();
+  for (const r of candidates) {
+    normalized.set(r.cellId, {});
+    for (const m of PICK_METRICS) { const { min, max } = bounds[m]; normalized.get(r.cellId)![m] = max === min ? 0 : (r[m] - min) / (max - min); }
+  }
+
+  // 3. sequential consistency-based selection
+  const available = new Set(candidates.map((r) => r.cellId));
+  const orderByOriginal = new Map(candidates.map((r, i) => [r.cellId, i]));
+
+  for (const rule of DEFAULT_PICK_RULES) {
+    const availArr = [...available];
+    if (availArr.length < rule.count) continue;
+
+    const combCount = combinationsCount(availArr.length, rule.count);
+    if (combCount > PICK_MAX_COMBINATIONS) {
+      const top = availArr.map((id) => ({ id, qd: candidates.find((r) => r.cellId === id)!.QD1st })).sort((a, b) => b.qd - a.qd).slice(0, rule.count).map((a) => a.id);
+      for (const id of top) { available.delete(id); result[id] = rule.testType; }
+      continue;
+    }
+
+    let bestKeys: string[] = [];
+    let bestScore: { score: number; maxRange: number; rangeVariance: number; orderSum: number } | null = null;
+
+    const metrics = PICK_METRICS as readonly string[];
+    for (const subset of combinations(availArr, rule.count)) {
+      const ranges = metrics.map((m) => { const vals = subset.map((k) => normalized.get(k)![m]); return Math.max(...vals) - Math.min(...vals); });
+      const score = ranges.reduce((s, v) => s + v, 0);
+      const maxRange = Math.max(...ranges);
+      const meanRange = score / ranges.length;
+      const rangeVariance = ranges.reduce((s, v) => s + (v - meanRange) ** 2, 0) / ranges.length;
+      const orderSum = subset.reduce((s, key) => s + (orderByOriginal.get(key) ?? 0), 0);
+
+      const cur = { score, maxRange, rangeVariance, orderSum };
+      if (!bestScore ||
+        cur.score < bestScore.score - 1e-12 ||
+        (Math.abs(cur.score - bestScore.score) < 1e-12 && cur.maxRange < bestScore.maxRange - 1e-12) ||
+        (Math.abs(cur.score - bestScore.score) < 1e-12 && Math.abs(cur.maxRange - bestScore.maxRange) < 1e-12 && cur.rangeVariance < bestScore.rangeVariance - 1e-12) ||
+        (Math.abs(cur.score - bestScore.score) < 1e-12 && Math.abs(cur.maxRange - bestScore.maxRange) < 1e-12 && Math.abs(cur.rangeVariance - bestScore.rangeVariance) < 1e-12 && cur.orderSum < bestScore.orderSum)
+      ) { bestKeys = subset; bestScore = cur; }
+    }
+    for (const id of bestKeys) { available.delete(id); result[id] = rule.testType; }
+  }
+  return result;
 }
 
 @Injectable()
@@ -398,6 +537,11 @@ export class DataService {
         (rowsByTable as any)['__deleteProcessData'] = true;
       }
 
+      // Fetch ExperimentDesign rows for this project to bind experimentDesignId and groupName
+      const projectDesigns = await this.dataSource.getRepository(ExperimentDesign).find({
+        where: { projectId: experiment.projectId },
+      });
+
       // Re-compute derived fields for the merged rows using context from ALL project steps
       for (const p of merged.values()) {
         const cellId = p['cellId'] as string;
@@ -409,6 +553,15 @@ export class DataService {
             if (p[key] == null || p[key] === '') {
               p[key] = val;
             }
+          }
+        }
+
+        // Bind experimentDesignId & groupName if matched
+        if (cellId && projectDesigns.length > 0) {
+          const matched = matchCellToDesign(cellId, projectDesigns);
+          if (matched) {
+            p.experimentDesignId = matched.id;
+            p.groupName = matched.group;
           }
         }
 
@@ -630,94 +783,83 @@ export class DataService {
     * Rank project cells by first discharge capacity and total formation
     * capacity, then allocate up to 17 cells across the configured tests.
    */
-    async autoPickCells(projectId: string): Promise<PickedCell[]> {
-    const TEST_ALLOCATION = [
-      { testType: 'CalendarLife', count: 3 },
-      { testType: 'StorageSwelling', count: 3 },
-      { testType: 'EnergyEfficiency', count: 3 },
-      { testType: 'DcrTest', count: 2 },
-      { testType: 'FastCharge', count: 3 },
-      { testType: 'HtCycle', count: 3 },
-    ];
-
+  async autoPickCells(projectId: string): Promise<PickedCell[]> {
     const exps = await this.dataSource.getRepository(Experiment).find({ where: { projectId } });
     const processExpIds = exps.filter((e) => (e.metadata as any)?.assayType === 'ProcessData').map(e => e.id);
-
     if (processExpIds.length === 0) {
-      throw new BadRequestException('No ProcessData experiment found for this project. Please import process data first.');
+      throw new BadRequestException('No ProcessData experiment found for this project.');
     }
 
-    const processRows = await this.dataSource.getRepository(ProcessData).find({
-      where: { experimentId: In(processExpIds) },
-    });
+    const processRows = await this.dataSource.getRepository(ProcessData).find({ where: { experimentId: In(processExpIds) } });
 
-    // Merge them by cellId
+    // ── Filter out procurement-invalid groups ──
+    const procRecords = await this.dataSource.getRepository(ReagentProcurement).find({ where: { projectId } });
+    const designRows = await this.dataSource.getRepository(ExperimentDesign).find({ where: { projectId } });
+    const designMap = new Map(designRows.map((d) => [d.id, d]));
+    const invalidDesignIds = new Set<string>();
+    const invalidKeys = new Set<string>();
+    for (const r of procRecords) {
+      if (!r.isValid && r.experimentDesignId) {
+        invalidDesignIds.add(r.experimentDesignId);
+        const d = designMap.get(r.experimentDesignId);
+        if (d?.group) invalidKeys.add(d.group.toLowerCase());
+        if (d?.internalCode) invalidKeys.add(d.internalCode.toLowerCase());
+      }
+    }
+
     const mergedRows = new Map<string, Record<string, unknown>>();
     for (const row of processRows) {
       if (!row.cellId) continue;
-      const existing = mergedRows.get(row.cellId) || {};
-      for (const [k, v] of Object.entries(row)) {
-        if (v != null && v !== '') existing[k] = v;
+      if (invalidDesignIds.size > 0 || invalidKeys.size > 0) {
+        if (row.experimentDesignId && invalidDesignIds.has(row.experimentDesignId)) continue;
+        if (row.groupName && invalidKeys.has(row.groupName.toLowerCase())) continue;
+        const nc = row.cellId.trim().toLowerCase();
+        if ([...invalidKeys].some((k) => nc === k || nc.startsWith(k + '-') || nc.startsWith(k + '_') || nc.startsWith(k + '.') || nc.startsWith(k))) continue;
       }
+      const existing = mergedRows.get(row.cellId) || {};
+      for (const [k, v] of Object.entries(row)) { if (v != null && v !== '') existing[k] = v; }
       mergedRows.set(row.cellId, existing);
     }
 
-    // Build records from cells that have cellId
-    const records: { id: string; QD1st: number; fqTotal: number }[] = [];
+    // Build CellRecord[]
+    const allRecords: CellRecord[] = [];
     for (const r of mergedRows.values()) {
       const cellId = r.cellId as string;
       if (!cellId) continue;
-      
-      const qd1st = r.gqd1 != null ? Number(r.gqd1) : null;
-      const fq1 = r.fq1 != null ? Number(r.fq1) : 0;
-      const fq2 = r.fq2 != null ? Number(r.fq2) : 0;
-      
-      records.push({ id: cellId, QD1st: qd1st ?? -999999, fqTotal: fq1 + fq2 });
+      const gqd1 = parseNum(r.gqd1), gr1 = parseNum(r.gr1), fvg = parseNum(r.fvg), ku = parseNum(r.ku);
+      if (gqd1 == null && gr1 == null && fvg == null && ku == null) continue;
+      const m = cellId.match(/^([A-Za-z]+)/);
+      allRecords.push({ cellId, groupName: m ? m[1] : cellId, QD1st: gqd1 ?? -999999, GR1: gr1 ?? 0, FVG: fvg ?? 0, KU: ku ?? 0 });
+    }
+    if (allRecords.length === 0) throw new BadRequestException('没有找到可用的电池数据。');
+
+    // Group → pickCellsForGroup
+    const byGroup = new Map<string, CellRecord[]>();
+    const groupOrder: string[] = [];
+    for (const r of allRecords) {
+      if (!byGroup.has(r.groupName)) { byGroup.set(r.groupName, []); groupOrder.push(r.groupName); }
+      byGroup.get(r.groupName)!.push(r);
     }
 
-    if (records.length === 0) {
-      throw new BadRequestException('没有找到可用的电池数据。');
-    }
-
-    // Sort: primary by QD1st (desc), secondary by fqTotal (desc)
-    records.sort((a, b) => {
-      if (a.QD1st !== b.QD1st) return b.QD1st - a.QD1st;
-      return b.fqTotal - a.fqTotal;
-    });
-
-    // Limit to 17 (or available)
-    const totalNeeded = TEST_ALLOCATION.reduce((sum, t) => sum + t.count, 0);
-    const sortedRecords = records.slice(0, totalNeeded);
-
-    // Allocate test types
-    let recordIndex = 0;
-    const assignments: { cellId: string, testType: string }[] = [];
-    for (const alloc of TEST_ALLOCATION) {
-      for (let i = 0; i < alloc.count; i++) {
-        if (recordIndex < sortedRecords.length) {
-          assignments.push({ cellId: sortedRecords[recordIndex].id, testType: alloc.testType });
-          recordIndex++;
-        }
+    const allAssignments: { cellId: string; testType: string }[] = [];
+    const totalNeeded = DEFAULT_PICK_RULES.reduce((s, g) => s + g.count, 0);
+    for (const groupName of groupOrder) {
+      const pool = byGroup.get(groupName)!;
+      if (pool.length < totalNeeded) {
+        this.logger.warn(`Group ${groupName}: ${pool.length} cells (< ${totalNeeded}), skipping`);
+        continue;
+      }
+      const picked = pickCellsForGroup(pool);
+      for (const [cellId, testType] of Object.entries(picked)) {
+        allAssignments.push({ cellId, testType });
       }
     }
+    this.logger.log(`Auto-pick ${projectId}: ${allAssignments.length} cells / ${groupOrder.length} groups.`);
 
-    // Log algorithm results for traceability
-    this.logger.log(`Auto-pick result for project ${projectId}: assigned ${assignments.length} cells.`);
-
-    // Replace existing picks
     const repo = this.dataSource.getRepository(PickedCell);
     await repo.delete({ projectId } as any);
-
-    const rows = assignments.map((a) => ({
-      id: uuid(),
-      projectId,
-      cellId: a.cellId,
-      testType: a.testType,
-      pickedBy: 'auto',
-    }));
-    const saved = (await repo.save(rows as any)) as PickedCell[];
-
-    return saved;
+    const rows = allAssignments.map((a) => ({ id: uuid(), projectId, cellId: a.cellId, testType: a.testType, pickedBy: 'auto' }));
+    return (await repo.save(rows as any)) as PickedCell[];
   }
 
   /** Get picked cells for a project */

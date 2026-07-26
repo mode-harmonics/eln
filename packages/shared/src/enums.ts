@@ -14,6 +14,7 @@ export enum ExperimentStatus {
   InReview = 'In Review',
   Approved = 'Approved',
   Archived = 'Archived',
+  Scrapped = 'Scrapped',
 }
 
 export enum ProjectStatus {
