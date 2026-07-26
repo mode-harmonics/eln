@@ -432,7 +432,7 @@ export const DataSummary: React.FC<SummaryDataProps> = (props) => {
             <Settings2 className="h-4 w-4 text-action" />
             {t("data_aggregation_heatmap")}
           </h2>
-          <p className="mt-1 text-xs text-gray-500">按实验分组对比关键指标均值；展开指标可查看电池分布与离群值。</p>
+          <p className="mt-1 text-xs text-gray-500">{t("data_summary_hint")}</p>
         </div>
         <div className="flex items-center gap-3 self-start rounded-control border border-border bg-white px-3 py-2 xl:self-auto">
             <label className="whitespace-nowrap text-xs font-medium text-gray-500">

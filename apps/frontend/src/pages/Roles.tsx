@@ -510,16 +510,16 @@ export function Roles() {
               <TableBody>
                 {permRow("projects", t("projects"))}
                 {permRow("experiments", t("experiments"))}
-                {specialActionRow("experiments", "approve", "审批 (Approve)")}
-                {specialActionRow("experiments", "archive", "归档 (Archive)")}
+                {specialActionRow("experiments", "approve", `${t("approve_experiments")} (Approve)`)}
+                {specialActionRow("experiments", "archive", `${t("edit")} (Archive)`)}
                 {dataGroup()}
                 {permRow("workflow", "工作流")}
                 {specialActionRow("workflow", "transition", "提交步骤 (Transition)")}
                 {permRow("users", t("user_management"))}
                 {permRow("roles", t("role_management"))}
-                {permRow("experiment_design", "实验设计")}
-                {permRow("procurement", "试剂采购")}
-                {permRow("dashboard", "仪表盘")}
+                {permRow("experiment_design", t("experiment_design"))}
+                {permRow("procurement", t("reagent_procurement"))}
+                {permRow("dashboard", t("dashboard"))}
               </TableBody>
             </Table>
           </TableWrapper>

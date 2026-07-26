@@ -1,18 +1,20 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Button } from "../components/Button";
 import { Logo } from "../components/Logo";
 import { api, ApiError } from "../lib/api";
 import { Surface } from "../components/Surface";
 
 const DEV_ACCOUNTS = [
-  { username: "pi", label: "Owner (PI)", color: "bg-purple-500" },
-  { username: "admin", label: "Admin", color: "bg-blue-500" },
-  { username: "editor", label: "Editor", color: "bg-emerald-500" },
-  { username: "viewer", label: "Viewer", color: "bg-gray-500" },
+  { username: "pi", labelKey: "dev_account_pi", color: "bg-purple-500" },
+  { username: "admin", labelKey: "dev_account_admin", color: "bg-blue-500" },
+  { username: "editor", labelKey: "dev_account_editor", color: "bg-emerald-500" },
+  { username: "viewer", labelKey: "dev_account_viewer", color: "bg-gray-500" },
 ];
 
 export function Login() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -38,9 +40,9 @@ export function Login() {
       navigate("/projects");
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.status === 401 ? "用户名或密码不正确" : err.message);
+        setError(err.status === 401 ? t("invalid_credentials") : err.message);
       } else {
-        setError("网络错误，请稍后重试");
+        setError(t("network_error"));
       }
     } finally {
       setLoading(false);
@@ -50,7 +52,7 @@ export function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setError("请输入用户名和密码");
+      setError(t("enter_credentials"));
       return;
     }
     await doLogin(username, password);
@@ -68,13 +70,13 @@ export function Login() {
         <div className="text-center mb-8 flex flex-col items-center">
            <Logo className="text-2xl mb-6 justify-center" />
           <h2 className="text-2xl font-bold text-gray-900">
-            Electronic Lab Notebook
+            {t("app_title")}
           </h2>
         </div>
         <form className="space-y-5" onSubmit={handleLogin}>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="username">
-                Username
+                {t("username")}
               </label>
               <input
                 id="username"
@@ -87,7 +89,7 @@ export function Login() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="password">
-                Password
+                {t("password")}
               </label>
               <input
                 id="password"
@@ -109,7 +111,7 @@ export function Login() {
               loading={loading}
               className="w-full justify-center py-2.5"
             >
-              Login
+              {t("sign_in")}
             </Button>
           </div>
         </form>
@@ -117,7 +119,7 @@ export function Login() {
         {/* Dev quick login */}
         <div className="mt-8 pt-6 border-t border-gray-100">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 text-center">
-            Dev — Quick Login (Password123!)
+            {t("dev_account")}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {DEV_ACCOUNTS.map((acc) => (
@@ -129,7 +131,7 @@ export function Login() {
                 className="flex items-center gap-2 px-3 py-2 rounded border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-50"
               >
                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${acc.color}`} />
-                {acc.label}
+                {t(acc.labelKey)}
               </button>
             ))}
           </div>

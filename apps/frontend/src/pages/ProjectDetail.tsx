@@ -294,13 +294,13 @@ export function ProjectDetail() {
     <div className="flex min-h-0 flex-col space-y-4">
       <PageHeader
         title={project.name}
-        description={project.description || "暂无项目描述"}
+        description={project.description || t("no_description")}
         badges={<span className={cn(
               "inline-flex items-center gap-1.5 rounded bg-gray-100 px-2 py-1 text-xs font-medium",
               project.status === "Approved" ? "text-green-700" : "text-gray-700"
             )}>
               <span className={cn("h-1.5 w-1.5 rounded-full", project.status === "Approved" ? "bg-green-500" : "bg-gray-500")}></span>
-              {project.status || "In Progress"}
+              {t(project.status === "Approved" ? "status_approved" : project.status === "Active" ? "status_active" : project.status === "Draft" ? "status_draft" : project.status === "In Review" ? "status_in_review" : "status_active")}
             </span>}
         actions={currentStep ? (
           <div className="flex shrink-0 items-center gap-2 text-[13px] sm:pt-1">
@@ -318,7 +318,7 @@ export function ProjectDetail() {
           { key: "workflow", label: t("workflow", "工作流程进度") },
           ...(isCreator ? [
             { key: "summary", label: t("data_summary", "数据概览") },
-            { key: "raw_data", label: "数据汇总" },
+            { key: "raw_data", label: t("project_data_overview") },
           ] : []),
         ]}
         activeKey={activeTab}
@@ -354,7 +354,7 @@ export function ProjectDetail() {
             <section className="overflow-hidden rounded-lg bg-gray-50/70">
               <div className="px-5 pb-3 pt-5 sm:px-6">
                 <h2 className="text-[15px] font-semibold text-gray-900">{t("workflow", "工作流程")}</h2>
-                <p className="mt-1 text-xs text-gray-500">按实验阶段查看任务状态、负责人和数据记录</p>
+                <p className="mt-1 text-xs text-gray-500">{t("workflow_subtitle")}</p>
               </div>
 
               {wfLoading ? (
@@ -570,12 +570,13 @@ function stepRoute(stepName: string, projectId: string, experiments: Experiment[
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    pending: { label: "待处理", cls: "bg-gray-100 text-gray-500" },
-    in_progress: { label: "进行中", cls: "bg-action-subtle text-action-muted font-medium" },
-    completed: { label: "已完成", cls: "bg-emerald-100/80 text-emerald-700 font-medium" },
-    skipped: { label: "已跳过", cls: "bg-gray-100 text-gray-400" },
+  const { t } = useTranslation();
+  const map: Record<string, { key: string; cls: string }> = {
+    pending: { key: "step_pending", cls: "bg-gray-100 text-gray-500" },
+    in_progress: { key: "step_in_progress", cls: "bg-action-subtle text-action-muted font-medium" },
+    completed: { key: "step_completed", cls: "bg-emerald-100/80 text-emerald-700 font-medium" },
+    skipped: { key: "step_skipped", cls: "bg-gray-100 text-gray-400" },
   };
   const s = map[status] || map.pending;
-  return <span className={cn("text-[10px] px-2 py-0.5 rounded-md shrink-0", s.cls)}>{s.label}</span>;
+  return <span className={cn("text-[10px] px-2 py-0.5 rounded-md shrink-0", s.cls)}>{t(s.key)}</span>;
 }

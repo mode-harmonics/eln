@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, X, Download, Trash2, FileIcon, Loader2, CloudUpload } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../lib/api";
 import { toast } from "./Toast";
 import { cn } from "../lib/utils";
@@ -24,6 +25,7 @@ function formatBytes(bytes: number): string {
 }
 
 function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) => void }) {
+  const { t } = useTranslation();
   const [deleting, setDeleting] = useState(false);
 
   const handleDownload = () => {
@@ -47,7 +49,7 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
         a.remove();
         URL.revokeObjectURL(url);
       })
-      .catch(() => toast.error("下载失败"));
+      .catch(() => toast.error(t("download_failed")));
   };
 
   const handleDelete = async () => {
@@ -56,7 +58,7 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
       await api.delete(`/api/v1/temp-files/${file.id}`);
       onDelete(file.id);
     } catch {
-      toast.error("删除失败");
+      toast.error(t("delete_failed"));
     } finally {
       setDeleting(false);
     }
@@ -74,20 +76,20 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
       <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
         <button
           type="button"
-          aria-label={`下载 ${file.name}`}
+          aria-label={`${t("download")} ${file.name}`}
           onClick={handleDownload}
           className="p-1.5 rounded-md text-gray-400 hover:text-action hover:bg-action-subtle transition-colors"
-          title="下载"
+          title={t("download")}
         >
           <Download className="w-3.5 h-3.5" />
         </button>
         <button
           type="button"
-          aria-label={`删除 ${file.name}`}
+          aria-label={`${t("delete")} ${file.name}`}
           onClick={handleDelete}
           disabled={deleting}
           className="p-1.5 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-          title="删除"
+          title={t("delete")}
         >
           {deleting ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -101,6 +103,7 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
 }
 
 export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
+  const { t } = useTranslation();
   const [files, setFiles] = useState<TempFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -128,9 +131,9 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
     try {
       const added = await api.upload<TempFile[]>("/api/v1/temp-files/upload", form);
       setFiles((prev) => [...(added || []), ...prev]);
-      toast.success(`已上传 ${fileList.length} 个文件`);
+      toast.success(t("upload_count", { count: fileList.length }));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "上传失败");
+      toast.error(err instanceof ApiError ? err.message : t("upload_failed"));
     } finally {
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -177,13 +180,13 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
               <CloudUpload className="w-4 h-4 text-action" />
             </div>
             <div>
-              <h3 id="temp-files-title" className="text-sm font-semibold text-gray-900">临时文件</h3>
-              <p className="text-xs text-gray-400">服务重启后自动清空</p>
+              <h3 id="temp-files-title" className="text-sm font-semibold text-gray-900">{t("temp_files")}</h3>
+              <p className="text-xs text-gray-400">{t("temp_files_auto_clear")}</p>
             </div>
           </div>
           <button
             type="button"
-            aria-label="关闭"
+            aria-label={t("close")}
             onClick={onClose}
             className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
           >
@@ -246,7 +249,7 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
           {files.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
               <FileIcon className="w-8 h-8 opacity-30" />
-              <p className="text-sm">暂无文件</p>
+              <p className="text-sm">{t("no_cells_available")}</p>
             </div>
           ) : (
             <div className="px-2 py-2">

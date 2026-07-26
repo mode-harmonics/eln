@@ -33,9 +33,9 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
       for (let i = 0; i < files.length; i++) form.append("files", files[i]);
       form.append("mode", "merge");
       await api.upload(`/api/v1/data/upload-project/${props.projectId}`, form);
-      toast.success("导入成功，请刷新页面查看数据");
+      toast.success(t("import_success_refresh"));
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "导入失败");
+      toast.error(err instanceof ApiError ? err.message : t("import_failed"));
     } finally {
       setUploading(false);
       if (uploadInputRef.current) uploadInputRef.current.value = "";
@@ -83,7 +83,7 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Export failed", error);
-      alert("导出失败，请稍后重试");
+      alert(t("export_failed"));
     }
   };
 
@@ -93,9 +93,9 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-[15px] font-semibold text-gray-900">
             <Database className="h-4 w-4 text-action" />
-            项目全量数据汇总
+            {t("project_data_overview")}
           </h2>
-          <p className="mt-1 text-xs text-gray-500">按数据类型浏览项目记录，并集中导入或导出 Excel 数据。</p>
+          <p className="mt-1 text-xs text-gray-500">{t("project_data_overview_desc")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input
@@ -108,11 +108,11 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
           />
           <Button variant="secondary" size="sm" onClick={() => uploadInputRef.current?.click()} loading={uploading}>
             <UploadCloud className="w-4 h-4" />
-            导入全量数据
+            {t("import_summary")}
           </Button>
           <Button variant="secondary" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4" />
-            导出全量数据
+            {t("export_summary")}
           </Button>
         </div>
       </div>

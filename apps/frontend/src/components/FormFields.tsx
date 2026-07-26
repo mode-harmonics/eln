@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useId } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { Check, ChevronDown, X, Search } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -238,6 +239,7 @@ export function MultiSelect({
   error,
   ...props
 }: MultiSelectProps) {
+  const { t } = useTranslation();
   const triggerId = useId();
   const listboxId = useId();
   const [open, setOpen] = useState(false);
@@ -419,7 +421,7 @@ export function MultiSelect({
                 type="text"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                placeholder="搜索..."
+                placeholder={t("search")}
                 className="w-full pl-6 pr-2 py-1 text-xs border border-gray-200 rounded-md focus:outline-none focus:border-gray-500 focus:ring-1 focus:ring-gray-300"
                 onKeyDown={(e) => e.stopPropagation()}
               />
@@ -442,7 +444,7 @@ export function MultiSelect({
                   allSelected ? "text-action-muted" : "text-gray-500 hover:text-action-muted"
                 )}
               >
-                {allSelected ? "取消全选" : "全选"}
+                {allSelected ? t("deselect_all") : t("select_all")}
               </button>
               {value.length > 0 && (
                 <>
@@ -452,7 +454,7 @@ export function MultiSelect({
                     onClick={handleClearAll}
                     className="text-xs text-gray-500 hover:text-red-500 font-medium transition-colors"
                   >
-                    {"清除"}
+                    {t("clear")}
                   </button>
                 </>
               )}

@@ -247,10 +247,10 @@ function RowActions({ row, type, onRefresh, editing, onStartEdit, onSave, onCanc
   return (
     <>
       <div className="flex items-center justify-center gap-1">
-        <Tooltip content="Edit">
+        <Tooltip content={t("edit_row")}>
           <button onClick={onStartEdit} className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
         </Tooltip>
-        <Tooltip content="Delete">
+        <Tooltip content={t("delete_row")}>
           <Popconfirm
             title={t("delete_row_confirm")}
             onConfirm={async () => {
@@ -258,7 +258,7 @@ function RowActions({ row, type, onRefresh, editing, onStartEdit, onSave, onCanc
                 await api.delete(`/api/v1/data/${type}/${rowId}`);
                 onRefresh();
               } catch (err: any) {
-                alert(err?.message ?? "Delete failed");
+                alert(err?.message ?? t("delete_failed"));
               }
             }}
             placement="left"

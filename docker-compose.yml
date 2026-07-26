@@ -37,6 +37,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      RUN_SEED: ${RUN_SEED:-true}
       DATABASE_URL: postgresql://${DB_USER:-eln}:${DB_PASSWORD:-eln}@db:5432/${DB_NAME:-eln}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}

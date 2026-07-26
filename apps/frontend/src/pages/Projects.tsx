@@ -32,16 +32,16 @@ import type { Project } from "../types";
 import { Popconfirm } from "../components/Popconfirm";
 import { toast } from "../components/Toast";
 
-function projectStatusBadge(project: any) {
+function projectStatusBadge(project: any, t: (key: string) => string) {
   const wf = project.workflowStatus;
   const cls = wf === "Completed" ? "bg-green-50 text-green-700"
     : wf === "Active" ? "bg-action-subtle text-action-muted"
       : wf === "Paused" ? "bg-amber-50 text-amber-700"
         : "bg-gray-100 text-gray-400";
-  const label = wf === "Completed" ? "已完成"
-    : wf === "Active" ? "进行中"
-      : wf === "Paused" ? "已暂停"
-        : "未配置";
+  const label = wf === "Completed" ? t("status_completed")
+    : wf === "Active" ? t("status_active")
+      : wf === "Paused" ? t("status_paused")
+        : t("status_not_configured");
   return <span className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }
 
@@ -147,7 +147,7 @@ export function Projects() {
       }
     }
     if (missing.length > 0) {
-      setAssignmentError(`请为以下步骤指定至少一个执行人: ${missing.join(", ")}`);
+      setAssignmentError(t("assignee_required", { steps: missing.join(", ") }));
       return;
     }
     setAssignmentError(null);
@@ -311,7 +311,7 @@ export function Projects() {
                   </TableCell>
                   <TableCell>{project.creator?.fullName || project.createdBy}</TableCell>
                   <TableCell>
-                    {projectStatusBadge(project)}
+                    {projectStatusBadge(project, t)}
                   </TableCell>
                   <TableCell>{format(new Date(project.createdAt), "MMM d, yyyy")}</TableCell>
                   {hasPermission("projects:write") && (

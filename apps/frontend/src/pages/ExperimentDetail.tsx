@@ -482,14 +482,14 @@ export function ExperimentDetail() {
             items={[
               ...(canWrite && !isReadOnly ? [{
                 id: "edit",
-                label: "编辑",
+                label: t("edit_info"),
                 icon: <Edit3 className="w-3.5 h-3.5 text-gray-500" />,
                 title: t("edit", "编辑信息"),
                 onClick: openEditModal
               }] : []),
               {
                 id: "attachments",
-                label: "附件",
+                label: t("attachments"),
                 icon: <Paperclip className="w-3.5 h-3.5 text-gray-500" />,
                 title: t("attachments", "附件"),
                 onClick: () => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); },
@@ -569,7 +569,7 @@ export function ExperimentDetail() {
                 )}
               </div>
               {dataView === "raw" && rawSteps.length > 0 && (
-                <span className="text-xs text-gray-400">{rawSteps.length} 行{isProcessData ? (rawSource === "formation" ? " (化成)" : " (定容)") : ""}</span>
+                <span className="text-xs text-gray-400">{rawSteps.length} {t("total")}{isProcessData ? ` (${rawSource === "formation" ? t("raw_formation") : t("raw_grading")})` : ""}</span>
               )}
             </div>
 
@@ -602,15 +602,15 @@ export function ExperimentDetail() {
                     <tr>
                       {[
                         { label: t("col_step_no", "工步号"), field: "stepNo" },
-                        { label: "工步序号", field: "stepSeqNo" },
-                        { label: t("col_raw_cycle", "循环号"), field: "cycleNo" },
-                        { label: t("col_raw_cell", "电池"), field: "cellName", sticky: true },
-                        { label: t("col_raw_step_type", "工步类型"), field: "stepType" },
-                        { label: t("col_raw_capacity", "容量"), field: "capacity", numeric: true },
-                        { label: "起始电压", field: "startVoltage", numeric: true },
-                        { label: "结束电压", field: "endVoltage", numeric: true },
-                        { label: "起始电流", field: "startCurrent", numeric: true },
-                        { label: "结束电流", field: "endCurrent", numeric: true },
+                        { label: t("col_step_no"), field: "stepSeqNo" },
+                        { label: t("col_raw_cycle"), field: "cycleNo" },
+                        { label: t("col_raw_cell"), field: "cellName", sticky: true },
+                        { label: t("col_raw_step_type"), field: "stepType" },
+                        { label: t("col_raw_capacity"), field: "capacity", numeric: true },
+                        { label: t("col_start_voltage"), field: "startVoltage", numeric: true },
+                        { label: t("col_end_voltage"), field: "endVoltage", numeric: true },
+                        { label: t("col_start_current"), field: "startCurrent", numeric: true },
+                        { label: t("col_end_current"), field: "endCurrent", numeric: true },
                         { label: t("col_step_time", "工步时间"), field: "stepTime", numeric: true },
                       ].map((h) => (
                         <th

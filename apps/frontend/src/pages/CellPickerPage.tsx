@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Loader2, Sparkles, Check, Layers } from "lucide-react";
 import { Button } from "../components/Button";
 import { SegmentedControl } from "../components/SegmentedControl";
@@ -63,15 +64,16 @@ function getGroupFromCellId(cellId: string): string {
 }
 
 const TEST_TYPES = [
-  { value: "HtCycle", label: "高温循环", target: 5 },
-  { value: "DcrTest", label: "4C DCR", target: 2 },
-  { value: "EnergyEfficiency", label: "能效", target: 1 },
-  { value: "CalendarLife", label: "日历寿命", target: 3 },
-  { value: "StorageSwelling", label: "60℃存储胀气", target: 3 },
-  { value: "FastCharge", label: "快充时间", target: 3 },
+  { value: "HtCycle", labelKey: "ht_cycle", target: 5 },
+  { value: "DcrTest", labelKey: "dcr_test", target: 2 },
+  { value: "EnergyEfficiency", labelKey: "energy_efficiency", target: 1 },
+  { value: "CalendarLife", labelKey: "calendar_life", target: 3 },
+  { value: "StorageSwelling", labelKey: "storage_swelling", target: 3 },
+  { value: "FastCharge", labelKey: "fast_charge", target: 3 },
 ];
 
 export function CellPickerPage() {
+  const { t } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
 
@@ -81,7 +83,7 @@ export function CellPickerPage() {
   const [autoPicking, setAutoPicking] = useState(false);
   const [saving, setSaving] = useState(false);
   const [readonly, setReadonly] = useState(false);
-  const [activeGroup, setActiveGroup] = useState<string>("全部");
+  const [activeGroup, setActiveGroup] = useState<string>(t("all"));
 
   const loadData = useCallback(async () => {
     if (!projectId) return;
@@ -127,7 +129,7 @@ export function CellPickerPage() {
 
       setCells(deduped);
       setSelected(initSelected);
-    } catch { toast("加载电池数据失败", "error"); }
+    } catch { toast(t("load_cell_data_failed", "加载电池数据失败"), "error"); }
     finally { setLoading(false); }
   }, [projectId]);
 
@@ -143,7 +145,7 @@ export function CellPickerPage() {
       await api.post(`/api/v1/data/pick-cells/${projectId}`, { mode: "auto" });
       try { await api.post(`/api/v1/data/sync-cells/${projectId}`, {}); } catch { }
       await loadData();
-      toast("已自动分配电池，表格已同步", "success");
+      toast(t("auto_assign_synced"), "success");
     } catch (err: any) { toast(err?.message ?? "自动挑选失败", "error"); }
     finally { setAutoPicking(false); }
   };
@@ -155,7 +157,7 @@ export function CellPickerPage() {
       await api.post(`/api/v1/data/pick-cells/${projectId}`, { mode: "manual", assignments });
       await api.post(`/api/v1/data/sync-cells/${projectId}`, {});
       try { await api.put(`/api/v1/workflow/instances/${projectId}/transition`, {}); } catch { }
-      toast(`已挑选并分配 ${assignments.length} 个电池`, "success");
+      toast(t("pick_assign_success", { count: assignments.length }), "success");
       navigate(`/projects/${projectId}`);
     } catch (err: any) { toast(err?.message ?? "操作失败", "error"); }
     finally { setSaving(false); }
@@ -163,13 +165,13 @@ export function CellPickerPage() {
 
   // Group tabs
   const groupNames = [...new Set(cells.map((c) => getGroupFromCellId(String(c.cellId))).sort())];
-  const groups = ["全部", ...groupNames];
-  const displayCells = activeGroup === "全部"
+  const groups = [t("all"), ...groupNames];
+  const displayCells = activeGroup === t("all")
     ? cells
     : cells.filter((c) => getGroupFromCellId(String(c.cellId)) === activeGroup);
 
   const displayAssignedCount = Object.keys(selected).filter((id) => displayCells.some((c) => c.cellId === id)).length;
-  const targetMultiplier = activeGroup === "全部" ? groupNames.length : 1;
+  const targetMultiplier = activeGroup === t("all") ? groupNames.length : 1;
   const countsPerType: Record<string, number> = {};
   displayCells.forEach((c) => {
     const t = selected[c.cellId];
@@ -191,28 +193,28 @@ export function CellPickerPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="挑选与分配电池" description="所有制程数据一览，手动或自动为后续测试挑选电池" onBack={() => navigate(`/projects/${projectId}`)} />
+      <PageHeader title={t("pick_assign_title")} description={t("pick_assign_desc")} onBack={() => navigate(`/projects/${projectId}`)} />
       <div className="rounded-surface border border-border bg-surface-subtle px-5 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4 text-[13px]">
-            <span className="font-medium text-gray-700">分组 <span className="text-action-muted">{groupNames.length}</span></span>
+            <span className="font-medium text-gray-700">{t("group")} <span className="text-action-muted">{groupNames.length}</span></span>
             <span className="text-gray-300">|</span>
-            <span className="font-medium text-gray-700">可用电池 <span className="text-action-muted">{displayCells.length}</span></span>
+            <span className="font-medium text-gray-700">{t("available_cells")} <span className="text-action-muted">{displayCells.length}</span></span>
             <span className="text-gray-300">|</span>
-            <span className="font-medium text-gray-700">已分配 <span className="text-action-muted">{displayAssignedCount}</span></span>
+            <span className="font-medium text-gray-700">{t("assigned")} <span className="text-action-muted">{displayAssignedCount}</span></span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {!readonly && <Button variant="secondary" size="sm" onClick={handleAutoPick} loading={autoPicking} disabled={autoPicking || cells.length === 0}><Sparkles className="w-3.5 h-3.5 mr-1" />{autoPicking ? "自动分配中..." : "自动分配（每组17只）"}</Button>}
-            {!readonly && <Button size="sm" onClick={handleSave} loading={saving} disabled={saving || displayAssignedCount === 0}><Check className="w-3.5 h-3.5 mr-1" />确认分配</Button>}
-            {readonly && <span className="text-sm text-amber-600 font-medium">挑选流程已完成，当前仅供查看</span>}
+            {!readonly && <Button variant="secondary" size="sm" onClick={handleAutoPick} loading={autoPicking} disabled={autoPicking || cells.length === 0}><Sparkles className="w-3.5 h-3.5 mr-1" />{autoPicking ? t("auto_assigning") : t("auto_assign_default")}</Button>}
+            {!readonly && <Button size="sm" onClick={handleSave} loading={saving} disabled={saving || displayAssignedCount === 0}><Check className="w-3.5 h-3.5 mr-1" />{t("confirm_assign")}</Button>}
+            {readonly && <span className="text-sm text-amber-600 font-medium">{t("pick_completed_readonly")}</span>}
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          {TEST_TYPES.map((t) => {
-            const count = countsPerType[t.value] || 0;
-            const target = t.target * targetMultiplier;
+          {TEST_TYPES.map((tt) => {
+            const count = countsPerType[tt.value] || 0;
+            const target = tt.target * targetMultiplier;
             const ok = count >= target;
-            return <div key={t.value} className={cn("rounded-control border px-2.5 py-1 text-xs font-medium", ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : count > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-500")}>{t.label}: {count}/{target}</div>;
+            return <div key={tt.value} className={cn("rounded-control border px-2.5 py-1 text-xs font-medium", ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : count > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-gray-200 bg-white text-gray-500")}>{t(tt.labelKey)}: {count}/{target}</div>;
           })}
         </div>
       </div>
@@ -233,9 +235,9 @@ export function CellPickerPage() {
         <div className="overflow-auto max-h-[calc(100vh-380px)] rounded-surface border border-border bg-white">
           <table className="min-w-max border-collapse">
             <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-              <th className={cn(thClass, "sticky left-0 z-20 min-w-[130px]")}>电池编号</th>
+              <th className={cn(thClass, "sticky left-0 z-20 min-w-[130px]")}>{t("cell_id")}</th>
               {dataCols.map((c) => <th key={c.field} className={cn(thClass, PD_COLOR[c.field] ?? "", "min-w-[90px]")}>{c.label}</th>)}
-              <th className="sticky right-0 z-20 bg-gray-50 px-3 py-2 w-44 text-center text-[11px] font-semibold text-gray-500 whitespace-nowrap">分配测试类型</th>
+              <th className="sticky right-0 z-20 bg-gray-50 px-3 py-2 w-44 text-center text-[11px] font-semibold text-gray-500 whitespace-nowrap">{t("assign_test_type")}</th>
             </tr></thead>
             <tbody className="bg-white divide-y divide-gray-100">
               {displayCells.map((cell) => {
@@ -260,8 +262,8 @@ export function CellPickerPage() {
                           readonly && "opacity-60 cursor-not-allowed bg-gray-50",
                         )}
                       >
-                        <option value="">-- 未分配 --</option>
-                        {TEST_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        <option value="">{t("not_assigned")}</option>
+                        {TEST_TYPES.map((tt) => <option key={tt.value} value={tt.value}>{t(tt.labelKey)}</option>)}
                       </select>
                     </td>
                   </tr>

@@ -106,7 +106,7 @@ export function Profile() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm">
                   <Shield className="w-4 h-4 text-gray-400" />
-                  {profile.roleName || "No Role"}
+                  {profile.roleName || t("profile_no_role")}
                 </div>
               </div>
             </div>

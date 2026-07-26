@@ -306,7 +306,8 @@ function HtCycleChart({ data }: { data: any[] }) {
 }
 
 function EmptyChart() {
-  return <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">暂无数据</div>;
+  const { t } = useTranslation();
+  return <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">{t("no_data")}</div>;
 }
 
 /* ── main component ───────────────────────────────────── */
