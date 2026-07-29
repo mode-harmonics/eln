@@ -18,6 +18,7 @@ import { PickedCell } from '../entities/picked-cell.entity';
 import { User } from '../entities/user.entity';
 import { ExperimentDesign } from '../entities/experiment-design.entity';
 import { ProcessData } from '../entities/process-data.entity';
+import { SolutionPreparation } from '../entities/solution-preparation.entity';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { StepStatus, type WorkflowStepDefinition } from '@eln/shared';
@@ -49,6 +50,7 @@ export class WorkflowService {
 
   // Step name → assayType mapping for auto-creating experiments
   private readonly STEP_ASSAY_MAP: Record<string, string> = {
+    solution_preparation: 'SolutionPreparation',
     drying_injection: 'ProcessData',
     formation: 'ProcessData',
     second_sealing: 'ProcessData',
@@ -64,6 +66,7 @@ export class WorkflowService {
   // Step name → Chinese label mapping for experiment titles
   private readonly STEP_LABEL_MAP: Record<string, string> = {
     experiment_design: '实验设计',
+    solution_preparation: '配液',
     drying_injection: '干燥/注液',
     formation: '化成',
     second_sealing: '二封',
@@ -584,6 +587,11 @@ export class WorkflowService {
     if (assayType === 'ProcessData') {
       await this.prefillProcessDataCells(projectId, saved.id);
     }
+
+    // ── For SolutionPreparation, pre-fill rows with groups from experiment design ──
+    if (assayType === 'SolutionPreparation') {
+      await this.prefillSolutionPreparationGroups(projectId, saved.id);
+    }
   }
 
   /**
@@ -623,6 +631,49 @@ export class WorkflowService {
     if (rows.length > 0) {
       await processRepo.save(rows);
       this.logger.log(`Pre-filled ${rows.length} ProcessData rows for experiment ${experimentId}`);
+    }
+  }
+
+  /**
+   * Pre-fill SolutionPreparation rows with groups from experiment design.
+   * Each experiment design group → one empty row (配方A, 配方B...).
+   * Users can then add more material rows per formula.
+   */
+  private async prefillSolutionPreparationGroups(projectId: string, experimentId: string): Promise<void> {
+    const designs = await this.dataSource.getRepository(ExperimentDesign).find({
+      where: { projectId, isRedundancy: false },
+      order: { rowIndex: 'ASC' },
+    });
+    if (designs.length === 0) {
+      this.logger.log(`No experiment designs found for project ${projectId}, skipping SolutionPreparation pre-fill`);
+      return;
+    }
+
+    const solutionRepo = this.dataSource.getRepository(SolutionPreparation);
+    const rows: SolutionPreparation[] = [];
+
+    // Get unique groups (may have multiple design rows per group)
+    const seenGroups = new Set<string>();
+    for (const design of designs) {
+      if (seenGroups.has(design.group)) continue;
+      seenGroups.add(design.group);
+
+      rows.push(
+        solutionRepo.create({
+          id: uuid(),
+          experimentId,
+          groupName: design.group,
+          materialName: '',
+          specification: null,
+          formulaAmount: null,
+          actualAmount: null,
+        }),
+      );
+    }
+
+    if (rows.length > 0) {
+      await solutionRepo.save(rows);
+      this.logger.log(`Pre-filled ${rows.length} SolutionPreparation rows for experiment ${experimentId}`);
     }
   }
 
@@ -729,6 +780,56 @@ export class WorkflowService {
       currentStepName: null,
     };
   }
+
+  // ════════════════════════════════════════════════════════════════
+  //  DEFAULT TEMPLATE STEPS — canonical step list for frontend
+  // ════════════════════════════════════════════════════════════════
+
+  /**
+   * Return the default template's flattened step definitions with
+   * data types resolved. This is the single source of truth for
+   * step ordering, labels, and data types consumed by the frontend.
+   */
+  async getDefaultTemplateSteps(): Promise<{
+    steps: Array<{
+      name: string;
+      label: string;
+      builtInStep: string | null;
+      dataType: string | null;
+      isParallel: boolean;
+      parallelChildren: string[];
+      sortOrder: number;
+    }>;
+  }> {
+    const tpl = await this.getDefaultTemplate();
+    const steps = tpl.steps
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((s) => ({
+        name: s.name,
+        label: s.label,
+        builtInStep: s.builtInStep ?? null,
+        dataType: this.STEP_DATA_TYPE[s.name] ?? null,
+        isParallel: s.isParallel ?? false,
+        parallelChildren: s.parallelChildren ?? [],
+        sortOrder: s.sortOrder,
+      }));
+    return { steps };
+  }
+
+  // Map step name → API data type string (mirrors shared/workflow.ts)
+  private readonly STEP_DATA_TYPE: Record<string, string> = {
+    solution_preparation: 'solution',
+    drying_injection: 'process',
+    formation: 'process',
+    second_sealing: 'process',
+    capacity_grading: 'process',
+    calendar_life: 'calendar',
+    storage_swelling: 'swelling',
+    energy_efficiency: 'efficiency',
+    dcr_test: 'dcr',
+    fast_charge: 'fastcharge',
+    ht_cycle: 'htcycle',
+  };
 
   // ════════════════════════════════════════════════════════════════
   //  INTERNAL

@@ -34,6 +34,7 @@ export enum InventoryStatus {
  */
 export enum DataType {
   Process = 'process',
+  Solution = 'solution',
   Calendar = 'calendar',
   Swelling = 'swelling',
   Efficiency = 'efficiency',
@@ -58,6 +59,7 @@ export enum StepStatus {
 export enum BuiltInStep {
   ProjectCreation = 'project_creation',
   ExperimentDesign = 'experiment_design',
+  SolutionPreparation = 'solution_preparation',
   DryingInjection = 'drying_injection',
   Formation = 'formation',
   SecondSealing = 'second_sealing',
@@ -68,6 +70,7 @@ export enum BuiltInStep {
 
 export const ALL_DATA_TYPES: DataType[] = [
   DataType.Process,
+  DataType.Solution,
   DataType.Calendar,
   DataType.Swelling,
   DataType.Efficiency,

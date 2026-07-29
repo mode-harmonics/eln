@@ -7,6 +7,7 @@
 // ─── 7 business table types ─────────────────────────────────────────────
 export const RECORD_TYPE_TO_API_TYPE: Record<string, string> = {
   ProcessData: 'process',
+  SolutionPreparation: 'solution',
   CalendarLife: 'calendar',
   StorageSwelling: 'swelling',
   EnergyEfficiency: 'efficiency',
@@ -17,6 +18,7 @@ export const RECORD_TYPE_TO_API_TYPE: Record<string, string> = {
 
 export const RECORD_TYPE_TO_I18N_KEY: Record<string, string> = {
   ProcessData: 'process_data',
+  SolutionPreparation: 'solution_preparation',
   CalendarLife: 'calendar_life',
   StorageSwelling: 'storage_swelling',
   EnergyEfficiency: 'energy_efficiency',
@@ -27,6 +29,7 @@ export const RECORD_TYPE_TO_I18N_KEY: Record<string, string> = {
 
 // ─── Step → assayType mapping (for auto-creating experiments) ──────────
 export const STEP_ASSAY_MAP: Record<string, string> = {
+  solution_preparation: 'SolutionPreparation',
   drying_injection: 'ProcessData',
   formation: 'ProcessData',
   second_sealing: 'ProcessData',
@@ -42,6 +45,7 @@ export const STEP_ASSAY_MAP: Record<string, string> = {
 // ─── Step → display label (i18n key) ──────────────────────────────────
 export const STEP_LABEL_KEYS: Record<string, string> = {
   experiment_design: 'step_experiment_design',
+  solution_preparation: 'step_solution_preparation',
   drying_injection: 'step_drying_injection',
   formation: 'step_formation',
   second_sealing: 'step_second_sealing',
@@ -78,6 +82,7 @@ export function getChildStepLabel(name: string): string {
 
 // ─── Step → dataType (for table rendering) ────────────────────────────
 export const STEP_DATA_TYPE: Record<string, string> = {
+  solution_preparation: 'solution',
   drying_injection: 'process',
   formation: 'process',
   second_sealing: 'process',
@@ -94,6 +99,7 @@ export const STEP_DATA_TYPE: Record<string, string> = {
 export const STEP_NAME_MAP: Record<string, string> = {
   experiment_design: '实验设计',
   battery_selection: '电池选取',
+  solution_preparation: '配液',
   drying_injection: '干燥/注液',
   formation: '化成',
   second_sealing: '二封',

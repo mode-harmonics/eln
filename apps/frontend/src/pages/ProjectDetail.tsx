@@ -40,25 +40,66 @@ interface WfData {
   steps: WfStep[];
 }
 
-// ─── Step icon & label config (icons stay frontend-only) ────────────
+// ─── Step icon map (icons are UI-only; labels & dataTypes come from backend) ──
 
-const STEP_META: Record<string, { label: string; icon: React.ReactNode; dataType?: string }> = {
-  experiment_design: { label: "实验设计", icon: <FileText className="w-4 h-4" /> },
+const STEP_ICON: Record<string, React.ReactNode> = {
+  experiment_design: <FileText className="w-4 h-4" />,
+  design_sub: <FileText className="w-3.5 h-3.5" />,
+  procurement_sub: <Layers className="w-3.5 h-3.5" />,
+  solution_preparation: <FlaskConical className="w-4 h-4" />,
+  drying_injection: <FlaskConical className="w-4 h-4" />,
+  formation: <FlaskConical className="w-4 h-4" />,
+  second_sealing: <FlaskConical className="w-4 h-4" />,
+  capacity_grading: <FlaskConical className="w-4 h-4" />,
+  battery_selection: <Layers className="w-4 h-4" />,
+  testing: <Beaker className="w-4 h-4" />,
+  calendar_life: <Clock className="w-3.5 h-3.5" />,
+  storage_swelling: <Thermometer className="w-3.5 h-3.5" />,
+  energy_efficiency: <Zap className="w-3.5 h-3.5" />,
+  dcr_test: <Activity className="w-3.5 h-3.5" />,
+  fast_charge: <Zap className="w-3.5 h-3.5" />,
+  ht_cycle: <Beaker className="w-3.5 h-3.5" />,
+};
+
+/** UI-only sub-steps injected into the experiment_design card (not real template steps) */
+const UI_ONLY_META: Record<string, { label: string; icon: React.ReactNode }> = {
   design_sub: { label: "1. 实验设计", icon: <FileText className="w-3.5 h-3.5" /> },
   procurement_sub: { label: "2. 试剂采购", icon: <Layers className="w-3.5 h-3.5" /> },
-  drying_injection: { label: "干燥/注液", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
-  formation: { label: "化成", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
-  second_sealing: { label: "二封", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
-  capacity_grading: { label: "定容", icon: <FlaskConical className="w-4 h-4" />, dataType: "process" },
-  battery_selection: { label: "挑选电池", icon: <Layers className="w-4 h-4" /> },
-  testing: { label: "测试", icon: <Beaker className="w-4 h-4" /> },
-  calendar_life: { label: "日历寿命", icon: <Clock className="w-3.5 h-3.5" />, dataType: "calendar" },
-  storage_swelling: { label: "存储胀气", icon: <Thermometer className="w-3.5 h-3.5" />, dataType: "swelling" },
-  energy_efficiency: { label: "能效", icon: <Zap className="w-3.5 h-3.5" />, dataType: "efficiency" },
-  dcr_test: { label: "4C DCR", icon: <Activity className="w-3.5 h-3.5" />, dataType: "dcr" },
-  fast_charge: { label: "快充", icon: <Zap className="w-3.5 h-3.5" />, dataType: "fastcharge" },
-  ht_cycle: { label: "高温循环", icon: <Beaker className="w-3.5 h-3.5" />, dataType: "htcycle" },
 };
+
+type StepMetaMap = Record<string, { label: string; icon: React.ReactNode; dataType?: string }>;
+
+/**
+ * Fetch default template steps from the backend (MANDATORY — no fallback).
+ * UI-only sub-steps (design_sub, procurement_sub) are merged in.
+ */
+async function fetchStepMeta(): Promise<StepMetaMap> {
+  const meta: StepMetaMap = {};
+  // UI-only sub-steps always available
+  for (const [name, m] of Object.entries(UI_ONLY_META)) {
+    meta[name] = { ...m };
+  }
+  const token = localStorage.getItem("token");
+  const res = await fetch("/api/v1/workflow/default-steps", {
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(`Failed to load workflow steps: ${res.status}`);
+  const json = await res.json();
+  const steps: Array<{ name: string; label: string; dataType: string | null; isParallel: boolean; parallelChildren: string[] }> =
+    json?.data?.steps ?? json?.steps ?? [];
+  for (const s of steps) {
+    const icon = STEP_ICON[s.name] ?? <Beaker className="w-4 h-4" />;
+    meta[s.name] = { label: s.label, icon, dataType: s.dataType ?? undefined };
+    if (s.isParallel && s.parallelChildren) {
+      for (const child of s.parallelChildren) {
+        if (!meta[child]) {
+          meta[child] = { label: child, icon: STEP_ICON[child] ?? <Beaker className="w-3.5 h-3.5" />, dataType: s.dataType ?? undefined };
+        }
+      }
+    }
+  }
+  return meta;
+}
 
 // ─── Main Component ─────────────────────────────────────────────
 
@@ -98,6 +139,19 @@ export function ProjectDetail() {
   // Cell groups removed - experiment design groups are used instead
   const [pickedCells, setPickedCells] = useState<string[]>([]);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
+
+  // Dynamic step meta — fetched from backend default template (MANDATORY)
+  const [STEP_META, setStepMeta] = useState<StepMetaMap>({});
+  const [stepMetaError, setStepMetaError] = useState(false);
+
+  // Fetch canonical step definitions from the backend default template
+  useEffect(() => {
+    let cancelled = false;
+    fetchStepMeta()
+      .then((meta) => { if (!cancelled) { setStepMeta(meta); setStepMetaError(false); } })
+      .catch(() => { if (!cancelled) setStepMetaError(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   // ── User ID ──
   useEffect(() => {
@@ -243,6 +297,7 @@ export function ProjectDetail() {
   }, [projectId, activeTab, refetchTrigger]);
 
   if (error || !project) return <div className="p-10 text-red-500">{error ?? t("project_not_found")}</div>;
+  if (stepMetaError) return <div className="p-10 text-red-500">{t("load_steps_failed", "无法加载流程步骤定义，请确保后端已配置默认流程模板")}</div>;
 
   const stepParents = visibleSteps.filter((s) => !s.parentStepName);
   const stepChildren = (parentName: string) => {

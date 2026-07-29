@@ -6,6 +6,7 @@ import type {
   ExperimentDto,
   InventoryDto,
   ProcessDataDto,
+  SolutionPreparationDto,
   CalendarLifeDto,
   StorageSwellingDto,
   EnergyEfficiencyDto,
@@ -25,6 +26,7 @@ export type InventoryItem = InventoryDto;
 
 // Battery Data Types mapped directly from the shared package (which matches backend entities)
 export type ProcessData = ProcessDataDto;
+export type SolutionPreparation = SolutionPreparationDto;
 export type CalendarLife = CalendarLifeDto;
 export type StorageSwelling = StorageSwellingDto;
 export type EnergyEfficiency = EnergyEfficiencyDto;

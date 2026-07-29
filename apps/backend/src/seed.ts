@@ -497,15 +497,16 @@ async function seed(): Promise<void> {
     await repo.delete({ isDefault: true });
     const defaultSteps = [
       { name: 'experiment_design', label: '实验设计', builtInStep: 'experiment_design', isParallel: false, sortOrder: 1 },
-      { name: 'drying_injection', label: '干燥/注液', builtInStep: 'drying_injection', isParallel: false, sortOrder: 2 },
-      { name: 'formation', label: '化成', builtInStep: 'formation', isParallel: false, sortOrder: 3 },
-      { name: 'second_sealing', label: '二封', builtInStep: 'second_sealing', isParallel: false, sortOrder: 4 },
-      { name: 'capacity_grading', label: '定容', builtInStep: 'capacity_grading', isParallel: false, sortOrder: 5 },
-      { name: 'battery_selection', label: '挑选电池', builtInStep: 'battery_selection', isParallel: false, sortOrder: 6 },
+      { name: 'solution_preparation', label: '配液', builtInStep: 'solution_preparation', isParallel: false, sortOrder: 2 },
+      { name: 'drying_injection', label: '干燥/注液', builtInStep: 'drying_injection', isParallel: false, sortOrder: 3 },
+      { name: 'formation', label: '化成', builtInStep: 'formation', isParallel: false, sortOrder: 4 },
+      { name: 'second_sealing', label: '二封', builtInStep: 'second_sealing', isParallel: false, sortOrder: 5 },
+      { name: 'capacity_grading', label: '定容', builtInStep: 'capacity_grading', isParallel: false, sortOrder: 6 },
+      { name: 'battery_selection', label: '挑选电池', builtInStep: 'battery_selection', isParallel: false, sortOrder: 7 },
       {
         name: 'testing', label: '测试', builtInStep: 'testing', isParallel: true,
         parallelChildren: ['calendar_life', 'storage_swelling', 'energy_efficiency', 'dcr_test', 'fast_charge', 'ht_cycle'],
-        sortOrder: 7,
+        sortOrder: 8,
       },
     ];
     await repo.save(

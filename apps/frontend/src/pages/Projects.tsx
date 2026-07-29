@@ -61,6 +61,17 @@ interface Template {
   }>;
 }
 
+/** Step definition from GET /api/v1/workflow/default-steps */
+interface DefaultStepDef {
+  name: string;
+  label: string;
+  builtInStep: string | null;
+  dataType: string | null;
+  isParallel: boolean;
+  parallelChildren: string[];
+  sortOrder: number;
+}
+
 export function Projects() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -90,6 +101,8 @@ export function Projects() {
   // Create project wizard
   const [createStep, setCreateStep] = useState(1);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [defaultSteps, setDefaultSteps] = useState<DefaultStepDef[] | null>(null);
+  const [defaultStepsError, setDefaultStepsError] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [stepAssignments, setStepAssignments] = useState<Record<string, string[]>>({});
   const [stepVisibleTo, setStepVisibleTo] = useState<Record<string, string[]>>({});
@@ -97,16 +110,24 @@ export function Projects() {
 
   const [users, setUsers] = useState<any[]>([]);
 
-  // Fetch templates & users for workflow assignment
+  // Fetch templates, default-steps & users for workflow assignment
   useEffect(() => {
     if (!isModalOpen) { setCreateStep(1); setAssignmentError(null); return; }
+    // Canonical step list from the backend default template — MANDATORY, no fallback
+    setDefaultStepsError(false);
+    api.get<{ steps: DefaultStepDef[] }>("/api/v1/workflow/default-steps")
+      .then((d) => setDefaultSteps(d?.steps ?? []))
+      .catch(() => setDefaultStepsError(true));
+    // Template list for the selector (user can override with custom)
     api.get<Template[]>("/api/v1/workflow/templates").then((d) => setTemplates(Array.isArray(d) ? d : [])).catch(() => { });
     api.get<any[]>("/api/v1/users/assignable").then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => { });
   }, [isModalOpen]);
 
-  // Resolve selected template steps
+  // Resolve selected template steps — MUST come from backend default-steps
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates.find((t) => t.isDefault);
-  const selectedTemplateSteps = selectedTemplate?.steps?.sort((a, b) => a.sortOrder - b.sortOrder) || [];
+  const selectedTemplateSteps: Array<{ name: string; label: string; isParallel?: boolean; parallelChildren?: string[]; sortOrder: number }> = selectedTemplate
+    ? selectedTemplate.steps.sort((a, b) => a.sortOrder - b.sortOrder)
+    : (defaultSteps ?? []);
 
   useEffect(() => {
     let cancelled = false;
@@ -448,8 +469,12 @@ export function Projects() {
                 <TableBody>
                   {selectedTemplateSteps.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-gray-400 py-8">
-                        {t("select_template_hint")}
+                      <TableCell colSpan={4} className="text-center py-8">
+                        {defaultStepsError && !selectedTemplate ? (
+                          <span className="text-red-500 text-sm">{t("load_steps_failed", "无法加载流程步骤，请检查后端是否已配置默认流程模板")}</span>
+                        ) : (
+                          <span className="text-gray-400">{t("select_template_hint")}</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ) : (

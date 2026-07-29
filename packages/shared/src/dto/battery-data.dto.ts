@@ -1,8 +1,19 @@
 // ============================================================================
-// DTOs for the 7 battery-science business tables (BACKEND_SPEC.md §二).
+// DTOs for the battery-science business tables (BACKEND_SPEC.md §二).
 // These mirror the TypeORM entities but stay framework-agnostic so the
-// future apps/frontend SPA can consume them without depending on TypeORM.
+// frontend SPA can consume them without depending on TypeORM.
 // ============================================================================
+
+export interface SolutionPreparationDto {
+  id: string;
+  experimentId: string;
+  groupName: string;
+  materialName: string;
+  specification: string | null;
+  formulaAmount: string | null;
+  actualAmount: string | null;
+  createdAt: string;
+}
 
 export interface ProcessDataDto {
   id: string;

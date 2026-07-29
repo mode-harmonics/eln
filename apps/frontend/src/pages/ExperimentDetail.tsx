@@ -5,6 +5,7 @@ import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layer
 import { useTranslation } from "react-i18next";
 import {
   ProcessDataTable,
+  SolutionPreparationTable,
   CalendarLifeTable,
   StorageSwellingTable,
   EnergyEfficiencyTable,
@@ -381,6 +382,7 @@ export function ExperimentDetail() {
   const renderTable = () => {
     switch (assayType) {
       case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} readOnly={stepCompleted} showBatchEdit invalidInternalCodes={invalidInternalCodes} />;
+      case "SolutionPreparation": return <SolutionPreparationTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
       case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
       case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
       case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
@@ -403,7 +405,7 @@ export function ExperimentDetail() {
         badges={<>
             {assayType && (
               <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 shrink-0">
-                {assayType !== 'ProcessData' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
+                {assayType !== 'ProcessData' && assayType !== 'SolutionPreparation' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
                 {experiment.workflowStepName && ` - ${t(`step_${experiment.workflowStepName}`, STEP_NAME_MAP[experiment.workflowStepName] || experiment.workflowStepName)}`}
               </span>
             )}
@@ -572,7 +574,7 @@ export function ExperimentDetail() {
                   assayType={assayType || "Unknown"} 
                   experimentId={experiment.id} 
                   projectId={experiment.projectId} 
-                  title={experiment.workflowStepName ? `${assayType !== 'ProcessData' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType || "Unknown"] || assayType)} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined}
+                  title={experiment.workflowStepName ? `${assayType !== 'ProcessData' && assayType !== 'SolutionPreparation' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType || "Unknown"] || assayType)} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined}
                 />
                 {renderTable()}
               </div>

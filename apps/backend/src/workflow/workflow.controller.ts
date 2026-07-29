@@ -39,6 +39,17 @@ export class WorkflowController {
     return { success: true, data: await this.workflowService.findTemplates(filter) };
   }
 
+  /**
+   * Return the default template's step definitions — the canonical
+   * step list for the frontend (create dialog, step meta, etc.).
+   */
+  @Get('workflow/default-steps')
+  @RequirePermission('projects:read')
+  @ApiOperation({ summary: 'Get default workflow template step definitions' })
+  async getDefaultSteps() {
+    return { success: true, data: await this.workflowService.getDefaultTemplateSteps() };
+  }
+
   @Get('workflow/templates/:id')
   @RequirePermission('workflow:read')
   @ApiOperation({ summary: 'Get a single workflow template' })

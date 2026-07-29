@@ -31,4 +31,5 @@ export * from './workflow-step-assignment.entity';
 // Experiment design & procurement
 export * from './experiment-design.entity';
 export * from './reagent-procurement.entity';
+export * from './solution-preparation.entity';
 

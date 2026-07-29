@@ -14,6 +14,7 @@ import { EnergyEfficiency } from '../entities/energy-efficiency.entity';
 import { FastCharge } from '../entities/fast-charge.entity';
 import { HtCycle } from '../entities/ht-cycle.entity';
 import { ProcessData } from '../entities/process-data.entity';
+import { SolutionPreparation } from '../entities/solution-preparation.entity';
 import { StorageSwelling } from '../entities/storage-swelling.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
@@ -34,6 +35,7 @@ import { WorkflowService } from '../workflow/workflow.service';
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
   processData: ProcessData,
+  solutionPreparation: SolutionPreparation,
   calendarLife: CalendarLife,
   RawStepData: RawStepData,
   storageSwelling: StorageSwelling,
@@ -46,6 +48,7 @@ const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
 /** Maps the GET /data/:type/:expId path segment to a TypeORM entity class. */
 const TYPE_PARAM_TO_ENTITY: Record<string, new () => unknown> = {
   process: ProcessData,
+  solution: SolutionPreparation,
   calendar: CalendarLife,
   swelling: StorageSwelling,
   efficiency: EnergyEfficiency,

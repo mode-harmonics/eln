@@ -28,6 +28,7 @@ const SPECIAL_ACTIONS = ['approve', 'archive', 'transition'] as const;
 /** Data child types (for data_${type}:action granularity) */
 export const DATA_CHILD_TYPES = [
   'process',
+  'solution',
   'calendar',
   'swelling',
   'efficiency',

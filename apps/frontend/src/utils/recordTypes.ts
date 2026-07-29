@@ -11,3 +11,6 @@ export const ALL_API_TYPES = Object.values(RECORD_TYPE_TO_API_TYPE);
 
 /** All record type keys */
 export const ALL_RECORD_TYPES = Object.keys(RECORD_TYPE_TO_API_TYPE);
+
+// SolutionPreparation is a new record type — re-export for convenience
+export const SOLUTION_PREPARATION_API_TYPE = 'solution' as const;
