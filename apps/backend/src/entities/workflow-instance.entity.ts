@@ -3,6 +3,7 @@ import {
   PrimaryColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Index,
 } from 'typeorm';
 
@@ -23,6 +24,7 @@ export class WorkflowInstance {
   @Column({ name: 'templateId', type: 'uuid', comment: '模板ID' })
   templateId!: string;
 
+  @Index()
   @Column({ type: 'varchar', length: 32, default: 'Active', comment: '状态(Active/Completed/Paused)' })
   status!: string;
 
@@ -31,4 +33,7 @@ export class WorkflowInstance {
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
+  updatedAt!: Date;
 }

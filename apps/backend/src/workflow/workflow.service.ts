@@ -21,10 +21,52 @@ import { ProcessData } from '../entities/process-data.entity';
 import { SolutionPreparation } from '../entities/solution-preparation.entity';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { StepStatus, type WorkflowStepDefinition } from '@eln/shared';
+import { StepStatus, BuiltInStep, WorkflowStepTreeDto, WorkflowStepNodeDto, parseGraphToStepTree } from '@eln/shared';
 
 export function isTerminalStepStatus(status: string): boolean {
   return status === StepStatus.Completed || status === StepStatus.Skipped;
+}
+
+/**
+ * Topological sort on a DAG defined by nodes + edges.
+ * Returns node ids in dependency order. Throws on cycle.
+ */
+function topologicalSort(
+  nodes: Array<{ id: string }>,
+  edges: Array<{ from: string; to: string }>,
+): string[] {
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const inDegree = new Map<string, number>();
+  const adjacency = new Map<string, string[]>();
+
+  for (const id of nodeIds) {
+    inDegree.set(id, 0);
+    adjacency.set(id, []);
+  }
+  for (const e of edges) {
+    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) continue;
+    inDegree.set(e.to, (inDegree.get(e.to) || 0) + 1);
+    adjacency.get(e.from)!.push(e.to);
+  }
+
+  const queue: string[] = [];
+  for (const [id, deg] of inDegree) {
+    if (deg === 0) queue.push(id);
+  }
+  const result: string[] = [];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    result.push(current);
+    for (const neighbor of adjacency.get(current) || []) {
+      const newDeg = (inDegree.get(neighbor) || 1) - 1;
+      inDegree.set(neighbor, newDeg);
+      if (newDeg === 0) queue.push(neighbor);
+    }
+  }
+  if (result.length !== nodeIds.size) {
+    throw new BadRequestException('Workflow template contains a cycle');
+  }
+  return result;
 }
 
 @Injectable()
@@ -100,7 +142,7 @@ export class WorkflowService {
     name: string;
     description?: string;
     isDefault?: boolean;
-    steps: WorkflowStepDefinition[];
+    steps: any;
   }): Promise<WorkflowTemplate> {
     const tpl = this.templateRepo.create({
       id: uuid(),
@@ -118,7 +160,7 @@ export class WorkflowService {
       name: string;
       description: string;
       isDefault: boolean;
-      steps: WorkflowStepDefinition[];
+      steps: any;
     }>,
   ): Promise<WorkflowTemplate> {
     const tpl = await this.findTemplateById(id);
@@ -141,9 +183,10 @@ export class WorkflowService {
   /**
    * Create a workflow instance from a template.
    *
-   * - Serial steps → sequential stepIndex
-   * - Parallel groups → group node + children with sequential indices
-   * - battery_selection auto-inherits from experiment_design's assignee
+   * The template stores steps as a DAG: { nodes: [{id,label,builtInStep}], edges: [{from,to}] }.
+   * - Edges define execution order (topological sort).
+   * - A node with out-degree > 1 is a parallel group (fan-out).
+   * - A node whose sole parent has out-degree > 1 is a parallel child.
    */
   async createInstance(dto: {
     projectId: string;
@@ -160,21 +203,47 @@ export class WorkflowService {
       ? await this.findTemplateById(dto.templateId)
       : await this.getDefaultTemplate();
 
-    const stepDefs = [...template.steps].sort((a, b) => a.sortOrder - b.sortOrder);
+    const graph = template.steps as any;
+    const nodes: Array<{ id: string; label: string; builtInStep?: string; parentId?: string }> =
+      graph.nodes || [];
+    const edges: Array<{ from: string; to: string }> = graph.edges || [];
 
-    // Build assignment map
+    // Compute out-degree and in-degree per node
+    const outDegree = new Map<string, number>();
+    const inDegree = new Map<string, string[]>();
+    for (const n of nodes) {
+      outDegree.set(n.id, 0);
+      inDegree.set(n.id, []);
+    }
+    for (const e of edges) {
+      outDegree.set(e.from, (outDegree.get(e.from) || 0) + 1);
+      const ins = inDegree.get(e.to) || [];
+      ins.push(e.from);
+      inDegree.set(e.to, ins);
+    }
+
+    // Topological sort gives execution order
+    const order = topologicalSort(nodes, edges);
+
+    // Build assignment map + builtInStep reverse lookup
     const assignMap = new Map(dto.assignments.map((a) => [a.stepName, a]));
+    const bsToName = new Map<string, string>();
+    for (const n of nodes) bsToName.set(n.builtInStep || n.id, n.id);
 
-    // Auto-assign battery_selection from experiment_design
-    const expDesign = assignMap.get('experiment_design');
-    if (expDesign && !assignMap.has('battery_selection')) {
-      assignMap.set('battery_selection', {
-        stepName: 'battery_selection',
-        assignedUserId: expDesign.assignedUserId,
-        canViewOtherSteps: expDesign.canViewOtherSteps,
-        canViewInternalCode: expDesign.canViewInternalCode,
-        visibleToUserIds: expDesign.visibleToUserIds,
-      });
+    // Auto-assign battery_selection from experiment_design (driven by builtInStep)
+    const expDesignName = bsToName.get(BuiltInStep.ExperimentDesign);
+    const bsName = bsToName.get(BuiltInStep.BatterySelection);
+    if (expDesignName && bsName) {
+      const expDesign = assignMap.get(expDesignName);
+      if (expDesign && !assignMap.has(bsName)) {
+        assignMap.set(bsName, {
+          stepName: bsName,
+          assignedUserId: expDesign.assignedUserId,
+          canViewOtherSteps: expDesign.canViewOtherSteps,
+          canViewInternalCode: expDesign.canViewInternalCode,
+          visibleToUserIds: expDesign.visibleToUserIds,
+        });
+      }
     }
 
     // Create instance
@@ -188,21 +257,25 @@ export class WorkflowService {
     const savedInstance = await this.instanceRepo.save(instance);
 
     // Build flattened assignment records
-    let stepIndex = 0;
     const records: WorkflowStepAssignment[] = [];
+    for (let stepIndex = 0; stepIndex < order.length; stepIndex++) {
+      const id = order[stepIndex];
+      const node = nodes.find((n) => n.id === id);
+      if (!node) continue;
 
-    for (const def of stepDefs) {
-      if (def.isParallel && def.parallelChildren?.length) {
-        const a = assignMap.get(def.name);
-        records.push(this.makeRecord(savedInstance.id, stepIndex++, def.name, a, true, null));
-        for (const childName of def.parallelChildren) {
-          const ca = assignMap.get(childName);
-          records.push(this.makeRecord(savedInstance.id, stepIndex++, childName, ca, false, def.name));
-        }
-      } else {
-        const a = assignMap.get(def.name);
-        records.push(this.makeRecord(savedInstance.id, stepIndex++, def.name, a, false, null));
-      }
+      // Hierarchy from parentId. Parallelism from edge out-degree.
+      const isGroup = (outDegree.get(id) || 0) > 1;
+      const parentStepName = node.parentId || null;
+
+      const a = assignMap.get(id);
+      records.push(this.makeRecord(
+        savedInstance.id,
+        stepIndex,
+        id,
+        a,
+        isGroup,
+        parentStepName,
+      ));
     }
 
     // First step is in_progress
@@ -212,10 +285,11 @@ export class WorkflowService {
 
     // Notify first assignee
     if (records[0]?.assignedUserId) {
+      const firstNode = nodes.find((n) => n.id === order[0]);
       await this.notificationsService.createNotification(
         records[0].assignedUserId,
         'WORKFLOW_STEP_ASSIGNED',
-        { projectId: dto.projectId, stepName: stepDefs[0].name, stepLabel: stepDefs[0].label, action: 'start' },
+        { projectId: dto.projectId, stepName: order[0], stepLabel: firstNode?.label || order[0], action: 'start' },
       );
     }
 
@@ -490,7 +564,7 @@ export class WorkflowService {
       // For the testing parallel group, only activate sub-steps that have picked cells assigned
       let children = steps.filter((s) => s.parentStepName === next.stepName && s.status === 'pending');
 
-      if (next.stepName === 'testing') {
+      if (next.stepName === BuiltInStep.Testing) {
         // Query which test types actually have assigned picked cells
         const pickedCells = await this.dataSource.getRepository(PickedCell).find({
           where: { projectId: instance.projectId } as any,
@@ -786,34 +860,23 @@ export class WorkflowService {
   // ════════════════════════════════════════════════════════════════
 
   /**
-   * Return the default template's flattened step definitions with
-   * data types resolved. This is the single source of truth for
-   * step ordering, labels, and data types consumed by the frontend.
+   * Converts a template DAG graph ({ nodes, edges }) into a clean, hierarchical step tree.
    */
-  async getDefaultTemplateSteps(): Promise<{
-    steps: Array<{
-      name: string;
-      label: string;
-      builtInStep: string | null;
-      dataType: string | null;
-      isParallel: boolean;
-      parallelChildren: string[];
-      sortOrder: number;
-    }>;
-  }> {
+  parseTemplateGraphToStepTree(graph: {
+    nodes?: Array<{ id: string; label: string; builtInStep?: string; parentId?: string }>;
+    edges?: Array<{ from: string; to: string }>;
+  }): WorkflowStepTreeDto {
+    return { steps: parseGraphToStepTree(graph) };
+  }
+
+  /**
+   * Return the default template's hierarchical step tree definitions.
+   * Single source of truth consumed by frontend dialogs and workflow UI.
+   */
+  async getDefaultTemplateSteps(): Promise<WorkflowStepTreeDto> {
     const tpl = await this.getDefaultTemplate();
-    const steps = tpl.steps
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map((s) => ({
-        name: s.name,
-        label: s.label,
-        builtInStep: s.builtInStep ?? null,
-        dataType: this.STEP_DATA_TYPE[s.name] ?? null,
-        isParallel: s.isParallel ?? false,
-        parallelChildren: s.parallelChildren ?? [],
-        sortOrder: s.sortOrder,
-      }));
-    return { steps };
+    const graph = (tpl.steps as any) || {};
+    return this.parseTemplateGraphToStepTree(graph);
   }
 
   // Map step name → API data type string (mirrors shared/workflow.ts)

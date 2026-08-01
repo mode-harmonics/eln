@@ -3,6 +3,7 @@ import {
   PrimaryColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Index,
 } from 'typeorm';
 
@@ -22,9 +23,11 @@ export class ExperimentDesign {
   @Column({ name: 'rowIndex', type: 'int', comment: '行序号' })
   rowIndex!: number;
 
+  @Index()
   @Column({ type: 'varchar', length: 128, comment: '分组' })
   group!: string;
 
+  @Index()
   @Column({ name: 'moleculeName', type: 'varchar', length: 255, comment: '分子名称' })
   moleculeName!: string;
 
@@ -40,6 +43,7 @@ export class ExperimentDesign {
   @Column({ name: 'designPrinciple', type: 'text', nullable: true, comment: '设计原理' })
   designPrinciple!: string | null;
 
+  @Index()
   @Column({ name: 'internalCode', type: 'varchar', length: 128, comment: '内部代码(自动生成)' })
   internalCode!: string;
 
@@ -54,4 +58,7 @@ export class ExperimentDesign {
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
+  updatedAt!: Date;
 }

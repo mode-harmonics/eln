@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, UpdateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * htCycle — 高温循环数据表
@@ -46,4 +46,7 @@ export class HtCycle {
 
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ type: 'timestamp', comment: '更新时间' })
+  updatedAt!: Date;
 }

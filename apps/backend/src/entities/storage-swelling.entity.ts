@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, UpdateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * storageSwelling — 60℃存储胀气数据表
@@ -48,4 +48,7 @@ export class StorageSwelling {
 
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ type: 'timestamp', comment: '更新时间' })
+  updatedAt!: Date;
 }

@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn, Index } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('notification', { comment: '系统通知表' })
 export class Notification {
@@ -15,6 +15,7 @@ export class Notification {
   @Column({ type: 'jsonb', nullable: true, comment: '附加负载数据' })
   payload!: Record<string, any> | null;
 
+  @Index()
   @Column({ name: 'relatedExperimentId', type: 'uuid', nullable: true, comment: '关联实验ID' })
   relatedExperimentId!: string | null;
 
@@ -24,4 +25,7 @@ export class Notification {
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
+  updatedAt!: Date;
 }

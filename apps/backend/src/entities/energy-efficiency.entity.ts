@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, UpdateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * energyEfficiency — 能效数据表
@@ -40,6 +40,13 @@ export class EnergyEfficiency {
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '能量效率比 ee=de/ce' })
   ee!: string | null;
 
+  /** 能量效率(%) = (de / ce) * 100 */
+  @Column({ name: 'eePct', type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '能量效率(%) eePct=(de/ce)*100' })
+  eePct!: string | null;
+
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ type: 'timestamp', comment: '更新时间' })
+  updatedAt!: Date;
 }

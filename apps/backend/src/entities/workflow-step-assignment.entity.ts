@@ -3,6 +3,7 @@ import {
   PrimaryColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Index,
 } from 'typeorm';
 
@@ -19,6 +20,7 @@ export class WorkflowStepAssignment {
   @Column({ name: 'workflowInstanceId', type: 'uuid', comment: '流程实例ID' })
   workflowInstanceId!: string;
 
+  @Index()
   @Column({ name: 'stepName', type: 'varchar', length: 64, comment: '步骤名称(key)' })
   stepName!: string;
 
@@ -30,6 +32,7 @@ export class WorkflowStepAssignment {
   @Column({ name: 'assignedUserId', type: 'uuid', nullable: true, comment: '分配执行人ID' })
   assignedUserId!: string | null;
 
+  @Index()
   @Column({ type: 'varchar', length: 32, default: 'pending', comment: '步骤状态(pending/in_progress/completed/skipped)' })
   status!: string;
 
@@ -51,9 +54,13 @@ export class WorkflowStepAssignment {
   @Column({ name: 'completedAt', type: 'timestamp', nullable: true, comment: '完成时间' })
   completedAt!: Date | null;
 
+  @Index()
   @Column({ name: 'completedBy', type: 'uuid', nullable: true, comment: '完成人ID' })
   completedBy!: string | null;
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
+  updatedAt!: Date;
 }

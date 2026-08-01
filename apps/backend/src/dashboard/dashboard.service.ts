@@ -111,7 +111,7 @@ export class DashboardService {
 
     // Version History globally
     const histories = await this.versionHistoryRepo.find({
-      order: { updatedAt: 'DESC' },
+      order: { createdAt: 'DESC' },
       take: 10,
     });
     const historyUserIds = [...new Set(histories.map(h => h.updatedBy))];
@@ -125,7 +125,7 @@ export class DashboardService {
         action: h.changeSummary || `Updated to version ${h.versionNumber}`,
         experimentId: h.experimentId,
         user: historyUserMap.get(h.updatedBy) || 'Unknown User',
-        timestamp: h.updatedAt,
+        timestamp: h.createdAt,
       });
     }
 

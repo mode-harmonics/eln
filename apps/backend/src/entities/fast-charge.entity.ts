@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, UpdateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /** One row of a step-charge ladder, folded from a horizontal source layout. */
 export interface FastChargeStep {
@@ -65,4 +65,7 @@ export class FastCharge {
 
   @CreateDateColumn({ type: 'timestamp', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ type: 'timestamp', comment: '更新时间' })
+  updatedAt!: Date;
 }

@@ -11,12 +11,14 @@ import {
 import type {
   CreateWorkflowInstanceDto as SharedCreateWorkflowInstanceDto,
   CreateWorkflowTemplateDto as SharedCreateWorkflowTemplateDto,
-  WorkflowStepDefinition,
+  WorkflowTemplateNode,
+  WorkflowTemplateEdge,
+  WorkflowTemplateGraph,
 } from '@eln/shared';
 
-export class WorkflowStepDefinitionDto implements WorkflowStepDefinition {
+export class WorkflowTemplateNodeDto implements WorkflowTemplateNode {
   @IsString()
-  name!: string;
+  id!: string;
 
   @IsString()
   label!: string;
@@ -26,17 +28,28 @@ export class WorkflowStepDefinitionDto implements WorkflowStepDefinition {
   builtInStep?: string;
 
   @IsOptional()
-  @IsBoolean()
-  isParallel?: boolean;
+  @IsString()
+  parentId?: string;
+}
 
-  @IsOptional()
+export class WorkflowTemplateEdgeDto implements WorkflowTemplateEdge {
+  @IsString()
+  from!: string;
+
+  @IsString()
+  to!: string;
+}
+
+export class WorkflowTemplateGraphDto implements WorkflowTemplateGraph {
   @IsArray()
-  @IsString({ each: true })
-  parallelChildren?: string[];
+  @ValidateNested({ each: true })
+  @Type(() => WorkflowTemplateNodeDto)
+  nodes!: WorkflowTemplateNodeDto[];
 
-  @IsInt()
-  @Min(0)
-  sortOrder!: number;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => WorkflowTemplateEdgeDto)
+  edges!: WorkflowTemplateEdgeDto[];
 }
 
 export class CreateWorkflowTemplateDto implements SharedCreateWorkflowTemplateDto {
@@ -51,10 +64,9 @@ export class CreateWorkflowTemplateDto implements SharedCreateWorkflowTemplateDt
   @IsBoolean()
   isDefault?: boolean;
 
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => WorkflowStepDefinitionDto)
-  steps!: WorkflowStepDefinitionDto[];
+  @ValidateNested()
+  @Type(() => WorkflowTemplateGraphDto)
+  steps!: WorkflowTemplateGraphDto;
 }
 
 export class UpdateWorkflowTemplateDto {
@@ -71,10 +83,9 @@ export class UpdateWorkflowTemplateDto {
   isDefault?: boolean;
 
   @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => WorkflowStepDefinitionDto)
-  steps?: WorkflowStepDefinitionDto[];
+  @ValidateNested()
+  @Type(() => WorkflowTemplateGraphDto)
+  steps?: WorkflowTemplateGraphDto;
 }
 
 export class WorkflowAssignmentInputDto {

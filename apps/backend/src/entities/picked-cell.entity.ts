@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Column, CreateDateColumn, UpdateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * pickedCell — 电池挑选记录表
@@ -24,9 +24,13 @@ export class PickedCell {
   pickedBy!: string;
 
   /** Assigned test type for this cell (e.g. 'CalendarLife', 'FastCharge', etc.) */
+  @Index()
   @Column({ name: 'testType', type: 'varchar', length: 64, nullable: true, comment: '分配的测试类型' })
   testType!: string | null;
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
+  updatedAt!: Date;
 }

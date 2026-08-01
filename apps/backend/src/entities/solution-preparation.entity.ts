@@ -1,6 +1,7 @@
 import {
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Entity,
   Index,
   PrimaryColumn,
@@ -27,6 +28,7 @@ export class SolutionPreparation {
   groupName!: string;
 
   /** 物料名称 */
+  @Index()
   @Column({ name: 'materialName', type: 'varchar', length: 255, comment: '物料名称' })
   materialName!: string;
 
@@ -44,4 +46,7 @@ export class SolutionPreparation {
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
+  updatedAt!: Date;
 }

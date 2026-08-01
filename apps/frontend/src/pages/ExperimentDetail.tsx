@@ -36,7 +36,7 @@ interface ExperimentDetail extends Experiment {
   attachments?: any[];
 }
 
-import { STEP_NAME_MAP } from "@eln/shared";
+import { STEP_NAME_MAP, BuiltInStep } from "@eln/shared";
 import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recordTypes";
 
 const ASSAY_TYPE_TO_PERMISSION = RECORD_TYPE_TO_API_TYPE;
@@ -70,6 +70,27 @@ export function ExperimentDetail() {
 
   // Invalid procurement internalCodes — used to filter ProcessData rows
   const [invalidInternalCodes, setInvalidInternalCodes] = useState<string[]>([]);
+
+  // Built-in step lookup map (stepName → builtInStep)
+  const [bsMap, setBsMap] = useState<Record<string, string>>({});
+  function bsFn(name: string) { return bsMap[name] ?? name; }
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch("/api/v1/workflow/default-steps", { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } })
+      .then((r) => r.json().catch(() => ({})))
+      .then((json) => {
+        const steps: Array<{ name: string; builtInStep: string | null; children?: any[] }> = json?.data?.steps ?? json?.steps ?? [];
+        const m: Record<string, string> = {};
+        for (const s of steps) {
+          m[s.name] = s.builtInStep ?? s.name;
+          if (s.children) {
+            for (const c of s.children) m[c.name] = c.builtInStep ?? c.name;
+          }
+        }
+        setBsMap(m);
+      })
+      .catch(() => {});
+  }, []);
 
   const openEditModal = () => {
     if (!experiment) return;
@@ -312,9 +333,11 @@ export function ExperimentDetail() {
 
   // For ProcessData experiments, raw data has two sources: formation (化成) and grading (定容)
   const isProcessData = assayType === "ProcessData";
-  const showProcessRawToggles = isProcessData && (!experiment.workflowStepName || ["formation", "capacity_grading"].includes(experiment.workflowStepName));
-  const isProcessRawData = isProcessData && ["formation", "capacity_grading"].includes(experiment.workflowStepName || "");
-  const [rawSource, setRawSource] = useState<"formation" | "grading">(experiment.workflowStepName === "capacity_grading" ? "grading" : "formation");
+  const wfBs = bsFn(experiment.workflowStepName ?? '');
+  const SHOW_RAW_DATA: string[] = [BuiltInStep.Formation, BuiltInStep.CapacityGrading];
+  const showProcessRawToggles = isProcessData && (!experiment.workflowStepName || SHOW_RAW_DATA.includes(wfBs));
+  const isProcessRawData = isProcessData && SHOW_RAW_DATA.includes(wfBs);
+  const [rawSource, setRawSource] = useState<"formation" | "grading">(wfBs === BuiltInStep.CapacityGrading ? "grading" : "formation");
   const [rawSteps, setRawSteps] = useState<any[]>([]);
   const [rawLoading, setRawLoading] = useState(false);
   const [rawLoaded, setRawLoaded] = useState<Record<string, boolean>>({});
@@ -549,10 +572,10 @@ export function ExperimentDetail() {
                 {showProcessRawToggles && dataView === "raw" && (
                   <SegmentedControl
                     items={[
-                      ...(!experiment.workflowStepName || experiment.workflowStepName === "formation"
+                      ...(!experiment.workflowStepName || wfBs === BuiltInStep.Formation
                         ? [{ value: "formation" as const, label: t("raw_formation", "化成数据") }]
                         : []),
-                      ...(!experiment.workflowStepName || experiment.workflowStepName === "capacity_grading"
+                      ...(!experiment.workflowStepName || wfBs === BuiltInStep.CapacityGrading
                         ? [{ value: "grading" as const, label: t("raw_grading", "定容数据") }]
                         : []),
                     ]}
@@ -587,14 +610,14 @@ export function ExperimentDetail() {
                 <FileDigit className="w-8 h-8 mb-2 opacity-40" />
                 <p className="text-sm">
                   {isProcessData
-                    ? (experiment.workflowStepName === "drying_injection" 
-                        ? t("no_raw_data_drying", "暂无干燥/注液原始数据") 
-                        : experiment.workflowStepName === "second_sealing"
+                    ? (wfBs === BuiltInStep.DryingInjection
+                        ? t("no_raw_data_drying", "暂无干燥/注液原始数据")
+                        : wfBs === BuiltInStep.SecondSealing
                         ? t("no_raw_data_sealing", "暂无二封原始数据")
                         : (rawSource === "formation" ? t("no_raw_data_formation", "暂无化成原始工步数据") : t("no_raw_data_grading", "暂无定容原始工步数据")))
                     : t("no_raw_data", "暂无原始工步数据")}
                 </p>
-                {(isProcessData && (experiment.workflowStepName === "drying_injection" || experiment.workflowStepName === "second_sealing")) && (
+                {(isProcessData && (wfBs === BuiltInStep.DryingInjection || wfBs === BuiltInStep.SecondSealing)) && (
                   <p className="text-xs text-gray-400 mt-2">{t("view_raw_data_attachments", "如果您上传了文件，请前往“附件”面板查看")}</p>
                 )}
               </div>

@@ -8,6 +8,7 @@ import { PageHeader } from "../components/PageHeader";
 import { toast } from "../components/Toast";
 import { api } from "../lib/api";
 import { cn } from "../lib/utils";
+import { BuiltInStep } from "@eln/shared";
 
 import { TooltipTh } from "../components/Tooltip";
 
@@ -95,6 +96,23 @@ export function CellPickerPage() {
   const [saving, setSaving] = useState(false);
   const [readonly, setReadonly] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string>(t("all"));
+  const [bsMap, setBsMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    fetch("/api/v1/workflow/default-steps", { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } })
+      .then((r) => r.json().catch(() => ({})))
+      .then((json) => {
+        const steps: Array<{ name: string; builtInStep: string | null; children?: any[]; parallelChildren?: string[] }> = json?.data?.steps ?? json?.steps ?? [];
+        const m: Record<string, string> = {};
+        for (const s of steps) {
+          m[s.name] = s.builtInStep ?? s.name;
+          if (s.children) for (const c of s.children) m[c.name] = c.builtInStep ?? c.name;
+          if (s.parallelChildren) for (const c of s.parallelChildren) m[c] = c;
+        }
+        setBsMap(m);
+      })
+      .catch(() => {});
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!projectId) return;
@@ -135,7 +153,7 @@ export function CellPickerPage() {
       // ── Picked / readonly ──
       const initSelected: Record<string, string> = {};
       (picked || []).forEach((p: any) => { if (p.testType) initSelected[p.cellId] = p.testType; });
-      const bsStep = wf?.steps?.find((s: any) => s.stepName === "battery_selection");
+      const bsStep = wf?.steps?.find((s: any) => (bsMap[s.stepName] ?? s.stepName) === BuiltInStep.BatterySelection);
       setReadonly(bsStep?.status === "completed");
 
       setCells(deduped);

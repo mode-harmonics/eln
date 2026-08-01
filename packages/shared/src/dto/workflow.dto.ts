@@ -1,12 +1,38 @@
 import { WorkflowStatus, StepStatus } from '../enums';
 
-export interface WorkflowStepDefinition {
+export type WorkflowStepType = 'task' | 'serial' | 'parallel';
+
+export interface WorkflowStepNodeDto {
+  id: string;
   name: string;
   label: string;
-  builtInStep?: string;
-  isParallel?: boolean;
-  parallelChildren?: string[];
+  builtInStep: string | null;
+  dataType: string | null;
+  type: WorkflowStepType;
+  children?: WorkflowStepNodeDto[];
   sortOrder: number;
+}
+
+export interface WorkflowStepTreeDto {
+  steps: WorkflowStepNodeDto[];
+}
+
+export interface WorkflowTemplateNode {
+  id: string;
+  label: string;
+  builtInStep?: string;
+  /** Parent id for hierarchy nesting. Omitted = top-level step. */
+  parentId?: string;
+}
+
+export interface WorkflowTemplateEdge {
+  from: string;
+  to: string;
+}
+
+export interface WorkflowTemplateGraph {
+  nodes: WorkflowTemplateNode[];
+  edges: WorkflowTemplateEdge[];
 }
 
 export interface WorkflowTemplateDto {
@@ -14,7 +40,7 @@ export interface WorkflowTemplateDto {
   name: string;
   description: string | null;
   isDefault: boolean;
-  steps: WorkflowStepDefinition[];
+  steps: WorkflowTemplateGraph;
   createdAt: string;
 }
 
@@ -22,7 +48,7 @@ export interface CreateWorkflowTemplateDto {
   name: string;
   description?: string;
   isDefault?: boolean;
-  steps: WorkflowStepDefinition[];
+  steps: WorkflowTemplateGraph;
 }
 
 export interface WorkflowStepAssignmentDto {

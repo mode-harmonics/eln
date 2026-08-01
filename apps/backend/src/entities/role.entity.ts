@@ -1,4 +1,4 @@
-import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, Index, UpdateDateColumn } from 'typeorm';
 
 /**
  * role — 角色表
@@ -8,6 +8,7 @@ export class Role {
   @PrimaryColumn({ type: 'uuid', comment: '主键ID' })
   id!: string;
 
+  @Index()
   @Column({ type: 'varchar', length: 64, comment: '角色名称' })
   name!: string;
 
@@ -16,4 +17,7 @@ export class Role {
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
+  updatedAt!: Date;
 }

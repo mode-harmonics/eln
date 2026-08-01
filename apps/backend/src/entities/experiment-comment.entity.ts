@@ -1,6 +1,6 @@
 import { Entity, PrimaryColumn, Column, CreateDateColumn, Index, UpdateDateColumn } from 'typeorm';
 
-@Entity('experiment_comment', { comment: '实验评论表' })
+@Entity('experimentComment', { comment: '实验评论表' })
 export class ExperimentComment {
   @PrimaryColumn({ type: 'uuid', comment: '主键ID' })
   id!: string;

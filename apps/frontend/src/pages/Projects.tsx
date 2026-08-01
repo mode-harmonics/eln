@@ -29,6 +29,7 @@ import { cn } from "../lib/utils";
 import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { Project } from "../types";
+import { normalizeTemplateSteps, type WorkflowStepNodeDto } from "@eln/shared";
 import { Popconfirm } from "../components/Popconfirm";
 import { toast } from "../components/Toast";
 
@@ -52,24 +53,7 @@ interface Template {
   id: string;
   name: string;
   isDefault: boolean;
-  steps: Array<{
-    name: string;
-    label: string;
-    isParallel?: boolean;
-    parallelChildren?: string[];
-    sortOrder: number;
-  }>;
-}
-
-/** Step definition from GET /api/v1/workflow/default-steps */
-interface DefaultStepDef {
-  name: string;
-  label: string;
-  builtInStep: string | null;
-  dataType: string | null;
-  isParallel: boolean;
-  parallelChildren: string[];
-  sortOrder: number;
+  steps: any;
 }
 
 export function Projects() {
@@ -101,7 +85,7 @@ export function Projects() {
   // Create project wizard
   const [createStep, setCreateStep] = useState(1);
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [defaultSteps, setDefaultSteps] = useState<DefaultStepDef[] | null>(null);
+  const [defaultSteps, setDefaultSteps] = useState<WorkflowStepNodeDto[] | null>(null);
   const [defaultStepsError, setDefaultStepsError] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [stepAssignments, setStepAssignments] = useState<Record<string, string[]>>({});
@@ -113,9 +97,8 @@ export function Projects() {
   // Fetch templates, default-steps & users for workflow assignment
   useEffect(() => {
     if (!isModalOpen) { setCreateStep(1); setAssignmentError(null); return; }
-    // Canonical step list from the backend default template — MANDATORY, no fallback
     setDefaultStepsError(false);
-    api.get<{ steps: DefaultStepDef[] }>("/api/v1/workflow/default-steps")
+    api.get<{ steps: WorkflowStepNodeDto[] }>("/api/v1/workflow/default-steps")
       .then((d) => setDefaultSteps(d?.steps ?? []))
       .catch(() => setDefaultStepsError(true));
     // Template list for the selector (user can override with custom)
@@ -125,8 +108,8 @@ export function Projects() {
 
   // Resolve selected template steps — MUST come from backend default-steps
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates.find((t) => t.isDefault);
-  const selectedTemplateSteps: Array<{ name: string; label: string; isParallel?: boolean; parallelChildren?: string[]; sortOrder: number }> = selectedTemplate
-    ? selectedTemplate.steps.sort((a, b) => a.sortOrder - b.sortOrder)
+  const selectedTemplateSteps: WorkflowStepNodeDto[] = selectedTemplate
+    ? normalizeTemplateSteps(selectedTemplate.steps)
     : (defaultSteps ?? []);
 
   useEffect(() => {
@@ -159,15 +142,15 @@ export function Projects() {
     if (createStep !== 2) return;
     if (!newProjectName.trim()) return;
 
-    // Validate all steps have at least one assignee
+    // Validate all steps (or sub-steps) have at least one assignee
     const missing: string[] = [];
     for (const step of selectedTemplateSteps) {
-      if (step.isParallel && step.parallelChildren?.length) {
-        for (const child of step.parallelChildren) {
-          if (!stepAssignments[child]?.length) missing.push(t(child, childLabel(child)));
+      if (step.children?.length) {
+        for (const child of step.children) {
+          if (!stepAssignments[child.name]?.length) missing.push(t(stepLabelKey(child.name), childLabel(child.name)));
         }
       } else {
-        if (!stepAssignments[step.name]?.length) missing.push(step.label);
+        if (!stepAssignments[step.name]?.length) missing.push(t(stepLabelKey(step.name), step.label));
       }
     }
     if (missing.length > 0) {
@@ -195,35 +178,46 @@ export function Projects() {
         }> = [];
 
         for (const step of selectedTemplateSteps) {
-          const userIds = stepAssignments[step.name];
-          if (userIds?.length) {
-            for (const userId of userIds) {
-              assignments.push({
-                stepName: step.name,
-                assignedUserId: userId,
-                canViewOtherSteps: true,
-                canViewInternalCode: true,
-                visibleToUserIds: stepVisibleTo[step.name] || [],
-              });
+          if (step.children?.length) {
+            // Parent group assignment (defaults to first sub-step's assignee if no explicit selection on parent)
+            const parentUserIds = stepAssignments[step.name] || stepAssignments[step.children[0].name];
+            if (parentUserIds?.length) {
+              for (const userId of parentUserIds) {
+                assignments.push({
+                  stepName: step.name,
+                  assignedUserId: userId,
+                  canViewOtherSteps: true,
+                  canViewInternalCode: true,
+                  visibleToUserIds: stepVisibleTo[step.name] || [],
+                });
+              }
             }
-          }
-        }
-
-        // For parallel children, also assign if specified
-        for (const step of selectedTemplateSteps) {
-          if (step.isParallel && step.parallelChildren) {
-            for (const child of step.parallelChildren) {
-              const userIds = stepAssignments[child];
+            // Sub-step assignments
+            for (const child of step.children) {
+              const userIds = stepAssignments[child.name];
               if (userIds?.length) {
                 for (const userId of userIds) {
                   assignments.push({
-                    stepName: child,
+                    stepName: child.name,
                     assignedUserId: userId,
                     canViewOtherSteps: false,
                     canViewInternalCode: false,
-                    visibleToUserIds: stepVisibleTo[child] || [],
+                    visibleToUserIds: stepVisibleTo[child.name] || [],
                   });
                 }
+              }
+            }
+          } else {
+            const userIds = stepAssignments[step.name];
+            if (userIds?.length) {
+              for (const userId of userIds) {
+                assignments.push({
+                  stepName: step.name,
+                  assignedUserId: userId,
+                  canViewOtherSteps: true,
+                  canViewInternalCode: true,
+                  visibleToUserIds: stepVisibleTo[step.name] || [],
+                });
               }
             }
           }
@@ -479,8 +473,8 @@ export function Projects() {
                     </TableRow>
                   ) : (
                     selectedTemplateSteps.flatMap((step, i) => {
-                      // Serial step → one row
-                      if (!step.isParallel || !step.parallelChildren?.length) {
+                      // Single task step → one row
+                      if (step.type === "task" || !step.children?.length) {
                         return [(
                           <TableRow key={step.name}>
                             <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
@@ -507,25 +501,28 @@ export function Projects() {
                         )];
                       }
 
-                      // Parallel group → header row + child rows
+                      // Group step with children → header row + child rows
+                      const isParallel = step.type === "parallel";
                       return [
-                        <TableRow key={step.name} className="bg-amber-50/60">
+                        <TableRow key={step.name} className={isParallel ? "bg-amber-50/60" : "bg-blue-50/60"}>
                           <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
-                          <TableCell className="font-medium text-amber-800">{t(stepLabelKey(step.name), step.label)}</TableCell>
+                          <TableCell className="font-medium text-gray-900">{t(stepLabelKey(step.name), step.label)}</TableCell>
                           <TableCell colSpan={2} className="text-center">
-                            <span className="text-xs text-amber-600 font-medium">{t("parallel_group")}</span>
+                            <span className={cn("text-xs font-medium px-2 py-0.5 rounded-md", isParallel ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700")}>
+                              {isParallel ? t("parallel_flow", "并行子步骤") : t("serial_flow", "串行子步骤")}
+                            </span>
                           </TableCell>
                         </TableRow>,
-                        ...step.parallelChildren.map((child, ci) => (
-                          <TableRow key={child} className="bg-amber-50/30">
-                            <TableCell className="text-gray-300 text-xs">{i + 1}.{ci + 1}</TableCell>
+                        ...step.children.map((child, ci) => (
+                          <TableRow key={child.name} className={isParallel ? "bg-amber-50/30" : "bg-blue-50/20"}>
+                            <TableCell className="text-gray-400 text-xs">{i + 1}.{ci + 1}</TableCell>
                             <TableCell className="text-sm text-gray-700 pl-8">
-                              {t(child, childLabel(child))}
+                              {t(stepLabelKey(child.name), childLabel(child.name))}
                             </TableCell>
                             <TableCell>
                               <MultiSelect
-                                value={stepAssignments[child] || []}
-                                onChange={(vals) => setStepAssignments((prev) => ({ ...prev, [child]: vals }))}
+                                value={stepAssignments[child.name] || []}
+                                onChange={(vals) => setStepAssignments((prev) => ({ ...prev, [child.name]: vals }))}
                                 options={users.map((u: any) => ({ value: u.id, label: u.fullName || u.username }))}
                                 placeholder={t("select_user", "Select user...")}
                                 className="min-w-[130px]!"
@@ -533,8 +530,8 @@ export function Projects() {
                             </TableCell>
                             <TableCell>
                               <MultiSelect
-                                value={stepVisibleTo[child] || []}
-                                onChange={(values) => setStepVisibleTo((prev) => ({ ...prev, [child]: values }))}
+                                value={stepVisibleTo[child.name] || []}
+                                onChange={(values) => setStepVisibleTo((prev) => ({ ...prev, [child.name]: values }))}
                                 options={users.map((u: any) => ({ value: u.id, label: u.fullName || u.username }))}
                                 placeholder={t("select_user", "Select user...")}
                                 className="min-w-[130px]!"

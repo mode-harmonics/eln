@@ -3,6 +3,7 @@ import {
   PrimaryColumn,
   Column,
   CreateDateColumn,
+  UpdateDateColumn,
   Index,
 } from 'typeorm';
 
@@ -19,6 +20,7 @@ export class ReagentProcurement {
   @Column({ name: 'projectId', type: 'uuid', comment: '项目ID' })
   projectId!: string;
 
+  @Index()
   @Column({ name: 'experimentDesignId', type: 'uuid', nullable: true, comment: '关联实验设计ID' })
   experimentDesignId!: string | null;
 
@@ -34,7 +36,7 @@ export class ReagentProcurement {
   @Column({ type: 'varchar', length: 64, nullable: true, comment: '纯度' })
   purity!: string | null;
 
-  @Column({ type: 'varchar', length: 64, nullable: true, comment: '数量' })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '数量' })
   quantity!: string | null;
 
   @Column({ name: 'isValid', type: 'boolean', default: true, comment: '是否有效(采购到)' })
@@ -45,4 +47,7 @@ export class ReagentProcurement {
 
   @CreateDateColumn({ name: 'createdAt', comment: '创建时间' })
   createdAt!: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt', comment: '更新时间' })
+  updatedAt!: Date;
 }

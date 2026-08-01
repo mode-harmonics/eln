@@ -10,6 +10,7 @@ import { ExperimentDesign } from '../entities/experiment-design.entity';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
 import { Project } from '../entities/project.entity';
 import { WorkflowService } from '../workflow/workflow.service';
+import { BuiltInStep } from '@eln/shared';
 
 @Injectable()
 export class ExperimentDesignService {
@@ -48,7 +49,7 @@ export class ExperimentDesignService {
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');
 
-    await this.workflowService.assertStepNotCompleted(projectId, 'experiment_design');
+    await this.workflowService.assertStepNotCompleted(projectId, BuiltInStep.ExperimentDesign);
 
     // Block duplicate submission
     const existingCount = await this.designRepo.count({ where: { projectId } });
@@ -104,7 +105,7 @@ export class ExperimentDesignService {
       designPrinciple: string;
     }>,
   ): Promise<ExperimentDesign> {
-    await this.workflowService.assertStepNotCompleted(projectId, 'experiment_design');
+    await this.workflowService.assertStepNotCompleted(projectId, BuiltInStep.ExperimentDesign);
 
     if (dto.moleculeName !== undefined && (!dto.moleculeName || !dto.moleculeName.trim())) {
       throw new BadRequestException('分子名称不可为空');

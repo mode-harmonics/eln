@@ -31,6 +31,6 @@ export class VersionHistory {
   @Column({ name: 'updatedBy', type: 'uuid', comment: '更新者ID' })
   updatedBy!: string;
 
-  @CreateDateColumn({ name: 'updatedAt', comment: '更新时间' })
-  updatedAt!: Date;
+  @CreateDateColumn({ name: 'createdAt', comment: '版本创建时间' })
+  createdAt!: Date;
 }

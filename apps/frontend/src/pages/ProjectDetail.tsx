@@ -16,7 +16,7 @@ import { SkeletonCard } from "../components/Skeleton";
 import { Popconfirm } from "../components/Popconfirm";
 import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
-import { STEP_ASSAY_MAP, getChildStepLabel, getStepLabelKey } from "@eln/shared";
+import { BuiltInStep, STEP_ASSAY_MAP } from "@eln/shared";
 import { RECORD_TYPE_TO_API_TYPE } from "../utils/recordTypes";
 import { PageHeader } from "../components/PageHeader";
 import type {
@@ -44,8 +44,8 @@ interface WfData {
 
 const STEP_ICON: Record<string, React.ReactNode> = {
   experiment_design: <FileText className="w-4 h-4" />,
-  design_sub: <FileText className="w-3.5 h-3.5" />,
-  procurement_sub: <Layers className="w-3.5 h-3.5" />,
+  design: <FileText className="w-3.5 h-3.5" />,
+  procurement: <Layers className="w-3.5 h-3.5" />,
   solution_preparation: <FlaskConical className="w-4 h-4" />,
   drying_injection: <FlaskConical className="w-4 h-4" />,
   formation: <FlaskConical className="w-4 h-4" />,
@@ -61,46 +61,51 @@ const STEP_ICON: Record<string, React.ReactNode> = {
   ht_cycle: <Beaker className="w-3.5 h-3.5" />,
 };
 
-/** UI-only sub-steps injected into the experiment_design card (not real template steps) */
-const UI_ONLY_META: Record<string, { label: string; icon: React.ReactNode }> = {
-  design_sub: { label: "1. 实验设计", icon: <FileText className="w-3.5 h-3.5" /> },
-  procurement_sub: { label: "2. 试剂采购", icon: <Layers className="w-3.5 h-3.5" /> },
-};
-
-type StepMetaMap = Record<string, { label: string; icon: React.ReactNode; dataType?: string }>;
+type StepMetaEntry = { label: string; icon: React.ReactNode; dataType?: string; builtInStep?: string };
+type StepMetaMap = Record<string, StepMetaEntry>;
 
 /**
  * Fetch default template steps from the backend (MANDATORY — no fallback).
- * UI-only sub-steps (design_sub, procurement_sub) are merged in.
  */
 async function fetchStepMeta(): Promise<StepMetaMap> {
   const meta: StepMetaMap = {};
-  // UI-only sub-steps always available
-  for (const [name, m] of Object.entries(UI_ONLY_META)) {
-    meta[name] = { ...m };
-  }
   const token = localStorage.getItem("token");
   const res = await fetch("/api/v1/workflow/default-steps", {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
   });
   if (!res.ok) throw new Error(`Failed to load workflow steps: ${res.status}`);
   const json = await res.json();
-  const steps: Array<{ name: string; label: string; dataType: string | null; isParallel: boolean; parallelChildren: string[] }> =
-    json?.data?.steps ?? json?.steps ?? [];
+  const data = json?.data ?? json ?? {};
+  const steps: Array<{ id: string; label: string; builtInStep?: string | null; dataType?: string | null; children?: any[] }> = data.steps || [];
+
+  const addNode = (n: { id: string; label: string; builtInStep?: string | null; dataType?: string | null }) => {
+    const icon = STEP_ICON[n.id] ?? <Beaker className="w-4 h-4" />;
+    meta[n.id] = { label: n.label, icon, dataType: n.dataType ?? undefined, builtInStep: n.builtInStep ?? n.id };
+  };
+
   for (const s of steps) {
-    const icon = STEP_ICON[s.name] ?? <Beaker className="w-4 h-4" />;
-    meta[s.name] = { label: s.label, icon, dataType: s.dataType ?? undefined };
-    if (s.isParallel && s.parallelChildren) {
-      for (const child of s.parallelChildren) {
-        if (!meta[child]) {
-          const childLabelKey = getStepLabelKey(child);
-          meta[child] = { label: childLabelKey, icon: STEP_ICON[child] ?? <Beaker className="w-3.5 h-3.5" />, dataType: s.dataType ?? undefined };
-        }
-      }
+    addNode(s);
+    if (s.children) {
+      for (const c of s.children) addNode(c);
     }
   }
   return meta;
 }
+
+/** Resolve a step's builtInStep value (for template-driven branching). */
+function bs(meta: StepMetaMap, stepName: string): string {
+  return meta[stepName]?.builtInStep ?? stepName;
+}
+
+/** Steps whose builtInStep indicates they should NOT auto-create an experiment. */
+const BS_NO_AUTO_EXP: string[] = [
+  BuiltInStep.ExperimentDesign, BuiltInStep.BatterySelection, BuiltInStep.Testing,
+];
+
+/** Steps whose builtInStep triggers special sidebar panels (no generic experiment card). */
+const BS_SPECIAL_PANEL: string[] = [
+  BuiltInStep.ExperimentDesign, BuiltInStep.BatterySelection, BuiltInStep.Testing,
+];
 
 // ─── Main Component ─────────────────────────────────────────────
 
@@ -184,7 +189,8 @@ export function ProjectDetail() {
       if (wfData.instance && wfData.steps.length > 0) {
         const existingStepNames = new Set(expsArr.map((e: any) => e.workflowStepName));
         const stepsNeedingExps = wfData.steps.filter(
-          (s) => s.status !== 'pending' && !s.parentStepName && !existingStepNames.has(s.stepName) && !['experiment_design', 'battery_selection', 'testing'].includes(s.stepName),
+          (s) => s.status !== 'pending' && !s.parentStepName && !existingStepNames.has(s.stepName)
+            && !BS_NO_AUTO_EXP.includes(bs(STEP_META, s.stepName)),
         );
         if (stepsNeedingExps.length > 0) {
           await Promise.allSettled(
@@ -302,35 +308,7 @@ export function ProjectDetail() {
 
   const stepParents = visibleSteps.filter((s) => !s.parentStepName);
   const stepChildren = (parentName: string) => {
-    const children = visibleSteps.filter((s) => s.parentStepName === parentName).sort((a, b) => a.stepIndex - b.stepIndex);
-    if (parentName === "experiment_design") {
-      const parentStep = visibleSteps.find(s => s.stepName === "experiment_design");
-      if (parentStep) {
-        let designStatus = parentStep.status;
-        let procStatus = parentStep.status;
-        if (parentStep.status === "in_progress") {
-          designStatus = isDesignSubmitted ? "completed" : "in_progress";
-          procStatus = isDesignSubmitted ? "in_progress" : "pending";
-        }
-        children.push({
-          stepName: "design_sub",
-          stepIndex: 0,
-          status: designStatus,
-          assignedUserId: null,
-          isParallelGroup: false,
-          parentStepName: "experiment_design"
-        });
-        children.push({
-          stepName: "procurement_sub",
-          stepIndex: 1,
-          status: procStatus,
-          assignedUserId: null,
-          isParallelGroup: false,
-          parentStepName: "experiment_design"
-        });
-      }
-    }
-    return children;
+    return visibleSteps.filter((s) => s.parentStepName === parentName).sort((a, b) => a.stepIndex - b.stepIndex);
   };
 
   const completedStepCount = stepParents.filter((step) => step.status === "completed").length;
@@ -428,8 +406,8 @@ export function ProjectDetail() {
                     const isComplete = step.status === "completed";
                     const isInProgress = step.status === "in_progress";
                     const isPending = step.status === "pending";
-                    const route = isPending ? null : stepRoute(step.stepName, projectId!, experiments);
-                    const canOpen = !isArchived && (!!route || (step.stepName === "battery_selection" && !isPending));
+                    const route = isPending ? null : stepRoute(step.stepName, projectId!, experiments, STEP_META);
+                    const canOpen = !isArchived && !!route;
 
                     return (
                       <div key={step.stepName} className={cn("relative rounded-surface px-3 py-3 transition-colors sm:px-4", isInProgress && "bg-action-subtle/60")}>
@@ -440,7 +418,6 @@ export function ProjectDetail() {
                           onClick={(event) => {
                             if (isArchived) { event.preventDefault(); return; }
                             if (!route) event.preventDefault();
-                            if (step.stepName === "battery_selection" && !isPending) navigate(`/projects/${projectId}/cell-picker`);
                           }}
                           className={cn(
                             "group flex min-w-0 items-center gap-3 no-underline",
@@ -478,7 +455,7 @@ export function ProjectDetail() {
                             {children.map((child, childIndex) => {
                               const childMeta = STEP_META[child.stepName] || { label: child.stepName, icon: <Circle className="h-3 w-3" /> };
                               const childPending = child.status === "pending";
-                              const childRoute = childPending ? null : stepRoute(child.stepName, projectId!, experiments);
+                              const childRoute = childPending ? null : stepRoute(child.stepName, projectId!, experiments, STEP_META);
                               const childCanOpen = !isArchived && !!childRoute;
                               return (
                                 <Link
@@ -546,7 +523,7 @@ export function ProjectDetail() {
                       </div>
                     )}
 
-                    {focusedStep.stepName === "experiment_design" && (
+                    {bs(STEP_META, focusedStep.stepName) === BuiltInStep.ExperimentDesign && (
                       isArchived ? (
                         <Button variant="secondary" className="w-full" disabled>
                           <LockKeyhole className="h-4 w-4" />
@@ -563,7 +540,7 @@ export function ProjectDetail() {
                       )
                     )}
 
-                    {focusedStep.stepName === "battery_selection" && (
+                    {bs(STEP_META, focusedStep.stepName) === BuiltInStep.BatterySelection && (
                       isArchived ? (
                         <Button variant="secondary" className="w-full" disabled>
                           <LockKeyhole className="h-4 w-4" />
@@ -578,8 +555,8 @@ export function ProjectDetail() {
                       )
                     )}
 
-                    {!['experiment_design', 'battery_selection', 'testing'].includes(focusedStep.stepName) && (() => {
-                      const taskRoute = stepRoute(focusedStep.stepName, projectId!, experiments);
+                    {!BS_SPECIAL_PANEL.includes(bs(STEP_META, focusedStep.stepName)) && (() => {
+                      const taskRoute = stepRoute(focusedStep.stepName, projectId!, experiments, STEP_META);
                       return taskRoute ? (
                         isArchived ? (
                           <Button variant="secondary" className="w-full" disabled>
@@ -631,18 +608,12 @@ export function ProjectDetail() {
 
 // ─── Helpers ────────────────────────────────────────────────────
 
-function stepRoute(stepName: string, projectId: string, experiments: Experiment[]): string | null {
-  switch (stepName) {
-    case "experiment_design": return null; // Unify with testing: parent steps have no arrow
-    case "testing": return null;
-    case "design_sub": return `/projects/${projectId}/design?tab=design`;
-    case "procurement_sub": return `/projects/${projectId}/design?tab=procurement`;
-    case "battery_selection": return null;
-    case "drying":
-    case "liquid_injection": {
-      const exp = experiments.find((e) => (e as any).workflowStepName === "drying_injection");
-      return exp ? `/projects/${projectId}/experiments/${exp.id}` : null;
-    }
+function stepRoute(stepName: string, projectId: string, experiments: Experiment[], meta: StepMetaMap): string | null {
+  const b = bs(meta, stepName);
+  switch (b) {
+    case BuiltInStep.ExperimentDesign: return `/projects/${projectId}/design`;
+    case BuiltInStep.Testing: return null;
+    case BuiltInStep.BatterySelection: return `/projects/${projectId}/cell-picker`;
   }
   const exp = experiments.find((e) => (e as any).workflowStepName === stepName);
   return exp ? `/projects/${projectId}/experiments/${exp.id}` : null;

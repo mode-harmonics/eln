@@ -35,13 +35,20 @@ import { api, ApiError } from "../lib/api";
 
 // ─── Types ──────────────────────────────────────────────────────
 
-interface StepDef {
-  name: string;
+interface TemplateNode {
+  id: string;
   label: string;
   builtInStep?: string;
-  isParallel?: boolean;
-  parallelChildren?: string[];
-  sortOrder: number;
+}
+
+interface TemplateEdge {
+  from: string;
+  to: string;
+}
+
+interface TemplateGraph {
+  nodes?: TemplateNode[];
+  edges?: TemplateEdge[];
 }
 
 interface Template {
@@ -49,7 +56,7 @@ interface Template {
   name: string;
   description: string | null;
   isDefault: boolean;
-  steps: StepDef[];
+  steps: TemplateGraph;
   createdAt: string;
 }
 
@@ -117,102 +124,99 @@ interface LayoutNode {
 }
 
 /**
- * Build React Flow nodes+edges from template StepDef[].
- * - Serial steps: laid out horizontally (left → right)
- * - Parallel groups: parent in main horizontal flow, children below in a row
- * - Edges connect serial steps sequentially
- * - Parallel groups have edges from parent to each child
+ * Build React Flow nodes+edges from template graph definition.
+ * Serial steps: laid out left-to-right. Parallel: parent in main flow, children below.
  */
-function buildLayout(steps: StepDef[]): { nodes: LayoutNode[]; edges: Partial<Edge>[] } {
-  const sorted = [...steps].sort((a, b) => a.sortOrder - b.sortOrder);
+function buildLayout(graph: TemplateGraph): { nodes: LayoutNode[]; edges: Partial<Edge>[] } {
+  const tNodes = graph.nodes || [];
+  const tEdges = graph.edges || [];
   const nodes: LayoutNode[] = [];
   const edges: Partial<Edge>[] = [];
+
+  // Compute topological order for layout
+  const inDeg = new Map<string, number>();
+  const outAdj = new Map<string, string[]>();
+  const nodeMap = new Map(tNodes.map((n) => [n.id, n]));
+  for (const n of tNodes) { inDeg.set(n.id, 0); outAdj.set(n.id, []); }
+  for (const e of tEdges) {
+    if (!nodeMap.has(e.from) || !nodeMap.has(e.to)) continue;
+    inDeg.set(e.to, (inDeg.get(e.to) || 0) + 1);
+    outAdj.get(e.from)!.push(e.to);
+  }
+  const queue = tNodes.filter((n) => inDeg.get(n.id) === 0).map((n) => n.id);
+  const order: string[] = [];
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    order.push(cur);
+    for (const t of outAdj.get(cur) || []) {
+      const d = (inDeg.get(t) || 1) - 1;
+      inDeg.set(t, d);
+      if (d === 0) queue.push(t);
+    }
+  }
+
+  const placed = new Set<string>();
   let x = 0;
-  let prevSerialId: string | null = null;
+  const seenParents = new Map<string, string>(); // nodeId → parentId if parallel child
 
-  for (const step of sorted) {
-    const id = `step-${step.name}`;
+  for (const id of order) {
+    if (placed.has(id)) continue;
+    const outCount = outAdj.get(id)?.length || 0;
+    const rId = `step-${id}`;
 
-    if (step.isParallel && step.parallelChildren && step.parallelChildren.length > 0) {
-      // Calculate block width to prevent overlapping
-      const childrenW = step.parallelChildren.length * NODE_W + (step.parallelChildren.length - 1) * CHILD_GAP;
+    if (outCount >= 2) {
+      // Parallel group: parent + children in a block
+      const children = outAdj.get(id) || [];
+      const childIds = children.filter((c) => !placed.has(c));
+      const childrenW = childIds.length * NODE_W + (childIds.length - 1) * CHILD_GAP;
       const blockW = Math.max(NODE_W, childrenW);
-      
-      const parentX = x + (blockW - NODE_W) / 2;
-      const startX = x + (blockW - childrenW) / 2;
 
-      // ── Parallel parent node ──
+      // Parent node
       nodes.push({
-        id,
-        type: "step",
-        position: { x: parentX, y: PARENT_Y },
-        data: {
-          label: step.label,
-          builtInStep: step.builtInStep || step.name,
-          nodeStyle: "parallel-parent",
-          childCount: step.parallelChildren.length,
-        },
+        id: rId, type: "step", position: { x: x + (blockW - NODE_W) / 2, y: PARENT_Y },
+        data: { label: nodeMap.get(id)?.label || id, builtInStep: nodeMap.get(id)?.builtInStep || id, nodeStyle: "parallel-parent", childCount: childIds.length },
       });
-      if (prevSerialId) {
-        edges.push({
-          id: `${prevSerialId}->${id}`,
-          source: prevSerialId,
-          target: id,
-          type: "smoothstep",
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { stroke: "#64748b", strokeWidth: 2 },
-        });
+      placed.add(id);
+      // Connect from previous serial
+      if (x > 0) {
+        const prev = nodes[nodes.length - 2];
+        if (prev) edges.push({ id: `${prev.id}->${rId}`, source: prev.id, target: rId, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#64748b", strokeWidth: 2 } });
       }
 
-      // ── Parallel children below ──
-      step.parallelChildren.forEach((childName, ci) => {
-        const childId = `step-${childName}`;
+      // Children
+      const startX = x + (blockW - childrenW) / 2;
+      childIds.forEach((cId, ci) => {
+        const cRId = `step-${cId}`;
         nodes.push({
-          id: childId,
-          type: "step",
-          position: { x: startX + ci * (NODE_W + CHILD_GAP), y: CHILD_Y },
-          data: {
-            label: childName.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-            builtInStep: childName,
-            nodeStyle: "parallel-child",
-          },
+          id: cRId, type: "step", position: { x: startX + ci * (NODE_W + CHILD_GAP), y: CHILD_Y },
+          data: { label: nodeMap.get(cId)?.label || cId, builtInStep: nodeMap.get(cId)?.builtInStep || cId, nodeStyle: "parallel-child" },
         });
-        edges.push({
-          id: `${id}->${childId}`,
-          source: id,
-          target: childId,
-          type: "smoothstep",
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { stroke: "#94a3b8", strokeWidth: 1.5, strokeDasharray: "5 3" },
-          animated: true,
-        });
+        placed.add(cId);
+        edges.push({ id: `${rId}->${cRId}`, source: rId, target: cRId, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#94a3b8", strokeWidth: 1.5, strokeDasharray: "5 3" }, animated: true });
       });
 
-      prevSerialId = id;
+      // Find where children converge to continue serial flow
+      const convergeTo = childIds
+        .flatMap((cId) => outAdj.get(cId) || [])
+        .find((t) => outAdj.get(t)?.every((c) => childIds.includes(c)) === false);
       x += blockW + NODE_H_GAP;
     } else {
-      // ── Serial step ──
-      nodes.push({
-        id,
-        type: "step",
-        position: { x, y: PARENT_Y },
-        data: {
-          label: step.label,
-          builtInStep: step.builtInStep || step.name,
-          nodeStyle: "serial",
-        },
-      });
-      if (prevSerialId) {
-        edges.push({
-          id: `${prevSerialId}->${id}`,
-          source: prevSerialId,
-          target: id,
-          type: "smoothstep",
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { stroke: "#64748b", strokeWidth: 2 },
-        });
+      // Serial node — skip if it's a parallel child (handled above)
+      const parents = tEdges.filter((e) => e.to === id).map((e) => e.from);
+      const isChild = parents.length === 1 && (outAdj.get(parents[0])?.length || 0) >= 2;
+      if (isChild) {
+        placed.add(id);
+        continue;
       }
-      prevSerialId = id;
+      nodes.push({
+        id: rId, type: "step", position: { x, y: PARENT_Y },
+        data: { label: nodeMap.get(id)?.label || id, builtInStep: nodeMap.get(id)?.builtInStep || id, nodeStyle: "serial" },
+      });
+      placed.add(id);
+      if (x > 0) {
+        const prev = nodes[nodes.length - 2];
+        if (prev) edges.push({ id: `${prev.id}->${rId}`, source: prev.id, target: rId, type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed }, style: { stroke: "#64748b", strokeWidth: 2 } });
+      }
       x += NODE_W + NODE_H_GAP;
     }
   }
@@ -221,77 +225,19 @@ function buildLayout(steps: StepDef[]): { nodes: LayoutNode[]; edges: Partial<Ed
 }
 
 /**
- * Reconstruct StepDef[] from current nodes + edges.
- * Rules:
- * - Sort nodes by Y then X (top-to-bottom, left-to-right) for flow order
- * - For each node, count outgoing edges:
- *   - 0-1 outgoing → serial step
- *   - 2+ outgoing → parallel group, children are targets
- * - Skip parallel children (nodes whose incoming edge source has 2+ outgoing)
+ * Reconstruct template graph from React Flow nodes + edges.
  */
-function stepsFromFlow(nodes: Node[], edges: Edge[]): StepDef[] {
-  // Build outgoing edge count map
-  const outgoingCount = new Map<string, number>();
-  const outgoingTargets = new Map<string, string[]>();
-  const incomingSource = new Map<string, string>();
-
-  for (const e of edges) {
-    outgoingCount.set(e.source, (outgoingCount.get(e.source) || 0) + 1);
-    const targets = outgoingTargets.get(e.source) || [];
-    targets.push(e.target);
-    outgoingTargets.set(e.source, targets);
-    incomingSource.set(e.target, e.source);
-  }
-
-  // Identify parallel children: nodes whose incoming source has 2+ outgoing
-  const parallelChildren = new Set<string>();
-  for (const [nodeId, sourceId] of incomingSource) {
-    if ((outgoingCount.get(sourceId) || 0) >= 2) {
-      parallelChildren.add(nodeId);
-    }
-  }
-
-  // Sort serial/parent nodes by position (Y then X)
-  const sorted = [...nodes]
-    .filter((n) => !parallelChildren.has(n.id))
-    .sort((a, b) => {
-      const diffY = a.position.y - b.position.y;
-      return diffY !== 0 ? diffY : a.position.x - b.position.x;
-    });
-
-  const steps: StepDef[] = [];
-  let order = 0;
-
-  for (const node of sorted) {
-    const name = node.id.replace("step-", "");
-    const outCount = outgoingCount.get(node.id) || 0;
-
-    if (outCount >= 2) {
-      // Parallel group
-      const children = (outgoingTargets.get(node.id) || [])
-        .map((t) => t.replace("step-", ""))
-        .filter((c) => c !== name);
-      steps.push({
-        name,
-        label: String(node.data.label || name),
-        builtInStep: String(node.data.builtInStep || name),
-        isParallel: true,
-        parallelChildren: children,
-        sortOrder: order++,
-      });
-    } else {
-      // Serial step
-      steps.push({
-        name,
-        label: String(node.data.label || name),
-        builtInStep: String(node.data.builtInStep || name),
-        isParallel: false,
-        sortOrder: order++,
-      });
-    }
-  }
-
-  return steps;
+function graphFromFlow(nodes: Node[], edges: Edge[]): TemplateGraph {
+  const tNodes: TemplateNode[] = nodes.map((n) => ({
+    id: n.id.startsWith("step-") ? n.id.slice(5) : n.id,
+    label: String((n.data as Record<string, unknown>).label || ""),
+    builtInStep: String((n.data as Record<string, unknown>).builtInStep || ""),
+  }));
+  const tEdges: TemplateEdge[] = edges.map((e) => ({
+    from: e.source.startsWith("step-") ? e.source.slice(5) : e.source,
+    to: e.target.startsWith("step-") ? e.target.slice(5) : e.target,
+  }));
+  return { nodes: tNodes, edges: tEdges };
 }
 
 // ─── Generate unique step name ──────────────────────────────────
@@ -497,7 +443,7 @@ function WorkflowConfig() {
     if (!activeTemplate) return;
     setSaving(true);
     try {
-      const steps = stepsFromFlow(nodes, edges);
+      const steps = graphFromFlow(nodes, edges);
       await api.put(`/api/v1/workflow/templates/${activeTemplate.id}`, {
         name: activeTemplate.name,
         description: activeTemplate.description,
@@ -520,7 +466,7 @@ function WorkflowConfig() {
         name: `Template ${templates.length + 1}`,
         description: "",
         isDefault: false,
-        steps: [],
+        steps: { nodes: [], edges: [] },
       });
       toast.success(t("create_success", "Created"));
       fetchTemplates();

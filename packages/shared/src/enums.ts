@@ -59,6 +59,8 @@ export enum StepStatus {
 export enum BuiltInStep {
   ProjectCreation = 'project_creation',
   ExperimentDesign = 'experiment_design',
+  Design = 'design',
+  Procurement = 'procurement',
   SolutionPreparation = 'solution_preparation',
   DryingInjection = 'drying_injection',
   Formation = 'formation',
