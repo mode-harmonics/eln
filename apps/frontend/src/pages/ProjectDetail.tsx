@@ -431,12 +431,15 @@ export function ProjectDetail() {
                                 isInProgress ? "border-transparent bg-action text-white" :
                                   "border-transparent bg-gray-100 text-gray-400",
                             )}>
-                              {isComplete ? <CheckCircle2 className="h-4 w-4" /> : isInProgress ? <Play className="ml-0.5 h-3.5 w-3.5 fill-current" /> : step.stepIndex + 1}
+                              {isComplete ? <CheckCircle2 className="h-4 w-4" /> : isInProgress ? <Play className="ml-0.5 h-3.5 w-3.5 fill-current" /> : index + 1}
                             </div>
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className={cn("text-sm font-medium", isPending ? "text-gray-500" : "text-gray-900")}>{t(meta.label, meta.label)}</span>
+                              <span className={cn("text-sm font-medium", isPending ? "text-gray-500" : "text-gray-900")}>
+                                <span className="text-gray-400 font-normal mr-1.5">{index + 1}.</span>
+                                {t(meta.label, meta.label)}
+                              </span>
                               <StatusBadge status={step.status} />
                             </div>
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
@@ -478,7 +481,10 @@ export function ProjectDetail() {
                                       : childMeta.icon}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className={cn("truncate text-[13px]", child.status === "in_progress" ? "font-medium text-action-muted" : "text-gray-700")}>{t(childMeta.label, childMeta.label)}</p>
+                                    <p className={cn("truncate text-[13px]", child.status === "in_progress" ? "font-medium text-action-muted" : "text-gray-700")}>
+                                      <span className="text-gray-400 font-normal mr-1.5">{index + 1}.{childIndex + 1}</span>
+                                      {t(childMeta.label, childMeta.label)}
+                                    </p>
                                     {child.assignedUserId && <p className="mt-0.5 truncate text-[11px] text-gray-400">{t("assignee", "执行人")}: {(child as any).assignedUserName || `用户 #${child.assignedUserId.slice(0, 6)}`}</p>}
                                   </div>
                                   <StatusBadge status={child.status} />
