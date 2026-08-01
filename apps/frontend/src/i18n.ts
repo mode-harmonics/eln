@@ -71,6 +71,7 @@ const resources = {
       create_record: "Create Record",
       record_type: "Record Type",
       process_data: "Process Data",
+      solution_preparation: "Solution Prep",
       calendar_life: "Calendar Life",
       storage_swelling: "Storage Swelling",
       energy_efficiency: "Energy Efficiency",
@@ -249,6 +250,13 @@ const resources = {
       col_gu1: "GU_e (Post-grading Volt)",
       col_gr1: "GR_e (Post-grading ACIR)",
 
+      // Solution Preparation columns
+      col_formula: "Formula",
+      col_material_name: "Material Name",
+      col_specification: "Spec / Purity",
+      col_formula_amount: "Formula Amount (g)",
+      col_actual_amount: "Actual Amount (g)",
+
       // Computed Fields
       col_comp_mIn: "m_v (Injection Mass)",
       col_comp_mLoss: "rn_total (Loss Mass)",
@@ -367,6 +375,7 @@ const resources = {
       step_drying: "Drying",
       step_injection: "Liquid Injection",
       step_drying_injection: "Drying/Injection",
+      step_solution_preparation: "Solution Prep",
       step_formation: "Formation",
       step_sealing: "Second Sealing",
       step_second_sealing: "Second Sealing",
@@ -378,6 +387,7 @@ const resources = {
       step_testing: "Testing",
       step_desc_design: "Design molecular formulations and submit for procurement",
       step_desc_drying: "Upload drying process data and complete this step",
+      step_desc_solution_preparation: "Prepare electrolyte solutions for each formula group",
       step_desc_injection: "Upload liquid injection process data",
       step_desc_formation: "Upload formation process data",
       step_desc_sealing: "Upload second sealing process data",
@@ -388,6 +398,7 @@ const resources = {
       use_default: "Use Default Template",
       select_user: "Select user...",
       select_template_hint: "Select a template to see steps",
+      load_steps_failed: "Failed to load workflow steps. Ensure the backend has a default workflow template configured.",
       quick_links: "Quick Links",
       not_unlocked: "Locked",
       lock_hint: "Complete process data & pick cells first",
@@ -866,6 +877,12 @@ const resources = {
 
       col_gr1: "定容后内阻",
 
+      // Solution Preparation columns
+      col_formula: "配方",
+      col_material_name: "物料名称",
+      col_specification: "规格/纯度",
+      col_formula_amount: "配方添加量(g)",
+      col_actual_amount: "实际添加量(g)",
 
       // Computed Fields
       col_comp_mIn: "注液量",
@@ -985,6 +1002,7 @@ const resources = {
       step_drying: "干燥",
       step_injection: "注液",
       step_drying_injection: "干燥/注液",
+      step_solution_preparation: "配液",
       step_formation: "化成",
       step_sealing: "二封",
       step_second_sealing: "二封",
@@ -996,6 +1014,7 @@ const resources = {
       step_testing: "测试",
       step_desc_design: "设计分子配方并提交采购",
       step_desc_drying: "上传干燥制程数据并完成此步骤",
+      step_desc_solution_preparation: "为各配方分组配制电解液",
       step_desc_injection: "上传注液制程数据",
       step_desc_formation: "上传化成制程数据",
       step_desc_sealing: "上传二封制程数据",
@@ -1006,6 +1025,7 @@ const resources = {
       use_default: "使用默认模板",
       select_user: "选择用户...",
       select_template_hint: "选择模板以查看步骤",
+      load_steps_failed: "无法加载流程步骤定义，请确保后端已配置默认流程模板",
       quick_links: "快捷链接",
       not_unlocked: "未解锁",
       lock_hint: "请先完成制程数据导入并挑选电池",

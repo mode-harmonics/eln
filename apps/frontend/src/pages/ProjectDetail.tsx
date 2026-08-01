@@ -16,7 +16,7 @@ import { SkeletonCard } from "../components/Skeleton";
 import { Popconfirm } from "../components/Popconfirm";
 import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
-import { STEP_ASSAY_MAP, getChildStepLabel } from "@eln/shared";
+import { STEP_ASSAY_MAP, getChildStepLabel, getStepLabelKey } from "@eln/shared";
 import { RECORD_TYPE_TO_API_TYPE } from "../utils/recordTypes";
 import { PageHeader } from "../components/PageHeader";
 import type {
@@ -93,7 +93,8 @@ async function fetchStepMeta(): Promise<StepMetaMap> {
     if (s.isParallel && s.parallelChildren) {
       for (const child of s.parallelChildren) {
         if (!meta[child]) {
-          meta[child] = { label: child, icon: STEP_ICON[child] ?? <Beaker className="w-3.5 h-3.5" />, dataType: s.dataType ?? undefined };
+          const childLabelKey = getStepLabelKey(child);
+          meta[child] = { label: childLabelKey, icon: STEP_ICON[child] ?? <Beaker className="w-3.5 h-3.5" />, dataType: s.dataType ?? undefined };
         }
       }
     }
@@ -361,7 +362,7 @@ export function ProjectDetail() {
           <div className="flex shrink-0 items-center gap-2 text-[13px] sm:pt-1">
             <span className="text-gray-400">{t("current_step", "当前步骤")}</span>
             <span className="h-1.5 w-1.5 rounded-full bg-action"></span>
-            <span className="font-medium text-gray-700">{STEP_META[currentStep.stepName]?.label || currentStep.stepName}</span>
+            <span className="font-medium text-gray-700">{t(STEP_META[currentStep.stepName]?.label || currentStep.stepName, STEP_META[currentStep.stepName]?.label || currentStep.stepName)}</span>
           </div>
         ) : undefined}
       />
@@ -458,7 +459,7 @@ export function ProjectDetail() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className={cn("text-sm font-medium", isPending ? "text-gray-500" : "text-gray-900")}>{meta.label}</span>
+                              <span className={cn("text-sm font-medium", isPending ? "text-gray-500" : "text-gray-900")}>{t(meta.label, meta.label)}</span>
                               <StatusBadge status={step.status} />
                             </div>
                             <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
@@ -500,7 +501,7 @@ export function ProjectDetail() {
                                       : childMeta.icon}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className={cn("truncate text-[13px]", child.status === "in_progress" ? "font-medium text-action-muted" : "text-gray-700")}>{childMeta.label}</p>
+                                    <p className={cn("truncate text-[13px]", child.status === "in_progress" ? "font-medium text-action-muted" : "text-gray-700")}>{t(childMeta.label, childMeta.label)}</p>
                                     {child.assignedUserId && <p className="mt-0.5 truncate text-[11px] text-gray-400">{t("assignee", "执行人")}: {(child as any).assignedUserName || `用户 #${child.assignedUserId.slice(0, 6)}`}</p>}
                                   </div>
                                   <StatusBadge status={child.status} />
@@ -529,7 +530,7 @@ export function ProjectDetail() {
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-action-muted">
                         {STEP_META[focusedStep.stepName]?.icon || <Circle className="h-4 w-4" />}
                       </div>
-                      <h3 className="text-[15px] font-semibold text-gray-900">{STEP_META[focusedStep.stepName]?.label || focusedStep.stepName}</h3>
+                      <h3 className="text-[15px] font-semibold text-gray-900">{t(STEP_META[focusedStep.stepName]?.label || focusedStep.stepName, STEP_META[focusedStep.stepName]?.label || focusedStep.stepName)}</h3>
                     </div>
                   </div>
                   <div className="space-y-4 p-5">

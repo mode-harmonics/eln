@@ -899,11 +899,11 @@ export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit
 
 // ─── SolutionPreparation (配液) ─────────────────────────────────────────────
 const SLN_COLS: ColDef[] = [
-  { field: 'groupName', i18nKey: 'col_formula', label: '配方' },
-  { field: 'materialName', i18nKey: 'col_material_name', label: '物料名称', editable: true, sourceType: 'manual' },
-  { field: 'specification', i18nKey: 'col_specification', label: '规格/纯度', editable: true, sourceType: 'manual' },
-  { field: 'formulaAmount', i18nKey: 'col_formula_amount', label: '配方添加量(g)', editable: true, sourceType: 'manual' },
-  { field: 'actualAmount', i18nKey: 'col_actual_amount', label: '实际添加量(g)', editable: true, sourceType: 'manual' },
+  { field: 'groupName', i18nKey: 'col_formula' },
+  { field: 'materialName', i18nKey: 'col_material_name', editable: true, sourceType: 'manual' },
+  { field: 'specification', i18nKey: 'col_specification', editable: true, sourceType: 'manual' },
+  { field: 'formulaAmount', i18nKey: 'col_formula_amount', editable: true, sourceType: 'manual' },
+  { field: 'actualAmount', i18nKey: 'col_actual_amount', editable: true, sourceType: 'manual' },
 ];
 
 export function SolutionPreparationTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {

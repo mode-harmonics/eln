@@ -405,7 +405,7 @@ export function ExperimentDetail() {
         badges={<>
             {assayType && (
               <span className="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 shrink-0">
-                {assayType !== 'ProcessData' && assayType !== 'SolutionPreparation' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType)}
+                {t(RECORD_TYPE_TO_I18N_KEY[assayType || ''] || assayType || '')}
                 {experiment.workflowStepName && ` - ${t(`step_${experiment.workflowStepName}`, STEP_NAME_MAP[experiment.workflowStepName] || experiment.workflowStepName)}`}
               </span>
             )}
@@ -574,7 +574,7 @@ export function ExperimentDetail() {
                   assayType={assayType || "Unknown"} 
                   experimentId={experiment.id} 
                   projectId={experiment.projectId} 
-                  title={experiment.workflowStepName ? `${assayType !== 'ProcessData' && assayType !== 'SolutionPreparation' ? t('testing', '测试') : t(RECORD_TYPE_TO_I18N_KEY[assayType || "Unknown"] || assayType)} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined}
+                  title={experiment.workflowStepName ? `${t(RECORD_TYPE_TO_I18N_KEY[assayType || ''] || assayType || '')} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined}
                 />
                 {renderTable()}
               </div>
