@@ -45,12 +45,6 @@ export class WorkflowStepAssignment {
   @Column({ name: 'visibleToUserIds', type: 'jsonb', nullable: true, comment: '允许查看该步骤的其他人员ID列表' })
   visibleToUserIds!: string[] | null;
 
-  @Column({ name: 'isParallelGroup', type: 'boolean', default: false, comment: '是否为并行组节点(如testing)' })
-  isParallelGroup!: boolean;
-
-  @Column({ name: 'parentStepName', type: 'varchar', length: 64, nullable: true, comment: '父级并行组步骤名称' })
-  parentStepName!: string | null;
-
   @Column({ name: 'completedAt', type: 'timestamp', nullable: true, comment: '完成时间' })
   completedAt!: Date | null;
 

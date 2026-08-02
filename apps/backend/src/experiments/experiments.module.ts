@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Attachment } from '../entities/attachment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
@@ -17,9 +17,10 @@ import { WorkflowModule } from '../workflow/workflow.module';
   imports: [
     TypeOrmModule.forFeature([Experiment, Attachment, ExperimentCollaborator, VersionHistory, ExperimentComment, WorkflowStepAssignment, WorkflowInstance]),
     NotificationsModule,
-    WorkflowModule,
+    forwardRef(() => WorkflowModule),
   ],
   controllers: [ExperimentsController],
   providers: [ExperimentsService],
+  exports: [ExperimentsService],
 })
 export class ExperimentsModule {}

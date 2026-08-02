@@ -1,31 +1,52 @@
 import {
+  forwardRef,
+  Inject,
   Injectable,
   NotFoundException,
   BadRequestException,
   Logger,
   ForbiddenException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository, In } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { WorkflowTemplate } from '../entities/workflow-template.entity';
 import { WorkflowInstance } from '../entities/workflow-instance.entity';
 import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
 import { Project } from '../entities/project.entity';
-import { Experiment } from '../entities/experiment.entity';
-import { NotificationsService } from '../notifications/notifications.service';
 import { PickedCell } from '../entities/picked-cell.entity';
 import { User } from '../entities/user.entity';
-import { ExperimentDesign } from '../entities/experiment-design.entity';
-import { ProcessData } from '../entities/process-data.entity';
-import { SolutionPreparation } from '../entities/solution-preparation.entity';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
-import { StepStatus, BuiltInStep, WorkflowStepTreeDto, WorkflowStepNodeDto, parseGraphToStepTree } from '@eln/shared';
+import { NotificationsService } from '../notifications/notifications.service';
+import { ExperimentsService } from '../experiments/experiments.service';
+import {
+  StepStatus,
+  WorkflowStatus,
+  BuiltInStep,
+  WorkflowStepTreeDto,
+  WorkflowStepNodeDto,
+  parseGraphToStepTree,
+  deriveWorkflowGraphMeta,
+  STEP_ASSAY_MAP,
+  type WorkflowGraphMeta,
+} from '@eln/shared';
 
 export function isTerminalStepStatus(status: string): boolean {
   return status === StepStatus.Completed || status === StepStatus.Skipped;
 }
+
+/**
+ * A step assignment enriched with derived group/child info.
+ * `isParallelGroup` / `parentStepName` / `groupType` are computed from the
+ * workflow template graph at read time (see decorateSteps) — never persisted.
+ */
+export type WorkflowStepView = WorkflowStepAssignment & {
+  /** true if this step is a group (has child steps) — regardless of serial/parallel */
+  isParallelGroup: boolean;
+  /** parent group step name, or null for top-level steps */
+  parentStepName: string | null;
+  /** group execution type; only meaningful when isParallelGroup is true */
+  groupType: 'serial' | 'parallel' | null;
+};
 
 /**
  * Topological sort on a DAG defined by nodes + edges.
@@ -82,45 +103,16 @@ export class WorkflowService {
     private readonly assignmentRepo: Repository<WorkflowStepAssignment>,
     @InjectRepository(Project)
     private readonly projectRepo: Repository<Project>,
-    @InjectRepository(Experiment)
-    private readonly experimentRepo: Repository<Experiment>,
     @InjectRepository(User)
     private readonly usersRepo: Repository<User>,
     private readonly notificationsService: NotificationsService,
+    @Inject(forwardRef(() => ExperimentsService))
+    private readonly experimentsService: ExperimentsService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
-  // Step name → assayType mapping for auto-creating experiments
-  private readonly STEP_ASSAY_MAP: Record<string, string> = {
-    solution_preparation: 'SolutionPreparation',
-    drying_injection: 'ProcessData',
-    formation: 'ProcessData',
-    second_sealing: 'ProcessData',
-    capacity_grading: 'ProcessData',
-    calendar_life: 'CalendarLife',
-    storage_swelling: 'StorageSwelling',
-    energy_efficiency: 'EnergyEfficiency',
-    dcr_test: 'DcrTest',
-    fast_charge: 'FastCharge',
-    ht_cycle: 'HtCycle',
-  };
-
-  // Step name → Chinese label mapping for experiment titles
-  private readonly STEP_LABEL_MAP: Record<string, string> = {
-    experiment_design: '实验设计',
-    solution_preparation: '配液',
-    drying_injection: '干燥/注液',
-    formation: '化成',
-    second_sealing: '二封',
-    capacity_grading: '定容',
-    battery_selection: '挑选电池',
-    calendar_life: '日历寿命',
-    storage_swelling: '存储胀气',
-    energy_efficiency: '能量效率',
-    dcr_test: 'DCR测试',
-    fast_charge: '快充时间',
-    ht_cycle: '高温循环',
-  };
+  // Step → assayType / label maps are defined once in @eln/shared
+  // (STEP_ASSAY_MAP / STEP_NAME_MAP) and imported above.
 
   // ════════════════════════════════════════════════════════════════
   //  TEMPLATE CRUD
@@ -208,15 +200,14 @@ export class WorkflowService {
       graph.nodes || [];
     const edges: Array<{ from: string; to: string }> = graph.edges || [];
 
-    // Compute out-degree and in-degree per node
-    const outDegree = new Map<string, number>();
+    // Graph hierarchy meta — derived from the template graph (single source of truth)
+    const meta = deriveWorkflowGraphMeta(graph);
+
+    // Compute in-degree per node
     const inDegree = new Map<string, string[]>();
-    for (const n of nodes) {
-      outDegree.set(n.id, 0);
-      inDegree.set(n.id, []);
-    }
+    for (const n of nodes) inDegree.set(n.id, []);
     for (const e of edges) {
-      outDegree.set(e.from, (outDegree.get(e.from) || 0) + 1);
+      if (!inDegree.has(e.to)) continue;
       const ins = inDegree.get(e.to) || [];
       ins.push(e.from);
       inDegree.set(e.to, ins);
@@ -251,21 +242,18 @@ export class WorkflowService {
       id: uuid(),
       projectId: dto.projectId,
       templateId: template.id,
-      status: 'Active',
+      status: WorkflowStatus.Active,
       currentStepIndex: 0,
     });
     const savedInstance = await this.instanceRepo.save(instance);
 
-    // Build flattened assignment records
+    // Build flattened assignment records. Group/child relationships are NOT
+    // persisted — they are derived from the template graph at read time.
     const records: WorkflowStepAssignment[] = [];
     for (let stepIndex = 0; stepIndex < order.length; stepIndex++) {
       const id = order[stepIndex];
       const node = nodes.find((n) => n.id === id);
       if (!node) continue;
-
-      // Hierarchy from parentId. Parallelism from edge out-degree.
-      const isGroup = (outDegree.get(id) || 0) > 1;
-      const parentStepName = node.parentId || null;
 
       const a = assignMap.get(id);
       records.push(this.makeRecord(
@@ -273,13 +261,27 @@ export class WorkflowService {
         stepIndex,
         id,
         a,
-        isGroup,
-        parentStepName,
       ));
     }
 
     // First step is in_progress
-    if (records.length > 0) records[0].status = 'in_progress';
+    if (records.length > 0) records[0].status = StepStatus.InProgress;
+
+    // If the first step is a group, activate its child step(s).
+    // Serial groups (e.g. experiment_design → design → procurement) only
+    // activate the FIRST child; parallel groups (e.g. testing) activate all.
+    const firstRecord = records[0];
+    const firstChildren = firstRecord ? meta.childrenOf[firstRecord.stepName] || [] : [];
+    const firstGroupIsParallel = firstRecord
+      ? meta.groupType[firstRecord.stepName] === 'parallel'
+      : false;
+    const firstToActivate = firstChildren.length > 0
+      ? (firstGroupIsParallel ? firstChildren : [firstChildren[0]])
+      : [];
+    for (const childName of firstToActivate) {
+      const child = records.find((r) => r.stepName === childName);
+      if (child && child.status === StepStatus.Pending) child.status = StepStatus.InProgress;
+    }
 
     await this.assignmentRepo.save(records);
 
@@ -293,9 +295,21 @@ export class WorkflowService {
       );
     }
 
+    // Notify children activated as part of a leading group
+    for (const childName of firstToActivate) {
+      const child = records.find((r) => r.stepName === childName);
+      if (child?.status === StepStatus.InProgress && child.assignedUserId) {
+        await this.notificationsService.createNotification(
+          child.assignedUserId,
+          'WORKFLOW_STEP_ASSIGNED',
+          { projectId: dto.projectId, stepName: child.stepName, isParallel: firstGroupIsParallel },
+        );
+      }
+    }
+
     await this.projectRepo.update(dto.projectId, {
       workflowInstanceId: savedInstance.id,
-      workflowStatus: 'Active',
+      workflowStatus: WorkflowStatus.Active,
     });
 
     return savedInstance;
@@ -306,8 +320,6 @@ export class WorkflowService {
     stepIndex: number,
     stepName: string,
     assign: { assignedUserId: string; canViewOtherSteps?: boolean; canViewInternalCode?: boolean; visibleToUserIds?: string[] } | undefined,
-    isParallelGroup: boolean,
-    parentStepName: string | null,
   ): WorkflowStepAssignment {
     return this.assignmentRepo.create({
       id: uuid(),
@@ -315,15 +327,38 @@ export class WorkflowService {
       stepName,
       stepIndex,
       assignedUserId: assign?.assignedUserId ?? null,
-      status: 'pending',
+      status: StepStatus.Pending,
       canViewOtherSteps: assign?.canViewOtherSteps ?? false,
       canViewInternalCode: assign?.canViewInternalCode ?? false,
       visibleToUserIds: assign?.visibleToUserIds ?? null,
-      isParallelGroup,
-      parentStepName,
       completedAt: null,
       completedBy: null,
     });
+  }
+
+  /**
+   * Load the template graph for an instance and derive its hierarchy meta
+   * (group membership) from the graph — the single source of truth.
+   */
+  private async getGraphMeta(instance: WorkflowInstance): Promise<WorkflowGraphMeta> {
+    const tpl = await this.findTemplateById(instance.templateId);
+    return deriveWorkflowGraphMeta((tpl.steps as any) || {});
+  }
+
+  /**
+   * Attach derived group/child fields to step assignments for responses.
+   * These fields are computed from the template graph, not persisted.
+   */
+  private decorateSteps<T extends WorkflowStepAssignment>(
+    steps: T[],
+    meta: WorkflowGraphMeta,
+  ): WorkflowStepView[] {
+    return steps.map((s) => ({
+      ...s,
+      isParallelGroup: !!meta.isGroup[s.stepName],
+      parentStepName: meta.parentOf[s.stepName] ?? null,
+      groupType: meta.groupType[s.stepName] ?? null,
+    }));
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -332,7 +367,7 @@ export class WorkflowService {
 
   async findByProject(projectId: string, userId?: string): Promise<{
     instance: WorkflowInstance | null;
-    steps: WorkflowStepAssignment[];
+    steps: WorkflowStepView[];
   }> {
     const instance = await this.instanceRepo.findOne({ where: { projectId } });
     if (!instance) return { instance: null, steps: [] };
@@ -340,6 +375,9 @@ export class WorkflowService {
       where: { workflowInstanceId: instance.id },
       order: { stepIndex: 'ASC' },
     });
+
+    // Graph hierarchy meta — derived from the template graph, not persisted
+    const meta = await this.getGraphMeta(instance);
 
     // Filter by user visibility if userId is provided
     if (userId) {
@@ -363,19 +401,22 @@ export class WorkflowService {
           // User can see all steps (e.g. PI/Admin role assigned)
           // Enrich before early return
           const enriched = await this.enrichSteps(steps);
-          return { instance, steps: enriched };
+          return { instance, steps: this.decorateSteps(enriched, meta) };
         }
 
         // Filter: only steps user is assigned to OR explicitly granted visibility
+        // Group nodes are kept so the frontend can render the group container.
         const allowed = new Set([...userAssignmentNames, ...visibleByPerm]);
-        steps = steps.filter((s) => allowed.has(s.stepName) || s.isParallelGroup);
+        steps = steps.filter(
+          (s) => allowed.has(s.stepName) || !!meta.isGroup[s.stepName],
+        );
       }
     }
 
     // Enrich steps with user display names
     steps = await this.enrichSteps(steps);
 
-    return { instance, steps };
+    return { instance, steps: this.decorateSteps(steps, meta) };
   }
 
   /**
@@ -415,12 +456,12 @@ export class WorkflowService {
     const { instance, steps } = await this.findByProject(projectId);
     if (!instance) return; // No workflow instance, allow bypass
 
-    if (instance.status === 'Completed') {
+    if (instance.status === WorkflowStatus.Completed) {
       throw new ForbiddenException('整个流程已结束，不可修改数据');
     }
 
     const step = steps.find((s) => s.stepName === stepName);
-    if (step && step.status === 'completed') {
+    if (step && step.status === StepStatus.Completed) {
       throw new ForbiddenException('该步骤已提交，不可再修改数据');
     }
   }
@@ -446,10 +487,10 @@ export class WorkflowService {
   async transition(
     projectId: string,
     userId: string,
-  ): Promise<{ instance: WorkflowInstance; steps: WorkflowStepAssignment[] }> {
+  ): Promise<{ instance: WorkflowInstance; steps: WorkflowStepView[] }> {
     const { instance, steps } = await this.findByProject(projectId);
     if (!instance) throw new NotFoundException('Workflow instance not found');
-    if (instance.status === 'Completed') {
+    if (instance.status === WorkflowStatus.Completed) {
       throw new BadRequestException('Workflow already completed');
     }
 
@@ -457,13 +498,13 @@ export class WorkflowService {
 
     // Find the user's active leaf step
     let currentStep = steps.find(
-      (s) => s.status === 'in_progress' && s.assignedUserId === userId && !s.isParallelGroup,
+      (s) => s.status === StepStatus.InProgress && s.assignedUserId === userId && !s.isParallelGroup,
     );
 
     // If no active step for user, allow project creator to force-complete
     if (!currentStep && project && project.createdBy === userId) {
       currentStep = steps.find(
-        (s) => s.status === 'in_progress' && !s.isParallelGroup,
+        (s) => s.status === StepStatus.InProgress && !s.isParallelGroup,
       );
       if (currentStep) {
         this.logger.log(`Project creator ${userId} force-completing step "${currentStep.stepName}"`);
@@ -471,55 +512,117 @@ export class WorkflowService {
     }
 
     if (!currentStep) {
-      const groupStep = steps.find((s) => s.status === 'in_progress' && s.isParallelGroup);
+      const groupStep = steps.find((s) => s.status === StepStatus.InProgress && s.isParallelGroup);
       if (groupStep) {
+        // If the group's children were never activated (e.g. legacy
+        // instances created before child activation existed), activate them
+        // so the user can complete a sub-step. Serial groups only activate
+        // the first pending child; parallel groups activate all.
+        const pendingChildren = steps.filter(
+          (s) => s.parentStepName === groupStep.stepName && s.status === StepStatus.Pending,
+        );
+        if (pendingChildren.length > 0) {
+          const isParallel = groupStep.groupType === 'parallel';
+          const toActivate = isParallel ? pendingChildren : pendingChildren.slice(0, 1);
+          for (const c of toActivate) c.status = StepStatus.InProgress;
+          await this.assignmentRepo.save(toActivate);
+
+          for (const c of toActivate) {
+            if (c.assignedUserId) {
+              await this.notificationsService.createNotification(
+                c.assignedUserId,
+                'WORKFLOW_STEP_ASSIGNED',
+                { projectId, stepName: c.stepName, isParallel },
+              );
+            }
+          }
+
+          // Re-find the current step after activation
+          currentStep = steps.find(
+            (s) => s.status === StepStatus.InProgress && s.assignedUserId === userId && !s.isParallelGroup,
+          );
+          if (!currentStep && project && project.createdBy === userId) {
+            currentStep = steps.find(
+              (s) => s.status === StepStatus.InProgress && !s.isParallelGroup,
+            );
+          }
+        }
+        if (!currentStep) {
+          const hint = groupStep.groupType === 'parallel'
+            ? `Please complete one of the parallel sub-steps under "${groupStep.stepName}"`
+            : `Please complete the next sub-step under "${groupStep.stepName}"`;
+          throw new BadRequestException(hint);
+        }
+      } else {
         throw new BadRequestException(
-          `Please complete one of the parallel sub-steps under "${groupStep.stepName}"`,
+          'No active step found. Either the step is not assigned to you or it is already completed.',
         );
       }
-      throw new BadRequestException(
-        'No active step found. Either the step is not assigned to you or it is already completed.',
-      );
     }
 
     // Mark step completed
-    currentStep.status = 'completed';
+    currentStep.status = StepStatus.Completed;
     currentStep.completedAt = new Date();
     currentStep.completedBy = userId;
     await this.assignmentRepo.save(currentStep);
 
     this.logger.log(`Step "${currentStep.stepName}" completed by ${userId} in project ${projectId}`);
 
-    // ── Parallel child completion check ──
+    // ── Child step completion check ──
     if (currentStep.parentStepName) {
-      const children = steps.filter((s) => s.parentStepName === currentStep.parentStepName);
-      const allDone = children.every((s) => isTerminalStepStatus(s.status));
+      const parentName = currentStep.parentStepName;
+      const parent = steps.find((s) => s.stepName === parentName);
+      const children = steps.filter((s) => s.parentStepName === parentName);
+      const isParallel = parent?.groupType === 'parallel';
 
-      if (!allDone) {
-        if (project) {
-          await this.notificationsService.createNotification(
-            project.createdBy,
-            'WORKFLOW_STEP_COMPLETED',
-            {
-              projectId,
-              projectName: project.name,
-              stepName: currentStep.stepName,
-              status: 'partial',
-              remaining: children.filter((s) => !isTerminalStepStatus(s.status)).length,
-            },
-          );
+      if (isParallel) {
+        // Parallel group: wait until ALL siblings are terminal.
+        const allDone = children.every((s) => isTerminalStepStatus(s.status));
+        if (!allDone) {
+          if (project) {
+            await this.notificationsService.createNotification(
+              project.createdBy,
+              'WORKFLOW_STEP_COMPLETED',
+              {
+                projectId,
+                projectName: project.name,
+                stepName: currentStep.stepName,
+                status: 'partial',
+                remaining: children.filter((s) => !isTerminalStepStatus(s.status)).length,
+              },
+            );
+          }
+          return { instance, steps: await this.reloadSteps(instance) };
         }
-        return { instance, steps: await this.reloadSteps(instance.id) };
+      } else {
+        // Serial group (e.g. experiment_design → design → procurement):
+        // activate the NEXT pending child; only complete the group when
+        // there is no child left.
+        const nextChild = children.find((s) => s.status === StepStatus.Pending);
+        if (nextChild) {
+          nextChild.status = StepStatus.InProgress;
+          await this.assignmentRepo.save(nextChild);
+          this.logger.log(
+            `Serial group "${parentName}": activated next child "${nextChild.stepName}"`,
+          );
+          if (nextChild.assignedUserId) {
+            await this.notificationsService.createNotification(
+              nextChild.assignedUserId,
+              'WORKFLOW_STEP_ASSIGNED',
+              { projectId, stepName: nextChild.stepName },
+            );
+          }
+          return { instance, steps: await this.reloadSteps(instance) };
+        }
       }
 
-      // All children done → mark parent group completed
-      const parent = steps.find((s) => s.stepName === currentStep.parentStepName);
+      // Group fully done → mark parent group completed
       if (parent) {
-        parent.status = 'completed';
+        parent.status = StepStatus.Completed;
         parent.completedAt = new Date();
         parent.completedBy = userId;
         await this.assignmentRepo.save(parent);
-        this.logger.log(`Parallel group "${parent.stepName}" fully completed`);
+        this.logger.log(`Group "${parent.stepName}" fully completed`);
       }
     }
 
@@ -529,21 +632,21 @@ export class WorkflowService {
 
   private async advance(
     instance: WorkflowInstance,
-    steps: WorkflowStepAssignment[],
+    steps: WorkflowStepView[],
     project: Project | null,
-  ): Promise<{ instance: WorkflowInstance; steps: WorkflowStepAssignment[] }> {
+  ): Promise<{ instance: WorkflowInstance; steps: WorkflowStepView[] }> {
     const maxCompleted = Math.max(
       ...steps.filter((s) => isTerminalStepStatus(s.status)).map((s) => s.stepIndex),
       -1,
     );
-    const next = steps.find((s) => s.stepIndex > maxCompleted && s.status === 'pending');
+    const next = steps.find((s) => s.stepIndex > maxCompleted && s.status === StepStatus.Pending);
 
     if (!next) {
       // ── Workflow complete ──
-      instance.status = 'Completed';
+      instance.status = WorkflowStatus.Completed;
       instance.currentStepIndex = maxCompleted + 1;
       await this.instanceRepo.save(instance);
-      await this.projectRepo.update(instance.projectId, { workflowStatus: 'Completed' });
+      await this.projectRepo.update(instance.projectId, { workflowStatus: WorkflowStatus.Completed });
 
       if (project) {
         await this.notificationsService.createNotification(
@@ -553,18 +656,21 @@ export class WorkflowService {
         );
         this.logger.log(`Workflow completed for project ${instance.projectId}`);
       }
-      return { instance, steps: await this.reloadSteps(instance.id) };
+      return { instance, steps: await this.reloadSteps(instance) };
     }
 
     // ── Activate next ──
     if (next.isParallelGroup) {
-      next.status = 'in_progress';
+      next.status = StepStatus.InProgress;
       await this.assignmentRepo.save(next);
 
-      // For the testing parallel group, only activate sub-steps that have picked cells assigned
-      let children = steps.filter((s) => s.parentStepName === next.stepName && s.status === 'pending');
+      // Group children to activate: parallel groups activate ALL children,
+      // serial groups only the FIRST pending child.
+      let children = steps.filter((s) => s.parentStepName === next.stepName && s.status === StepStatus.Pending);
+      const isParallel = next.groupType === 'parallel';
 
-      if (next.stepName === BuiltInStep.Testing) {
+      // For the testing parallel group, only activate sub-steps that have picked cells assigned
+      if (isParallel && next.stepName === BuiltInStep.Testing) {
         // Query which test types actually have assigned picked cells
         const pickedCells = await this.dataSource.getRepository(PickedCell).find({
           where: { projectId: instance.projectId } as any,
@@ -575,42 +681,43 @@ export class WorkflowService {
           const activeTestTypes = new Set(pickedCells.map((pc) => pc.testType).filter(Boolean));
 
           for (const c of children) {
-            const assayType = this.STEP_ASSAY_MAP[c.stepName];
+            const assayType = STEP_ASSAY_MAP[c.stepName];
             if (assayType && !activeTestTypes.has(assayType)) {
               // No cells assigned to this test — skip this sub-step entirely
-              c.status = 'skipped';
+              c.status = StepStatus.Skipped;
               this.logger.log(`Skipping testing sub-step "${c.stepName}": no picked cells for assayType "${assayType}"`);
             }
           }
           await this.assignmentRepo.save(children);
           // Re-filter: only keep non-skipped children for activation
-          children = children.filter((c) => c.status === 'pending');
+          children = children.filter((c) => c.status === StepStatus.Pending);
         }
       }
 
-      for (const c of children) c.status = 'in_progress';
-      await this.assignmentRepo.save(children);
+      const toActivate = isParallel ? children : children.slice(0, 1);
+      for (const c of toActivate) c.status = StepStatus.InProgress;
+      await this.assignmentRepo.save(toActivate);
 
-      // Auto-create experiments for parallel children
-      for (const c of children) {
-        await this.ensureExperiment(instance.projectId, c.stepName);
+      // Auto-create experiments for activated children
+      for (const c of toActivate) {
+        await this.experimentsService.ensureWorkflowExperiment(instance.projectId, c.stepName);
       }
 
-      for (const c of children) {
+      for (const c of toActivate) {
         if (c.assignedUserId) {
           await this.notificationsService.createNotification(
             c.assignedUserId,
             'WORKFLOW_STEP_ASSIGNED',
-            { projectId: instance.projectId, stepName: c.stepName, isParallel: true },
+            { projectId: instance.projectId, stepName: c.stepName, isParallel },
           );
         }
       }
     } else {
-      next.status = 'in_progress';
+      next.status = StepStatus.InProgress;
       await this.assignmentRepo.save(next);
 
       // Auto-create experiment for this step
-      await this.ensureExperiment(instance.projectId, next.stepName);
+      await this.experimentsService.ensureWorkflowExperiment(instance.projectId, next.stepName);
 
       if (next.assignedUserId) {
         await this.notificationsService.createNotification(
@@ -623,132 +730,7 @@ export class WorkflowService {
 
     instance.currentStepIndex = next.stepIndex;
     await this.instanceRepo.save(instance);
-    return { instance, steps: await this.reloadSteps(instance.id) };
-  }
-
-  /**
-   * Auto-create an Experiment for a step if one doesn't already exist.
-   * This gives each workflow step its own experiment detail page.
-   */
-  private async ensureExperiment(projectId: string, stepName: string): Promise<void> {
-    const assayType = this.STEP_ASSAY_MAP[stepName];
-    if (!assayType) return;
-
-    // Check if an experiment already exists for this step
-    const existing = await this.experimentRepo.findOne({
-      where: { projectId, workflowStepName: stepName } as any,
-    });
-    if (existing) return;
-
-    const project = await this.projectRepo.findOne({ where: { id: projectId } });
-    if (!project) return;
-
-    const stepLabel = this.STEP_LABEL_MAP[stepName] ?? stepName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-    const exp = this.experimentRepo.create({
-      id: uuid(),
-      projectId,
-      title: `${stepLabel} - ${new Date().toISOString().split('T')[0]}`,
-      status: 'Draft',
-      metadata: { assayType, workflowStepName: stepName },
-      workflowStepName: stepName,
-      versionNo: 1,
-      createdBy: project.createdBy,
-    });
-    const saved = await this.experimentRepo.save(exp);
-    this.logger.log(`Auto-created experiment "${exp.title}" for step "${stepName}"`);
-
-    // ── For ProcessData steps, pre-fill rows with cell IDs from experiment design ──
-    if (assayType === 'ProcessData') {
-      await this.prefillProcessDataCells(projectId, saved.id);
-    }
-
-    // ── For SolutionPreparation, pre-fill rows with groups from experiment design ──
-    if (assayType === 'SolutionPreparation') {
-      await this.prefillSolutionPreparationGroups(projectId, saved.id);
-    }
-  }
-
-  /**
-   * Pre-fill ProcessData rows with cell IDs generated from each experiment design group.
-   * Format: <Group><Seq> e.g. A001, A002, ..., A017 (cellCount) + A018, A019, A020 (redundancy)
-   */
-  private async prefillProcessDataCells(projectId: string, experimentId: string): Promise<void> {
-    const designs = await this.dataSource.getRepository(ExperimentDesign).find({
-      where: { projectId, isRedundancy: false },
-      order: { rowIndex: 'ASC' },
-    });
-    if (designs.length === 0) {
-      this.logger.log(`No experiment designs found for project ${projectId}, skipping ProcessData pre-fill`);
-      return;
-    }
-
-    const processRepo = this.dataSource.getRepository(ProcessData);
-    const rows: ProcessData[] = [];
-
-    for (const design of designs) {
-      const cellCount = design.cellCount ?? 17;
-      const redundancyCount = design.redundancyCount ?? 0;
-      const totalCells = cellCount + redundancyCount;
-
-      for (let i = 1; i <= totalCells; i++) {
-        const cellId = `${design.group}${String(i).padStart(3, '0')}`;
-        rows.push(
-          processRepo.create({
-            id: uuid(),
-            experimentId,
-            cellId,
-          }),
-        );
-      }
-    }
-
-    if (rows.length > 0) {
-      await processRepo.save(rows);
-      this.logger.log(`Pre-filled ${rows.length} ProcessData rows for experiment ${experimentId}`);
-    }
-  }
-
-  /**
-   * Pre-fill SolutionPreparation rows with groups from experiment design.
-   * Each experiment design group → one empty row (配方A, 配方B...).
-   * Users can then add more material rows per formula.
-   */
-  private async prefillSolutionPreparationGroups(projectId: string, experimentId: string): Promise<void> {
-    const designs = await this.dataSource.getRepository(ExperimentDesign).find({
-      where: { projectId, isRedundancy: false },
-      order: { rowIndex: 'ASC' },
-    });
-    if (designs.length === 0) {
-      this.logger.log(`No experiment designs found for project ${projectId}, skipping SolutionPreparation pre-fill`);
-      return;
-    }
-
-    const solutionRepo = this.dataSource.getRepository(SolutionPreparation);
-    const rows: SolutionPreparation[] = [];
-
-    // Get unique groups (may have multiple design rows per group)
-    const seenGroups = new Set<string>();
-    for (const design of designs) {
-      if (seenGroups.has(design.group)) continue;
-      seenGroups.add(design.group);
-
-      rows.push(
-        solutionRepo.create({
-          id: uuid(),
-          experimentId,
-          groupName: design.group,
-          materialName: '',
-          specification: null,
-          formulaAmount: null,
-          actualAmount: null,
-        }),
-      );
-    }
-
-    if (rows.length > 0) {
-      await solutionRepo.save(rows);
-      this.logger.log(`Pre-filled ${rows.length} SolutionPreparation rows for experiment ${experimentId}`);
-    }
+    return { instance, steps: await this.reloadSteps(instance) };
   }
 
   // ════════════════════════════════════════════════════════════════
@@ -791,7 +773,7 @@ export class WorkflowService {
     }>
   > {
     const assignments = await this.assignmentRepo.find({
-      where: { assignedUserId: userId, status: In(['in_progress', 'pending']) },
+      where: { assignedUserId: userId, status: In([StepStatus.InProgress, StepStatus.Pending]) },
       order: { stepIndex: 'ASC' },
     });
     if (!assignments.length) return [];
@@ -803,17 +785,31 @@ export class WorkflowService {
     );
     const projectMap = new Map(projects.map((p) => [p.id, p.name]));
 
+    // Group/child membership is derived from each instance's template graph
+    const metaByInstance = new Map<string, WorkflowGraphMeta>();
+    for (const inst of instances) {
+      metaByInstance.set(inst.id, await this.getGraphMeta(inst));
+    }
+
     return assignments
-      .filter((a) => !a.isParallelGroup)
+      .filter((a) => {
+        const meta = metaByInstance.get(a.workflowInstanceId);
+        return !meta?.isGroup[a.stepName];
+      })
       .map((a) => {
         const inst = instances.find((i) => i.id === a.workflowInstanceId);
+        const meta = metaByInstance.get(a.workflowInstanceId);
+        const parentName = meta?.parentOf[a.stepName];
+        // Only a child of a genuinely parallel group (fan-out) is "parallel";
+        // serial-group children (e.g. design under experiment_design) are not.
+        const isParallel = !!parentName && meta.groupType[parentName] === 'parallel';
         return {
           projectId: inst?.projectId ?? '',
           projectName: projectMap.get(inst?.projectId ?? '') ?? '',
           workflowInstanceId: a.workflowInstanceId,
           stepName: a.stepName,
           status: a.status,
-          isParallel: !!a.parentStepName,
+          isParallel,
         };
       });
   }
@@ -844,7 +840,7 @@ export class WorkflowService {
       return {
         canViewInternalCode: isCreator || userAssignment?.canViewInternalCode || false,
         visibleStepNames: steps.map((s) => s.stepName),
-        currentStepName: steps.find((s) => s.status === 'in_progress' && !s.isParallelGroup)?.stepName ?? null,
+        currentStepName: steps.find((s) => s.status === StepStatus.InProgress && !s.isParallelGroup)?.stepName ?? null,
       };
     }
 
@@ -879,21 +875,6 @@ export class WorkflowService {
     return this.parseTemplateGraphToStepTree(graph);
   }
 
-  // Map step name → API data type string (mirrors shared/workflow.ts)
-  private readonly STEP_DATA_TYPE: Record<string, string> = {
-    solution_preparation: 'solution',
-    drying_injection: 'process',
-    formation: 'process',
-    second_sealing: 'process',
-    capacity_grading: 'process',
-    calendar_life: 'calendar',
-    storage_swelling: 'swelling',
-    energy_efficiency: 'efficiency',
-    dcr_test: 'dcr',
-    fast_charge: 'fastcharge',
-    ht_cycle: 'htcycle',
-  };
-
   // ════════════════════════════════════════════════════════════════
   //  INTERNAL
   // ════════════════════════════════════════════════════════════════
@@ -908,10 +889,12 @@ export class WorkflowService {
     return tpl;
   }
 
-  private async reloadSteps(instanceId: string): Promise<WorkflowStepAssignment[]> {
-    return this.assignmentRepo.find({
-      where: { workflowInstanceId: instanceId },
+  private async reloadSteps(instance: WorkflowInstance): Promise<WorkflowStepView[]> {
+    const steps = await this.assignmentRepo.find({
+      where: { workflowInstanceId: instance.id },
       order: { stepIndex: 'ASC' },
     });
+    const meta = await this.getGraphMeta(instance);
+    return this.decorateSteps(steps, meta);
   }
 }

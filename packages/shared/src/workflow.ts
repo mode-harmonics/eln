@@ -221,3 +221,132 @@ export function normalizeTemplateSteps(steps: any): WorkflowStepNodeDto[] {
   if (steps && Array.isArray(steps.nodes)) return parseGraphToStepTree(steps);
   return [];
 }
+
+// ─── Graph → per-step hierarchy meta (derived, never persisted) ────────
+/**
+ * Derive grouping/hierarchy info from a workflow template graph.
+ *
+ * This is the single source of truth for "is this step a group?" and
+ * "which group does this step belong to?" — both are derived from the
+ * template graph (nodes + edges) at read time instead of being stored
+ * on each workflow step assignment.
+ *
+ * Rules (mirror parseGraphToStepTree / WorkflowConfig layout):
+ * 1. A node with an explicit `parentId` is a child of that node.
+ * 2. A node with out-degree > 1 (fan-out) is a group; its direct targets
+ *    that aren't already claimed by a parentId become its children.
+ */
+export interface WorkflowGraphMeta {
+  /** stepId → true if it is a group (has children) */
+  isGroup: Record<string, boolean>;
+  /**
+   * stepId → group execution type.
+   * - 'serial': children MUST run in order (e.g. experiment_design's
+   *   design → procurement, expressed by edges between the children).
+   * - 'parallel': children run concurrently (e.g. testing's 6 test types,
+   *   a fan-out with out-degree > 1).
+   */
+  groupType: Record<string, 'serial' | 'parallel'>;
+  /** childStepId → parentGroupStepId */
+  parentOf: Record<string, string>;
+  /** parentGroupStepId → child step ids (in topological/execution order) */
+  childrenOf: Record<string, string[]>;
+}
+
+export function deriveWorkflowGraphMeta(graph: {
+  nodes?: Array<{ id: string; label?: string; builtInStep?: string; parentId?: string }>;
+  edges?: Array<{ from: string; to: string }>;
+}): WorkflowGraphMeta {
+  const nodes = graph.nodes || [];
+  const edges = graph.edges || [];
+  const nodeIds = new Set(nodes.map((n) => n.id));
+
+  const outTargets = new Map<string, string[]>();
+  for (const n of nodes) outTargets.set(n.id, []);
+  for (const e of edges) {
+    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) continue;
+    const list = outTargets.get(e.from) || [];
+    if (!list.includes(e.to)) list.push(e.to);
+    outTargets.set(e.from, list);
+  }
+
+  const parentOf: Record<string, string> = {};
+  const childrenOf: Record<string, string[]> = {};
+  const childSet = new Set<string>();
+  const addChild = (parent: string, child: string) => {
+    if (parent === child || !nodeIds.has(parent)) return;
+    if (childSet.has(child)) return; // already claimed (parentId wins)
+    childSet.add(child);
+    parentOf[child] = parent;
+    (childrenOf[parent] ||= []).push(child);
+  };
+
+  // 1. explicit parentId wins
+  for (const n of nodes) {
+    if (n.parentId) addChild(n.parentId, n.id);
+  }
+  // 2. fan-out (out-degree > 1) group children
+  for (const n of nodes) {
+    const targets = outTargets.get(n.id) || [];
+    if (targets.length > 1) {
+      for (const t of targets) addChild(n.id, t);
+    }
+  }
+
+  // Order each group's children by global topological order so serial
+  // groups (design → procurement) have a deterministic execution sequence.
+  const topoOrder = topoSortIds(nodes, edges);
+  const rank = new Map(topoOrder.map((id, i) => [id, i]));
+  for (const parent of Object.keys(childrenOf)) {
+    childrenOf[parent].sort(
+      (a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0),
+    );
+  }
+
+  const isGroup: Record<string, boolean> = {};
+  const groupType: Record<string, 'serial' | 'parallel'> = {};
+  for (const n of nodes) {
+    const hasChildren = !!childrenOf[n.id]?.length;
+    isGroup[n.id] = hasChildren;
+    if (hasChildren) {
+      // Fan-out (out-degree > 1) = true parallelism; otherwise the
+      // children are ordered by their edges (serial group).
+      groupType[n.id] = (outTargets.get(n.id) || []).length > 1 ? 'parallel' : 'serial';
+    }
+  }
+
+  return { isGroup, groupType, parentOf, childrenOf };
+}
+
+/** Minimal topological sort over a graph; used to order serial group children. */
+function topoSortIds(
+  nodes: Array<{ id: string }>,
+  edges: Array<{ from: string; to: string }>,
+): string[] {
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const inDegree = new Map<string, number>();
+  const adjacency = new Map<string, string[]>();
+  for (const id of nodeIds) {
+    inDegree.set(id, 0);
+    adjacency.set(id, []);
+  }
+  for (const e of edges) {
+    if (!nodeIds.has(e.from) || !nodeIds.has(e.to)) continue;
+    inDegree.set(e.to, (inDegree.get(e.to) || 0) + 1);
+    adjacency.get(e.from)!.push(e.to);
+  }
+  const queue: string[] = [];
+  for (const [id, deg] of inDegree) if (deg === 0) queue.push(id);
+  const result: string[] = [];
+  while (queue.length > 0) {
+    const cur = queue.shift()!;
+    result.push(cur);
+    for (const t of adjacency.get(cur) || []) {
+      const d = (inDegree.get(t) || 1) - 1;
+      inDegree.set(t, d);
+      if (d === 0) queue.push(t);
+    }
+  }
+  for (const id of nodeIds) if (!result.includes(id)) result.push(id);
+  return result;
+}

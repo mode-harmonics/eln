@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
@@ -20,10 +20,12 @@ import { DcrTest } from '../entities/dcr-test.entity';
 import { FastCharge } from '../entities/fast-charge.entity';
 import { HtCycle } from '../entities/ht-cycle.entity';
 import { RawStepData } from '../entities/raw-step-data.entity';
+import { ExperimentDesign } from '../entities/experiment-design.entity';
+import { SolutionPreparation } from '../entities/solution-preparation.entity';
 import { SubmitExperimentDto, UpdateExperimentDto } from './dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WorkflowService } from '../workflow/workflow.service';
-import { ExperimentStatus } from '@eln/shared';
+import { ExperimentStatus, STEP_ASSAY_MAP, STEP_NAME_MAP } from '@eln/shared';
 
 export interface ExperimentDetail extends Experiment {
   attachments: Attachment[];
@@ -46,9 +48,124 @@ export class ExperimentsService {
     @InjectRepository(WorkflowInstance)
     private readonly instanceRepo: Repository<WorkflowInstance>,
     private readonly notificationsService: NotificationsService,
+    @Inject(forwardRef(() => WorkflowService))
     private readonly workflowService: WorkflowService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
+
+  /**
+   * Auto-create an Experiment for a workflow step if one doesn't already exist.
+   * Gives each workflow step its own experiment detail page, and pre-fills
+   * rows for ProcessData / SolutionPreparation from the experiment design.
+   * (Owned by this module so WorkflowService stays free of data-entity logic.)
+   */
+  async ensureWorkflowExperiment(projectId: string, stepName: string): Promise<void> {
+    const assayType = STEP_ASSAY_MAP[stepName];
+    if (!assayType) return;
+
+    // Check if an experiment already exists for this step
+    const existing = await this.experimentsRepo.findOne({
+      where: { projectId, workflowStepName: stepName } as any,
+    });
+    if (existing) return;
+
+    const project = await this.dataSource.getRepository(Project).findOne({ where: { id: projectId } });
+    if (!project) return;
+
+    const stepLabel = STEP_NAME_MAP[stepName] ?? stepName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const exp = this.experimentsRepo.create({
+      id: uuid(),
+      projectId,
+      title: `${stepLabel} - ${new Date().toISOString().split('T')[0]}`,
+      status: ExperimentStatus.Draft,
+      metadata: { assayType, workflowStepName: stepName },
+      workflowStepName: stepName,
+      versionNo: 1,
+      createdBy: project.createdBy,
+    });
+    const saved = await this.experimentsRepo.save(exp);
+
+    // ── For ProcessData steps, pre-fill rows with cell IDs from experiment design ──
+    if (assayType === 'ProcessData') {
+      await this.prefillProcessDataCells(projectId, saved.id);
+    }
+
+    // ── For SolutionPreparation, pre-fill rows with groups from experiment design ──
+    if (assayType === 'SolutionPreparation') {
+      await this.prefillSolutionPreparationGroups(projectId, saved.id);
+    }
+  }
+
+  /**
+   * Pre-fill ProcessData rows with cell IDs generated from each experiment design group.
+   * Format: <Group><Seq> e.g. A001, A002, ..., A017 (cellCount) + A018, A019, A020 (redundancy)
+   */
+  private async prefillProcessDataCells(projectId: string, experimentId: string): Promise<void> {
+    const designs = await this.dataSource.getRepository(ExperimentDesign).find({
+      where: { projectId, isRedundancy: false },
+      order: { rowIndex: 'ASC' },
+    });
+    if (designs.length === 0) return;
+
+    const processRepo = this.dataSource.getRepository(ProcessData);
+    const rows: ProcessData[] = [];
+
+    for (const design of designs) {
+      const cellCount = design.cellCount ?? 17;
+      const redundancyCount = design.redundancyCount ?? 0;
+      const totalCells = cellCount + redundancyCount;
+
+      for (let i = 1; i <= totalCells; i++) {
+        const cellId = `${design.group}${String(i).padStart(3, '0')}`;
+        rows.push(
+          processRepo.create({
+            id: uuid(),
+            experimentId,
+            cellId,
+          }),
+        );
+      }
+    }
+
+    if (rows.length > 0) await processRepo.save(rows);
+  }
+
+  /**
+   * Pre-fill SolutionPreparation rows with groups from experiment design.
+   * Each experiment design group → one empty row (配方A, 配方B...).
+   * Users can then add more material rows per formula.
+   */
+  private async prefillSolutionPreparationGroups(projectId: string, experimentId: string): Promise<void> {
+    const designs = await this.dataSource.getRepository(ExperimentDesign).find({
+      where: { projectId, isRedundancy: false },
+      order: { rowIndex: 'ASC' },
+    });
+    if (designs.length === 0) return;
+
+    const solutionRepo = this.dataSource.getRepository(SolutionPreparation);
+    const rows: SolutionPreparation[] = [];
+
+    // Get unique groups (may have multiple design rows per group)
+    const seenGroups = new Set<string>();
+    for (const design of designs) {
+      if (seenGroups.has(design.group)) continue;
+      seenGroups.add(design.group);
+
+      rows.push(
+        solutionRepo.create({
+          id: uuid(),
+          experimentId,
+          groupName: design.group,
+          materialName: '',
+          specification: null,
+          formulaAmount: null,
+          actualAmount: null,
+        }),
+      );
+    }
+
+    if (rows.length > 0) await solutionRepo.save(rows);
+  }
 
   async findDetail(id: string, userId?: string): Promise<ExperimentDetail> {
     const experiment = await this.experimentsRepo.findOne({ where: { id } });

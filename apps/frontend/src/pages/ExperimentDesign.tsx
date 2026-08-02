@@ -132,7 +132,8 @@ export function ExperimentDesign() {
       let procSubmittedFlag = false;
       try {
         const wf = await api.get<any>(`/api/v1/workflow/instances/${projectId}`);
-        if (wf?.instance?.currentStepIndex >= 1 || wf?.instance?.status === 'Completed') {
+        const procStep = wf?.steps?.find((s: any) => s.stepName === "procurement");
+        if (wf?.instance?.status === 'Completed' || procStep?.status === 'completed') {
           procSubmittedFlag = true;
         }
       } catch { /* no workflow yet */ }
@@ -184,6 +185,14 @@ export function ExperimentDesign() {
           redundancyCount: r.redundancyCount ?? 0,
         })),
       });
+
+      // Advance the workflow: mark the design sub-step completed and
+      // activate the procurement sub-step (same as the procurement submit).
+      try {
+        await api.put(`/api/v1/workflow/instances/${projectId}/transition`);
+      } catch (e) {
+        console.warn("Workflow transition after design submit skipped or failed", e);
+      }
 
       toast.success(t("design_submit_success"));
       setDesignSubmitted(true);
