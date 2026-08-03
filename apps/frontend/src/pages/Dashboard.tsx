@@ -42,6 +42,8 @@ interface DashboardSummary {
     id: string;
     type: "version" | "comment" | "notification";
     action: string;
+    actionKey?: string;
+    versionNumber?: number;
     user?: string;
     timestamp: string;
     experimentId?: string;
@@ -54,8 +56,29 @@ interface DashboardSummary {
 
 const COLORS = ["#1d74f5", "#f27429", "#10b981", "#ef4444", "#8b5cf6", "#f59e0b"];
 
+// Maps backend status enum values to i18n keys (see i18n.ts status_*).
+const STATUS_KEYS: Record<string, string> = {
+  Active: "status_active",
+  Archived: "status_inactive",
+  Draft: "status_draft",
+  "In Review": "status_in_review",
+  Approved: "status_approved",
+  Scrapped: "status_scrapped",
+};
+
+// Maps notification types to i18n keys (mirrors NotificationBell).
+const NOTIFICATION_KEYS: Record<string, string> = {
+  WORKFLOW_STEP_ASSIGNED: "notif_step_assigned",
+  WORKFLOW_STEP_COMPLETED: "notif_step_completed",
+  WORKFLOW_COMPLETED: "notif_project_completed",
+  REVIEW_SUBMITTED: "notif_review_requested",
+  REVIEW_APPROVED: "notif_review_approved",
+  REVIEW_REJECTED: "notif_review_rejected",
+  NEW_COMMENT: "notif_new_comment",
+};
+
 export function Dashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +92,7 @@ export function Dashboard() {
         if (!cancelled) setSummary(res);
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message || "Failed to load dashboard data");
+        if (!cancelled) setError(err.message || t("load_failed"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -109,6 +132,27 @@ export function Dashboard() {
         return <FileText className="w-4 h-4 text-gray-500" />;
     }
   };
+
+  const translateStatus = (status: string) => {
+    const key = STATUS_KEYS[status];
+    return key ? t(key) : status;
+  };
+
+  const translateActivity = (activity: DashboardSummary["recentActivities"][number]) => {
+    // Machine-readable actionKey from the backend takes priority.
+    if (activity.actionKey === "activity_added_comment") return t("activity_added_comment");
+    if (activity.actionKey === "activity_version_updated") {
+      return t("activity_version_updated", { version: activity.versionNumber });
+    }
+    if (activity.actionKey === "activity_version_summary") return t("activity_version_summary");
+    // Notification types map through the same keys as the bell.
+    if (activity.type === "notification" && NOTIFICATION_KEYS[activity.action]) {
+      return t(NOTIFICATION_KEYS[activity.action]);
+    }
+    return activity.action;
+  };
+
+  const activityDateFormat = i18n.language?.startsWith("zh") ? "M月d日 HH:mm" : "MMM d, HH:mm";
 
   return (
     <div className="space-y-6">
@@ -156,8 +200,8 @@ export function Dashboard() {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <RechartsTooltip />
-                <Legend />
+                <RechartsTooltip formatter={(value) => String(value)} labelFormatter={(label) => translateStatus(String(label))} />
+                <Legend formatter={(value) => translateStatus(String(value))} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -184,8 +228,8 @@ export function Dashboard() {
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <RechartsTooltip />
-                <Legend />
+                <RechartsTooltip formatter={(value) => String(value)} labelFormatter={(label) => translateStatus(String(label))} />
+                <Legend formatter={(value) => translateStatus(String(value))} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -261,10 +305,10 @@ export function Dashboard() {
                         <p className="text-sm font-medium text-gray-900">
                           {activity.user && <span className="text-action-muted">{activity.user}</span>}
                           {activity.user && " "}
-                          {activity.action}
+                          {translateActivity(activity)}
                         </p>
                         <span className="text-xs text-gray-500 whitespace-nowrap ml-4">
-                          {format(new Date(activity.timestamp), "M月d日 HH:mm")}
+                          {format(new Date(activity.timestamp), activityDateFormat)}
                         </span>
                       </div>
                       {activity.experimentTitle && (

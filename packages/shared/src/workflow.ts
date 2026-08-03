@@ -42,6 +42,39 @@ export const STEP_ASSAY_MAP: Record<string, string> = {
   ht_cycle: 'HtCycle',
 };
 
+// ─── assayType → workflow step name(s) fed by summary imports ──────────
+// ProcessData is the shared fabrication dataset, so it is mirrored into
+// every fabrication step's experiment so the workflow view shows data for
+// each of them (干燥/注液, 化成, 二封, 定容).
+export const ASSAY_TO_STEP_NAMES: Record<string, string[]> = {
+  ProcessData: ['drying_injection', 'formation', 'second_sealing', 'capacity_grading'],
+  SolutionPreparation: ['solution_preparation'],
+  CalendarLife: ['calendar_life'],
+  StorageSwelling: ['storage_swelling'],
+  EnergyEfficiency: ['energy_efficiency'],
+  DcrTest: ['dcr_test'],
+  FastCharge: ['fast_charge'],
+  HtCycle: ['ht_cycle'],
+};
+
+// ─── Summary-workbook sheet-name keyword → assayType routing ───────────
+// Used by the project-level 汇总数据 import to route each sheet to the
+// experiment of the matching assay type.
+export interface SummarySheetRoute {
+  keyword: string;
+  assayType: string;
+  label: string;
+}
+export const SUMMARY_SHEET_ROUTES: SummarySheetRoute[] = [
+  { keyword: '制程', assayType: 'ProcessData', label: '制程数据' },
+  { keyword: '日历', assayType: 'CalendarLife', label: '日历寿命' },
+  { keyword: '胀气', assayType: 'StorageSwelling', label: '存储胀气' },
+  { keyword: 'dcr', assayType: 'DcrTest', label: 'DCR测试' },
+  { keyword: '能效', assayType: 'EnergyEfficiency', label: '能量效率' },
+  { keyword: '快充', assayType: 'FastCharge', label: '快充时间' },
+  { keyword: '高温循环', assayType: 'HtCycle', label: '高温循环' },
+];
+
 // ─── Step → display label (i18n key) ──────────────────────────────────
 export const STEP_LABEL_KEYS: Record<string, string> = {
   experiment_design: 'step_experiment_design',

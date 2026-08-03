@@ -621,6 +621,7 @@ const resources = {
       status_completed: "Completed",
       status_not_configured: "Not Configured",
       status_paused: "Paused",
+      status_scrapped: "Scrapped",
       edit_info: "Edit Info",
       profile_full_name: "Full Name",
       profile_email: "Email Address",
@@ -634,6 +635,17 @@ const resources = {
       password_changed: "Password changed successfully",
       change_failed: "Password change failed",
       workstation_assignee: "Assignee",
+      // ─── Dashboard activities ───
+      activity_added_comment: "Added a comment",
+      activity_version_updated: "Updated to version {{version}}",
+      activity_version_summary: "Updated experiment",
+      // ─── Profile ───
+      owner_role: "Owner",
+      confirm_new_password: "Confirm New Password",
+      confirm_new_password_placeholder: "Re-enter new password",
+      password_fields_required: "Please fill in all password fields",
+      password_mismatch: "New passwords do not match",
+      password_too_short: "New password must be at least 6 characters",
     },
   },
   zh: {
@@ -1271,6 +1283,7 @@ const resources = {
       status_completed: "已完成",
       status_not_configured: "未配置",
       status_paused: "已暂停",
+      status_scrapped: "已报废",
       edit_info: "编辑信息",
       profile_full_name: "姓名",
       profile_email: "邮箱地址",
@@ -1284,6 +1297,17 @@ const resources = {
       password_changed: "密码修改成功",
       change_failed: "密码修改失败",
       workstation_assignee: "执行人",
+      // ─── Dashboard activities ───
+      activity_added_comment: "添加了评论",
+      activity_version_updated: "更新到第 {{version}} 版",
+      activity_version_summary: "更新了实验",
+      // ─── Profile ───
+      owner_role: "所有者",
+      confirm_new_password: "确认新密码",
+      confirm_new_password_placeholder: "再次输入新密码",
+      password_fields_required: "请填写所有密码字段",
+      password_mismatch: "两次输入的新密码不一致",
+      password_too_short: "新密码至少 6 位",
     },
   },
 };

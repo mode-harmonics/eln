@@ -32,6 +32,10 @@ import { computeFastChargeTime } from './parsers/fast-charge.parser';
 import { ProjectsService } from '../projects/projects.service';
 import { getColumnHeaders, RAW_STEP_COLUMNS } from './export-columns';
 import { WorkflowService } from '../workflow/workflow.service';
+import {
+  ASSAY_TO_STEP_NAMES,
+  SUMMARY_SHEET_ROUTES as SUMMARY_SHEET_ROUTES_SHARED,
+} from '@eln/shared';
 
 /** Maps a parser's tableName to its TypeORM entity class, for queryRunner.manager.save(). */
 const TABLE_NAME_TO_ENTITY: Record<string, new () => unknown> = {
@@ -661,21 +665,10 @@ export class DataService {
   // the normal upload pipeline so merge/overwrite, attachments, derived-field
   // recomputation and picked-cell filtering all still apply.
 
-  /** Sheet-name keyword → assayType routing for summary imports. */
-  private readonly SUMMARY_SHEET_ROUTES: { keyword: string; assayType: string; label: string }[] = [
-    { keyword: '制程', assayType: 'ProcessData', label: '制程数据' },
-    { keyword: '日历', assayType: 'CalendarLife', label: '日历寿命' },
-    { keyword: '胀气', assayType: 'StorageSwelling', label: '存储胀气' },
-    { keyword: 'dcr', assayType: 'DcrTest', label: 'DCR测试' },
-    { keyword: '能效', assayType: 'EnergyEfficiency', label: '能量效率' },
-    { keyword: '快充', assayType: 'FastCharge', label: '快充时间' },
-    { keyword: '高温循环', assayType: 'HtCycle', label: '高温循环' },
-  ];
-
   /** Route a sheet name to an assayType by keyword, or null if not a data sheet. */
   private routeSummarySheet(sheetName: string): { assayType: string; label: string } | null {
     const name = (sheetName || '').toLowerCase();
-    for (const route of this.SUMMARY_SHEET_ROUTES) {
+    for (const route of SUMMARY_SHEET_ROUTES_SHARED) {
       if (name.includes(route.keyword.toLowerCase())) {
         return { assayType: route.assayType, label: route.label };
       }
@@ -754,36 +747,58 @@ export class DataService {
     const rowsInsertedByTable: Record<string, number> = {};
 
     // Second pass: for each assayType, run the standard upload pipeline on the
-    // original workbook restricted to that type's sheets.
+    // original workbook restricted to that type's sheets. Each type feeds one
+    // or more workflow step experiments (ProcessData feeds all fabrication
+    // steps) so the workflow view shows the imported data per step.
     for (const [assayType, sheetNames] of sheetsByAssay) {
-      const route = this.SUMMARY_SHEET_ROUTES.find((r) => r.assayType === assayType)!;
-      let exp = exps.find((e) => (e.metadata as any)?.assayType === assayType) ?? null;
-      if (!exp) {
-        const today = new Date().toISOString().split('T')[0];
-        exp = await this.projectsService.createExperiment(projectId, uploadedBy, {
-          title: `${route.label} - ${today}`,
-          assayType,
-        });
-        exps.push(exp);
-      }
-
-      // The upload pipeline processes each file; whitelist keeps only this type's sheets.
-      const result = await this.uploadWorkbooks(fileMeta, exp.id, uploadedBy, mode ?? 'merge', {
-        skipWorkflowCheck: true,
-        sheetNames,
-      });
+      const route = SUMMARY_SHEET_ROUTES_SHARED.find((r) => r.assayType === assayType)!;
+      const stepNames = ASSAY_TO_STEP_NAMES[assayType] ?? [];
+      if (stepNames.length === 0) continue;
 
       for (const sheetName of sheetNames) {
         sheetsByType.push({ sheetName, assayType, rows: 0 });
       }
-      for (const [table, count] of Object.entries(result.rowsInsertedByTable)) {
-        rowsInsertedByTable[table] = (rowsInsertedByTable[table] ?? 0) + count;
-      }
-      // Assign the per-sheet totals after the fact (uploadWorkbooks aggregates
-      // by table, not by sheet). Reuse the routed list to give accurate rows.
-      const rowsForType = Object.values(result.rowsInsertedByTable).reduce((s, n) => s + n, 0);
-      for (const entry of sheetsByType) {
-        if (entry.assayType === assayType) entry.rows = rowsForType;
+
+      for (const stepName of stepNames) {
+        // 1. Prefer an experiment already linked to this workflow step.
+        let exp = exps.find((e) => e.workflowStepName === stepName) ?? null;
+        // 2. Reuse an orphan experiment of the same assayType (created by
+        //    older summary imports without workflowStepName), back-filling
+        //    the step link so its data becomes visible in the workflow.
+        if (!exp) {
+          exp = exps.find((e) => (e.metadata as any)?.assayType === assayType) ?? null;
+          if (exp && exp.workflowStepName !== stepName) {
+            exp.workflowStepName = stepName;
+            exp.metadata = { ...(exp.metadata ?? {}), assayType, workflowStepName: stepName };
+            await this.dataSource.getRepository(Experiment).save(exp);
+          }
+        }
+        // 3. Otherwise create a new experiment linked to the step.
+        if (!exp) {
+          const today = new Date().toISOString().split('T')[0];
+          exp = await this.projectsService.createExperiment(projectId, uploadedBy, {
+            title: `${route.label} - ${today}`,
+            assayType,
+            workflowStepName: stepName,
+          });
+          exps.push(exp);
+        }
+
+        // The upload pipeline processes each file; whitelist keeps only this type's sheets.
+        const result = await this.uploadWorkbooks(fileMeta, exp.id, uploadedBy, mode ?? 'merge', {
+          skipWorkflowCheck: true,
+          sheetNames,
+        });
+
+        for (const [table, count] of Object.entries(result.rowsInsertedByTable)) {
+          rowsInsertedByTable[table] = (rowsInsertedByTable[table] ?? 0) + count;
+        }
+        // Assign the per-sheet totals after the fact (uploadWorkbooks aggregates
+        // by table, not by sheet). Reuse the routed list to give accurate rows.
+        const rowsForType = Object.values(result.rowsInsertedByTable).reduce((s, n) => s + n, 0);
+        for (const entry of sheetsByType) {
+          if (entry.assayType === assayType) entry.rows = rowsForType;
+        }
       }
     }
 

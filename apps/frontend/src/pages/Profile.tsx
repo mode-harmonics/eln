@@ -7,6 +7,14 @@ import { toast } from "../components/Toast";
 import { PageHeader } from "../components/PageHeader";
 import { Surface } from "../components/Surface";
 
+// Maps backend RoleName enum values to i18n keys (see i18n.ts *_role).
+const ROLE_KEYS: Record<string, string> = {
+  Owner: "owner_role",
+  Admin: "admin_role",
+  Editor: "editor_role",
+  Viewer: "viewer_role",
+};
+
 export function Profile() {
   const { t } = useTranslation();
   const [profile, setProfile] = useState<any>(null);
@@ -25,7 +33,7 @@ export function Profile() {
     let cancelled = false;
     api.get<any>("/api/v1/users/me")
       .then((data) => { if (!cancelled) setProfile(data); })
-      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载个人资料失败"); })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : t("load_failed")); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
@@ -33,26 +41,26 @@ export function Profile() {
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oldPassword || !newPassword || !confirmPassword) {
-      toast.error("请填写所有密码字段");
+      toast.error(t("password_fields_required"));
       return;
     }
     if (newPassword !== confirmPassword) {
-      toast.error("两次输入的新密码不一致");
+      toast.error(t("password_mismatch"));
       return;
     }
     if (newPassword.length < 6) {
-      toast.error("新密码至少 6 位");
+      toast.error(t("password_too_short"));
       return;
     }
     setChanging(true);
     try {
       await api.put("/api/v1/users/me/password", { oldPassword, newPassword });
-      toast.success("密码修改成功");
+      toast.success(t("password_changed"));
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : "密码修改失败");
+      toast.error(err instanceof ApiError ? err.message : t("change_failed"));
     } finally {
       setChanging(false);
     }
@@ -67,10 +75,11 @@ export function Profile() {
   }
 
   if (error || !profile) {
-    return <div className="p-8 text-center text-sm text-red-500">{error || "加载失败"}</div>;
+    return <div className="p-8 text-center text-sm text-red-500">{error || t("load_failed")}</div>;
   }
 
   const initial = profile.fullName ? profile.fullName.charAt(0).toUpperCase() : "U";
+  const roleKey = ROLE_KEYS[profile.roleName];
 
   return (
     <div className="space-y-6">
@@ -87,15 +96,15 @@ export function Profile() {
           <div className="flex-1 space-y-6 w-full">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("profile_full_name")}</label>
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm">
                   <User className="w-4 h-4 text-gray-400" />
                   {profile.fullName}
                 </div>
               </div>
-              
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("profile_email")}</label>
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm">
                   <Mail className="w-4 h-4 text-gray-400" />
                   {profile.email}
@@ -103,10 +112,10 @@ export function Profile() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t("profile_role")}</label>
                 <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 border border-gray-200 rounded text-gray-900 text-sm">
                   <Shield className="w-4 h-4 text-gray-400" />
-                  {profile.roleName || t("profile_no_role")}
+                  {roleKey ? t(roleKey) : profile.roleName || t("profile_no_role")}
                 </div>
               </div>
             </div>
@@ -115,18 +124,18 @@ export function Profile() {
             <div className="pt-6 border-t border-gray-100">
               <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Key className="w-4 h-4" />
-                修改密码
+                {t("change_password")}
               </h3>
               <form onSubmit={handleChangePassword} className="max-w-sm space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">当前密码</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t("current_password")}</label>
                   <div className="relative">
                     <input
                       type={showOld ? "text" : "password"}
                       value={oldPassword}
                       onChange={(e) => setOldPassword(e.target.value)}
                       className="block w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30"
-                      placeholder="输入当前密码"
+                      placeholder={t("current_password_placeholder")}
                     />
                     <button type="button" onClick={() => setShowOld(!showOld)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showOld ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -134,14 +143,14 @@ export function Profile() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">新密码</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t("new_password")}</label>
                   <div className="relative">
                     <input
                       type={showNew ? "text" : "password"}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       className="block w-full rounded border border-gray-300 px-3 py-2 pr-10 text-sm text-gray-900 focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30"
-                      placeholder="至少 6 位"
+                      placeholder={t("new_password_hint")}
                     />
                     <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                       {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -149,17 +158,17 @@ export function Profile() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">确认新密码</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">{t("confirm_new_password")}</label>
                   <input
                     type="password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     className="block w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-focus focus:outline-none focus:ring-1 focus:ring-focus/30"
-                    placeholder="再次输入新密码"
+                    placeholder={t("confirm_new_password_placeholder")}
                   />
                 </div>
                 <Button type="submit" loading={changing} size="sm">
-                  修改密码
+                  {t("change_password")}
                 </Button>
               </form>
             </div>

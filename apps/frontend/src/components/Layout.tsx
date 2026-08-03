@@ -22,6 +22,7 @@ import { api } from "../lib/api";
 import { usePermissions } from "../hooks/usePermissions";
 import { Button } from "./Button";
 import { Logo } from "./Logo";
+import favSrc from "../../assets/fav.png";
 import { Breadcrumb } from "./Breadcrumb";
 import { NotificationBell } from "./NotificationBell";
 import { TempUploadDrawer } from "./TempUploadDrawer";
@@ -101,7 +102,7 @@ export function Layout() {
       >
         <div className="flex flex-col shrink-0 px-6 pt-6 pb-4 border-b border-transparent relative z-10">
           <div className="flex items-center justify-between mb-1">
-            <Logo />
+            <Logo src={favSrc} />
             <div className="flex items-center gap-1">
               <NotificationBell />
               <Dropdown
