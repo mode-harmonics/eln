@@ -23,6 +23,9 @@ export * from './ht-cycle.entity';
 // Picked cells
 export * from './picked-cell.entity';
 
+// Scrapped cells (电池报废记录)
+export * from './scrapped-cell.entity';
+
 // Workflow entities
 export * from './workflow-template.entity';
 export * from './workflow-instance.entity';

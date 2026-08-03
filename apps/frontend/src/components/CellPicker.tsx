@@ -48,7 +48,7 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
       });
       
       const mapped = (processData || [])
-        .filter((r: any) => r.cellId)
+        .filter((r: any) => r.cellId && !r.scrapped)
         .map((r: any) => ({
           cellId: r.cellId,
           fqTotal: (parseFloat(r.fq1) || 0) + (parseFloat(r.fq2) || 0),

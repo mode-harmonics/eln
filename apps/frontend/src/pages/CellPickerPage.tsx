@@ -148,7 +148,7 @@ export function CellPickerPage() {
           }
         }
       }
-      const deduped = Array.from(seen.values()).filter((r: any) => r.cellId);
+      const deduped = Array.from(seen.values()).filter((r: any) => r.cellId && !r.scrapped);
 
       // ── Picked / readonly ──
       const initSelected: Record<string, string> = {};

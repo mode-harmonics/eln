@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Check, Edit3, Loader2, Lock, Pencil, Save, Trash2, X } from "lucide-react";
+import { Ban, Check, Edit3, Loader2, Lock, Pencil, RotateCcw, Save, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn, isCellInvalid } from "../lib/utils";
 import { api } from "../lib/api";
 import { Button } from "./Button";
+import { Modal } from "./Modal";
 import { Tooltip, TooltipTh } from "./Tooltip";
 import { Popconfirm } from "./Popconfirm";
+import { toast } from "./Toast";
 
 /** Shared hook: fetch /api/v1/data/:type/:expId and return { data, loading, error, refresh } */
 function useTableData<T>(type: string, experimentId: string) {
@@ -190,6 +192,8 @@ function useBatchEdit(type: string, data: any[], refresh: () => void) {
         const original = data[i];
         const draft = batchDraft[i];
         if (!draft || !original) continue;
+        // 已报废电池不可批量编辑
+        if ((original as any).scrapped) continue;
 
         const row: Record<string, unknown> = { id: draft.id };
         let hasChanges = false;
@@ -224,13 +228,118 @@ function useBatchEdit(type: string, data: any[], refresh: () => void) {
   return { batchEditing, batchDraft, batchSaving, enterBatchEdit, cancelBatchEdit, handleBatchChange, saveBatchEdit };
 }
 
-/** Row actions: toggles between edit/delete buttons and save/cancel. */
-function RowActions({ row, type, onRefresh, editing, onStartEdit, onSave, onCancel, saving: isSaving, readOnly }: {
-  row: Record<string, unknown>; type: string; onRefresh: () => void;
-  editing?: boolean; onStartEdit?: () => void; onSave?: () => void; onCancel?: () => void; saving?: boolean; readOnly?: boolean;
+/** Scrap/restore a single battery (project-scoped). Renders a scrap button
+ *  for healthy cells and an undo button for scrapped ones. */
+function ScrapCellButton({ projectId, cellId, scrapped, readOnly, onChanged }: {
+  projectId?: string;
+  cellId: string;
+  scrapped?: boolean;
+  readOnly?: boolean;
+  onChanged: () => void;
 }) {
   const { t } = useTranslation();
-  const rowId = (type === 'fastcharge' ? (row.originalRow as any)?.id : row.id) as string;
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  if (!projectId || !cellId) return null;
+
+  const doScrap = async () => {
+    setSubmitting(true);
+    try {
+      await api.post(`/api/v1/data/scrapped-cells/${projectId}`, { cellId, reason: reason.trim() || undefined });
+      setOpen(false);
+      setReason("");
+      toast.success(t("scrap_cell_success", "电池已报废"));
+      onChanged();
+    } catch (err: any) {
+      toast.error(err?.message ?? t("scrap_cell_failed", "报废失败"));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const doRestore = async () => {
+    try {
+      await api.post(`/api/v1/data/scrapped-cells/${projectId}/restore`, { cellId });
+      toast.success(t("restore_cell_success", "已撤销报废"));
+      onChanged();
+    } catch (err: any) {
+      toast.error(err?.message ?? t("restore_cell_failed", "撤销报废失败"));
+    }
+  };
+
+  if (scrapped) {
+    return (
+      <Tooltip content={t("restore_cell", "撤销报废")}>
+        <Popconfirm
+          title={t("restore_cell_confirm", "确认撤销该电池的报废状态？")}
+          onConfirm={doRestore}
+          placement="left"
+        >
+          <button className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-md transition-colors cursor-pointer">
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </Popconfirm>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <>
+      <Tooltip content={t("scrap_cell", "报废电池")}>
+        <button
+          onClick={() => setOpen(true)}
+          disabled={readOnly}
+          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Ban className="w-3.5 h-3.5" />
+        </button>
+      </Tooltip>
+      <Modal
+        open={open}
+        onClose={() => { if (!submitting) { setOpen(false); setReason(""); } }}
+        title={t("scrap_cell_modal_title", "报废电池")}
+        maxWidth="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => { setOpen(false); setReason(""); }} disabled={submitting}>
+              {t("cancel", "取消")}
+            </Button>
+            <Button variant="danger" onClick={doScrap} loading={submitting} disabled={submitting}>
+              {t("confirm_scrap_cell", "确认报废")}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            {t("scrap_cell_warning_prefix", "电池")}
+            <span className="font-semibold text-gray-900"> {cellId} </span>
+            {t("scrap_cell_warning", "报废后将从图表、导出与电池挑选中排除，此操作可撤销。")}
+          </p>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={t("scrap_cell_reason_placeholder", "请填写报废原因（可选）")}
+            rows={3}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-1 focus:ring-red-200"
+          />
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+/** Row actions: toggles between edit/delete buttons and save/cancel. */
+function RowActions({ row, type, onRefresh, editing, onStartEdit, onSave, onCancel, saving: isSaving, readOnly, projectId }: {
+  row: Record<string, unknown>; type: string; onRefresh: () => void;
+  editing?: boolean; onStartEdit?: () => void; onSave?: () => void; onCancel?: () => void; saving?: boolean; readOnly?: boolean;
+  projectId?: string;
+}) {
+  const { t } = useTranslation();
+  const cellId = String(row.cellId ?? row.cellName ?? '');
+  const scrapped = !!(row as any).scrapped;
 
   if (readOnly) {
     return (
@@ -255,32 +364,22 @@ function RowActions({ row, type, onRefresh, editing, onStartEdit, onSave, onCanc
     );
   }
 
-  return (
-    <>
+  if (scrapped) {
+    // Scrapped batteries are frozen: only undo is available.
+    return (
       <div className="flex items-center justify-center gap-1">
-        <Tooltip content={t("edit_row")}>
-          <button onClick={onStartEdit} className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
-        </Tooltip>
-        <Tooltip content={t("delete_row")}>
-          <Popconfirm
-            title={t("delete_row_confirm")}
-            onConfirm={async () => {
-              try {
-                await api.delete(`/api/v1/data/${type}/${rowId}`);
-                onRefresh();
-              } catch (err: any) {
-                alert(err?.message ?? t("delete_failed"));
-              }
-            }}
-            placement="left"
-          >
-            <button className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors cursor-pointer">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </Popconfirm>
-        </Tooltip>
+        <ScrapCellButton projectId={projectId} cellId={cellId} scrapped onChanged={onRefresh} />
       </div>
-    </>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <Tooltip content={t("edit_row")}>
+        <button onClick={onStartEdit} className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"><Edit3 className="w-3.5 h-3.5" /></button>
+      </Tooltip>
+      <ScrapCellButton projectId={projectId} cellId={cellId} readOnly={readOnly} onChanged={onRefresh} />
+    </div>
   );
 }
 
@@ -345,7 +444,7 @@ const P_SECTIONS: Array<{ labelKey: string; fallback: string; start: number; end
   { labelKey: 'lab_firstCycle', fallback: '首圈数据', start: 28, end: 31 },       // qcFirst, qdFirst, ceFirst = 3 cols
 ];
 
-export function ProcessDataTable({ experimentId, stepName, staticData, readOnly, showBatchEdit, invalidInternalCodes }: { experimentId?: string; stepName?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; invalidInternalCodes?: string[] }) {
+export function ProcessDataTable({ experimentId, stepName, staticData, readOnly, showBatchEdit, invalidInternalCodes, projectId }: { experimentId?: string; stepName?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; invalidInternalCodes?: string[]; projectId?: string }) {
   const { t } = useTranslation();
   const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>('process', experimentId || '');
   // Filter out rows from invalid procurement groups (matches group name and internalCode)
@@ -411,18 +510,26 @@ export function ProcessDataTable({ experimentId, stepName, staticData, readOnly,
             <tr>
               <th className="sticky left-0 z-20 bg-gray-50/90 px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-100">{t('col_cell_id')}</th>
               {renderHeaders(visiblePCols, t, 'border-r border-gray-100')}
-              {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50/90 px-2 py-3 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
+              {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50/90 px-2 py-3 w-[100px] min-w-[100px] max-w-[100px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
             </tr></thead>
           <tbody className="bg-white divide-y divide-gray-100">
             {data.map((d: any, idx: number) => {
               const isEditing = editingId === d.id;
               const isBatchEditing = batchEditing;
               const draftRow = batchEditing ? batchDraft[idx] : null;
+              const rowCls = d.scrapped
+                ? 'bg-red-50/40 hover:bg-red-50/60'
+                : (isEditing || isBatchEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70');
               return (
-                <tr key={d.id} className={isEditing || isBatchEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70'}>
-                  <td className="sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap text-[13px] text-gray-900 border-r border-gray-100">{d.cellId}</td>
-                  {renderCells(visiblePCols, isBatchEditing && draftRow ? draftRow : d, P_CELL, (!isBatchEditing && isEditing), isBatchEditing ? undefined : editForm, isBatchEditing ? undefined : handleChange, isBatchEditing ? (f, v) => handleBatchChange(idx, f, v) : undefined, 'border-r border-gray-100')}
-                  {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[70px] min-w-[70px] max-w-[70px]">
+                <tr key={d.id} className={rowCls}>
+                  <td className={cn("sticky left-0 z-10 px-3 py-2 whitespace-nowrap text-[13px] border-r border-gray-100", d.scrapped ? "bg-red-50/80" : "bg-white text-gray-900")}>
+                    <span className={d.scrapped ? "text-gray-400 line-through" : ""}>{d.cellId}</span>
+                    {d.scrapped && (
+                      <span className="ml-1.5 inline-flex items-center rounded bg-red-100 border border-red-200 px-1.5 py-0.5 text-[10px] font-medium text-red-600 align-middle">{t("scrapped_badge", "已报废")}</span>
+                    )}
+                  </td>
+                  {renderCells(visiblePCols, isBatchEditing && draftRow ? draftRow : d, P_CELL, (!isBatchEditing && isEditing), isBatchEditing ? undefined : editForm, isBatchEditing ? undefined : handleChange, isBatchEditing && !d.scrapped ? (f, v) => handleBatchChange(idx, f, v) : undefined, 'border-r border-gray-100')}
+                  {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[100px] min-w-[100px] max-w-[100px]">
                     {isBatchEditing ? (
                       draftRow && data[idx] && Object.keys(draftRow).some((k) => {
                         const skip = new Set(['id', 'experimentId', 'createdAt', 'updatedAt']);
@@ -430,7 +537,7 @@ export function ProcessDataTable({ experimentId, stepName, staticData, readOnly,
                         return String((data[idx] as any)[k] ?? '') !== String((draftRow as any)[k] ?? '');
                       }) ? <span className="inline-flex items-center justify-center w-full text-[10px] font-medium text-amber-600">✎</span> : null
                     ) : (
-                      <RowActions row={d} type="process" onRefresh={refresh}
+                      <RowActions row={d} type="process" onRefresh={refresh} projectId={projectId}
                         editing={isEditing}
                         onStartEdit={() => startEditing(d)}
                         onSave={() => handleSave(d.id, refresh)}
@@ -463,10 +570,10 @@ function buildColorMap(cols: ColDef[]): Record<string, string> {
 }
 
 // ─── Shared render helper for simple row-cell pattern ────────────────────────
-function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, staticData, readOnly, showBatchEdit }: {
+function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, staticData, readOnly, showBatchEdit, projectId }: {
   cols: ColDef[]; cellNameField?: string; type: string; experimentId?: string;
   t: (k: string) => string; keyFn?: (d: any) => string; staticData?: any[]; readOnly?: boolean;
-  showBatchEdit?: boolean;
+  showBatchEdit?: boolean; projectId?: string;
 }) {
   const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>(type, experimentId || '');
   const data = staticData || fetchData;
@@ -512,18 +619,27 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, static
         <thead className="bg-gray-50 sticky top-0 z-20"><tr>
           <th className="sticky left-0 z-20 bg-gray-50/90 px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 whitespace-nowrap">{t(firstCol.i18nKey)}</th>
           {renderHeaders(restCols, t)}
-          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50/90 px-2 py-3 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50/90 px-2 py-3 w-[100px] min-w-[100px] max-w-[100px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
         </tr></thead>
         <tbody className="bg-white divide-y divide-gray-100">
           {data.map((d: any, idx: number) => {
             const isEditing = editingId === (keyFn?.(d) ?? d.id);
             const isBatchEditing = batchEditing;
             const draftRow = batchEditing ? batchDraft[idx] : null;
+            const rowCls = d.scrapped
+              ? 'bg-red-50/40 hover:bg-red-50/60'
+              : (isEditing || isBatchEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70');
+            const firstVal = String(d[firstCol.field] ?? '');
             return (
-              <tr key={keyFn?.(d) ?? d.id} className={isEditing || isBatchEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70'}>
-                <td className={`sticky left-0 z-10 bg-white px-3 py-2 whitespace-nowrap text-[13px] ${cellColorMap[firstCol.field] || 'text-gray-900'}`}>{String(d[firstCol.field] ?? '')}</td>
-                {renderCells(restCols, isBatchEditing && draftRow ? draftRow : d, cellColorMap, (!isBatchEditing && isEditing), isBatchEditing ? undefined : editForm, isBatchEditing ? undefined : handleChange, isBatchEditing ? (f, v) => handleBatchChange(idx, f, v) : undefined)}
-                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[70px] min-w-[70px] max-w-[70px]">
+              <tr key={keyFn?.(d) ?? d.id} className={rowCls}>
+                <td className={cn("sticky left-0 z-10 px-3 py-2 whitespace-nowrap text-[13px]", d.scrapped ? "bg-red-50/80" : `bg-white ${cellColorMap[firstCol.field] || 'text-gray-900'}`)}>
+                  <span className={d.scrapped ? "text-gray-400 line-through" : ""}>{firstVal}</span>
+                  {d.scrapped && (
+                    <span className="ml-1.5 inline-flex items-center rounded bg-red-100 border border-red-200 px-1.5 py-0.5 text-[10px] font-medium text-red-600 align-middle">{t("scrapped_badge")}</span>
+                  )}
+                </td>
+                {renderCells(restCols, isBatchEditing && draftRow ? draftRow : d, cellColorMap, (!isBatchEditing && isEditing), isBatchEditing ? undefined : editForm, isBatchEditing ? undefined : handleChange, isBatchEditing && !d.scrapped ? (f, v) => handleBatchChange(idx, f, v) : undefined)}
+                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[100px] min-w-[100px] max-w-[100px]">
                   {isBatchEditing ? (
                     draftRow && data[idx] && Object.keys(draftRow).some((k) => {
                       const skip = new Set(['id', 'experimentId', 'createdAt', 'updatedAt']);
@@ -531,7 +647,7 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, static
                       return String((data[idx] as any)[k] ?? '') !== String((draftRow as any)[k] ?? '');
                     }) ? <span className="inline-flex items-center justify-center w-full text-[10px] font-medium text-amber-600">✎</span> : null
                   ) : (
-                    <RowActions row={d} type={type} onRefresh={refresh}
+                    <RowActions row={d} type={type} onRefresh={refresh} projectId={projectId}
                       editing={isEditing}
                       onStartEdit={() => startEditing(d)}
                       onSave={() => handleSave(d.id, refresh)}
@@ -564,10 +680,10 @@ const CAL_COLS: ColDef[] = [
   { field: 'r', i18nKey: 'col_r_acir', tooltip: '交流内阻 (r, mΩ)', editable: true },
   { field: 'rGrowth', i18nKey: 'col_comp_rGrowth', tooltip: '内阻增长率 = (r / r_0d - 1) * 100 (%)' },
 ];
-export function CalendarLifeTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
+export function CalendarLifeTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
   return <SimpleTable cols={CAL_COLS} type="calendar" experimentId={props.experimentId} staticData={props.staticData} t={t}
-    keyFn={(d: any) => d.id || d.dayCount} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} />;
+    keyFn={(d: any) => d.id || d.dayCount} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} projectId={props.projectId} />;
 }
 
 // ─── StorageSwelling ───────────────────────────────────────────────────────
@@ -578,9 +694,9 @@ const SWELL_COLS: ColDef[] = [
   { field: 'v', i18nKey: 'col_v_volume', tooltip: '存储后电池体积 (v, mL)', editable: true },
   { field: 'vg', i18nKey: 'col_comp_vg', tooltip: '存储产气量 = (v - v_0d) / qd1st (mL/Ah)' },
 ];
-export function StorageSwellingTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
+export function StorageSwellingTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={SWELL_COLS} type="swelling" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} />;
+  return <SimpleTable cols={SWELL_COLS} type="swelling" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} projectId={props.projectId} />;
 }
 
 // ─── EnergyEfficiency ──────────────────────────────────────────────────────
@@ -590,9 +706,9 @@ const EFF_COLS: ColDef[] = [
   { field: 'ce', i18nKey: 'col_ce', tooltip: '充电能量 (ce, Wh)', editable: true },
   { field: 'ee', i18nKey: 'col_comp_ee', tooltip: '能量效率比 = de / ce' },
 ];
-export function EnergyEfficiencyTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
+export function EnergyEfficiencyTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={EFF_COLS} type="efficiency" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} />;
+  return <SimpleTable cols={EFF_COLS} type="efficiency" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} projectId={props.projectId} />;
 }
 
 // ─── DcrTest ───────────────────────────────────────────────────────────────
@@ -610,9 +726,9 @@ const DCR_COLS: ColDef[] = [
   { field: 'dRcProduct', i18nKey: 'col_comp_dRcProduct', tooltip: '放电 R-C 乘积 = q0 * ddcr (Ah·Ω)' },
   { field: 'cRcProduct', i18nKey: 'col_comp_cRcProduct', tooltip: '充电 R-C 乘积 = q0 * cdcr (Ah·Ω)' },
 ];
-export function DcrTestTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
+export function DcrTestTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={DCR_COLS} type="dcr" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} />;
+  return <SimpleTable cols={DCR_COLS} type="dcr" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} projectId={props.projectId} />;
 }
 
 // ─── FastCharge (special: flatRows + computed time with custom cell render) ─
@@ -628,7 +744,7 @@ const FC_COLS: ColDef[] = [
 ];
 const FC_COMP = 'text-sky-600';
 
-export function FastChargeTable({ experimentId, staticData, readOnly, showBatchEdit }: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
+export function FastChargeTable({ experimentId, staticData, readOnly, showBatchEdit, projectId }: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
   const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>('fastcharge', experimentId || '');
   const data = staticData || fetchData;
@@ -641,8 +757,8 @@ export function FastChargeTable({ experimentId, staticData, readOnly, showBatchE
 
   const flatRows = data.flatMap((d: any) => {
     const steps = d.steps || [];
-    if (steps.length === 0) return [{ cellName: d.cellName, c0: d.c0, providedFastChargeTime: d.providedFastChargeTime, computedFastChargeTime: d.computedFastChargeTime, originalRow: d, isFirstStep: true, totalSteps: 1, stepNo: '-', cutOffVoltage: '-', current: '-', rate: '-', stepCapacity: '-', stepSoc: '-', cumulativeSoc: '-', stepTime: '-' }];
-    return steps.map((step: any, i: number) => ({ cellName: d.cellName, c0: d.c0, providedFastChargeTime: d.providedFastChargeTime, computedFastChargeTime: d.computedFastChargeTime, originalRow: d, isFirstStep: i === 0, totalSteps: steps.length, ...step }));
+    if (steps.length === 0) return [{ cellName: d.cellName, c0: d.c0, providedFastChargeTime: d.providedFastChargeTime, computedFastChargeTime: d.computedFastChargeTime, originalRow: d, scrapped: d.scrapped, isFirstStep: true, totalSteps: 1, stepNo: '-', cutOffVoltage: '-', current: '-', rate: '-', stepCapacity: '-', stepSoc: '-', cumulativeSoc: '-', stepTime: '-' }];
+    return steps.map((step: any, i: number) => ({ cellName: d.cellName, c0: d.c0, providedFastChargeTime: d.providedFastChargeTime, computedFastChargeTime: d.computedFastChargeTime, originalRow: d, scrapped: d.scrapped, isFirstStep: i === 0, totalSteps: steps.length, ...step }));
   });
 
   const startEditing = (r: any) => {
@@ -712,6 +828,8 @@ export function FastChargeTable({ experimentId, staticData, readOnly, showBatchE
         const original = flatRows[i];
         const draft = batchFlat[i];
         if (!draft || !original) continue;
+        // 已报废电池不可批量编辑
+        if (original.scrapped) continue;
         const parentId = original.originalRow.id;
         let entry = parentChanges.get(parentId);
         if (!entry) {
@@ -770,21 +888,27 @@ export function FastChargeTable({ experimentId, staticData, readOnly, showBatchE
           <th className="sticky left-0 z-20 bg-gray-50 px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 whitespace-nowrap">{t('col_cell_name')}</th>
           {renderHeaders(FC_COLS, t)}
           <TooltipTh content="10%-80% SOC 快充时间 (min)" label={t('col_comp_computedTime')} />
-          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-3 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-3 w-[100px] min-w-[100px] max-w-[100px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
         </tr></thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {flatRows.map((r: any, idx: number) => {
             const isEditing = isEditingRow(r, idx);
             const isBatchEditing = batchEditing;
             const draftRow = batchEditing ? batchFlat[idx] : null;
+            const rowCls = r.scrapped
+              ? 'bg-red-50/40 hover:bg-red-50/60'
+              : (isEditing || isBatchEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70');
             return (
-              <tr key={`${r.originalRow.id}-${idx}`} className={isEditing || isBatchEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70'}>
+              <tr key={`${r.originalRow.id}-${idx}`} className={rowCls}>
                 {r.isFirstStep ? (
-                  <td rowSpan={r.totalSteps} className="sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm text-gray-900 border-r border-gray-100 font-medium align-middle">
-                    {r.cellName}
+                  <td rowSpan={r.totalSteps} className={cn("sticky left-0 z-10 px-4 py-2 whitespace-nowrap text-sm border-r border-gray-100 font-medium align-middle", r.scrapped ? "bg-red-50/80" : "bg-white text-gray-900")}>
+                    <span className={r.scrapped ? "text-gray-400 line-through" : ""}>{r.cellName}</span>
+                    {r.scrapped && (
+                      <span className="ml-1.5 inline-flex items-center rounded bg-red-100 border border-red-200 px-1.5 py-0.5 text-[10px] font-medium text-red-600 align-middle">{t("scrapped_badge", "已报废")}</span>
+                    )}
                   </td>
                 ) : null}
-                {renderCells(FC_COLS, isBatchEditing && draftRow ? draftRow : r, undefined, (!isBatchEditing && isEditing), isBatchEditing ? undefined : editForm, isBatchEditing ? undefined : handleChange, isBatchEditing ? (f, v) => {
+                {renderCells(FC_COLS, isBatchEditing && draftRow ? draftRow : r, undefined, (!isBatchEditing && isEditing), isBatchEditing ? undefined : editForm, isBatchEditing ? undefined : handleChange, isBatchEditing && !r.scrapped ? (f, v) => {
                   const updated = [...batchFlat];
                   updated[idx] = { ...updated[idx], [f]: v };
                   setBatchFlat(updated);
@@ -794,11 +918,11 @@ export function FastChargeTable({ experimentId, staticData, readOnly, showBatchE
                     {r.computedFastChargeTime ? `${r.computedFastChargeTime} min` : 'N/A'}
                   </td>
                 ) : null}
-                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[70px] min-w-[70px] max-w-[70px]">
+                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-2 whitespace-nowrap w-[100px] min-w-[100px] max-w-[100px]">
                   {isBatchEditing ? (
                     draftRow && r && fcEditableCols.some((c) => String((r as any)[c.field] ?? '') !== String((draftRow as any)[c.field] ?? '')) ? <span className="inline-flex items-center justify-center w-full text-[10px] font-medium text-amber-600">✎</span> : null
                   ) : (
-                    <RowActions row={r} type="fastcharge" onRefresh={refresh}
+                    <RowActions row={r} type="fastcharge" onRefresh={refresh} projectId={projectId}
                       readOnly={readOnly}
                       editing={isEditing}
                       onStartEdit={() => startEditing(r)}
@@ -823,7 +947,7 @@ const HT_COLS: ColDef[] = [
   { field: 'capacityRetention', i18nKey: 'col_retention', sourceType: 'computed', tooltip: '容量保持率 (%)', render: (v) => v != null ? `${typeof v === 'number' ? v.toFixed(4) : v}%` : '-' },
   { field: 'ironDissolution', i18nKey: 'col_iron_ppm', sourceType: 'device', tooltip: '铁溶出量 (ppm)', render: (v) => v != null ? `${v} ppm` : '-' },
 ];
-export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit }: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
+export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit, projectId }: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
   const { data: fetchData, loading: fetchLoading, error: fetchErr, refresh } = useTableData<any>('htcycle', experimentId || '');
   const data = staticData || fetchData;
@@ -862,18 +986,27 @@ export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit
         <thead className="bg-gray-50 sticky top-0 z-20"><tr>
           <th className="sticky left-0 z-20 bg-gray-50 px-4 py-3 min-w-[140px] text-left text-xs font-semibold text-gray-700 whitespace-nowrap">{t(htFirst.i18nKey)}</th>
           {renderHeaders(htRest, t)}
-          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-3 w-[70px] min-w-[70px] max-w-[70px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
+          {staticData ? null : <th className="sticky right-0 z-20 bg-gray-50 px-2 py-3 w-[100px] min-w-[100px] max-w-[100px] text-center text-xs font-semibold text-gray-700 whitespace-nowrap">{t('actions')}</th>}
         </tr></thead>
         <tbody className="bg-white divide-y divide-gray-200">
           {sorted.map((d: any, idx: number) => {
             const isEditing = editingId === d.id;
             const isBatchEditing = batchEditing;
             const draftRow = batchEditing ? batchDraft[idx] : null;
+            const rowCls = d.scrapped
+              ? 'bg-red-50/40 hover:bg-red-50/60'
+              : (isEditing || isBatchEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70');
+            const firstVal = String(d[htFirst.field] ?? '');
             return (
-              <tr key={d.id} className={isEditing || isBatchEditing ? 'bg-gray-50' : 'hover:bg-gray-50/70'}>
-                <td className={`sticky left-0 z-10 bg-white px-4 py-2 whitespace-nowrap text-sm ${htColors[htFirst.field] || 'text-gray-900'} font-medium`}>{String(d[htFirst.field] ?? '')}</td>
-                {renderCells(htRest, isBatchEditing && draftRow ? draftRow : d, htColors, (!isBatchEditing && isEditing), isBatchEditing ? undefined : editForm, isBatchEditing ? undefined : handleChange, isBatchEditing ? (f, v) => handleBatchChange(idx, f, v) : undefined)}
-                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap w-[70px] min-w-[70px] max-w-[70px]">
+              <tr key={d.id} className={rowCls}>
+                <td className={cn("sticky left-0 z-10 px-4 py-2 whitespace-nowrap text-sm font-medium", d.scrapped ? "bg-red-50/80 text-gray-400" : `bg-white ${htColors[htFirst.field] || 'text-gray-900'}`)}>
+                  <span className={d.scrapped ? "line-through" : ""}>{firstVal}</span>
+                  {d.scrapped && (
+                    <span className="ml-1.5 inline-flex items-center rounded bg-red-100 border border-red-200 px-1.5 py-0.5 text-[10px] font-medium text-red-600 align-middle">{t("scrapped_badge", "已报废")}</span>
+                  )}
+                </td>
+                {renderCells(htRest, isBatchEditing && draftRow ? draftRow : d, htColors, (!isBatchEditing && isEditing), isBatchEditing ? undefined : editForm, isBatchEditing ? undefined : handleChange, isBatchEditing && !d.scrapped ? (f, v) => handleBatchChange(idx, f, v) : undefined)}
+                {staticData ? null : <td className="sticky right-0 z-10 bg-white px-2 py-1.5 whitespace-nowrap w-[100px] min-w-[100px] max-w-[100px]">
                   {isBatchEditing ? (
                     draftRow && data[idx] && Object.keys(draftRow).some((k) => {
                       const skip = new Set(['id', 'experimentId', 'createdAt', 'updatedAt']);
@@ -881,7 +1014,7 @@ export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit
                       return String((data[idx] as any)[k] ?? '') !== String((draftRow as any)[k] ?? '');
                     }) ? <span className="inline-flex items-center justify-center w-full text-[10px] font-medium text-amber-600">✎</span> : null
                   ) : (
-                    <RowActions row={d} type="htcycle" onRefresh={refresh}
+                    <RowActions row={d} type="htcycle" onRefresh={refresh} projectId={projectId}
                       editing={isEditing}
                       onStartEdit={() => startEditing(d)}
                       onSave={() => handleSave(d.id, refresh)}
@@ -906,7 +1039,7 @@ const SLN_COLS: ColDef[] = [
   { field: 'actualAmount', i18nKey: 'col_actual_amount', editable: true, sourceType: 'manual' },
 ];
 
-export function SolutionPreparationTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean }) {
+export function SolutionPreparationTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={SLN_COLS} type="solution" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} />;
+  return <SimpleTable cols={SLN_COLS} type="solution" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} projectId={props.projectId} />;
 }

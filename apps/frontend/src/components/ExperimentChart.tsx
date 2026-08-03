@@ -560,15 +560,17 @@ export function ExperimentChart({ assayType, experimentId, projectId, title, sta
   }, [assayType, experimentId, projectId, staticData]);
 
   const renderChart = () => {
-    if (!data.length) return <EmptyChart />;
+    // Exclude scrapped batteries (电池报废) from charts
+    const visible = data.filter((r: any) => !r.scrapped);
+    if (!visible.length) return <EmptyChart />;
     switch (assayType) {
-      case 'ProcessData': return <ProcessBoxPlotChart data={data} />;
-      case 'CalendarLife': return <CalendarLifeCharts data={data} />;
-      case 'StorageSwelling': return <StorageSwellingChart data={data} />;
-      case 'EnergyEfficiency': return <EfficiencyGroupChart data={data} />;
-      case 'DcrTest': return <DcrGroupChart data={data} />;
-      case 'FastCharge': return <FastChargeChart data={data} />;
-      case 'HtCycle': return <HtCycleGroupChart data={data} />;
+      case 'ProcessData': return <ProcessBoxPlotChart data={visible} />;
+      case 'CalendarLife': return <CalendarLifeCharts data={visible} />;
+      case 'StorageSwelling': return <StorageSwellingChart data={visible} />;
+      case 'EnergyEfficiency': return <EfficiencyGroupChart data={visible} />;
+      case 'DcrTest': return <DcrGroupChart data={visible} />;
+      case 'FastCharge': return <FastChargeChart data={visible} />;
+      case 'HtCycle': return <HtCycleGroupChart data={visible} />;
       default: return <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">暂无合适图表</div>;
     }
   };

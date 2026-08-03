@@ -292,6 +292,8 @@ export function ProjectDetail() {
               if (invalidCodes.length > 0) {
                 rows = rows.filter((r: any) => !isCellInvalid(r.cellId || r.cellName, invalidCodes));
               }
+              // Exclude scrapped batteries (电池报废)
+              rows = rows.filter((r: any) => !r.scrapped);
               setter(rows);
               setLoadedTypes((p) => [...p, apiType]);
             }
@@ -604,7 +606,8 @@ export function ProjectDetail() {
       {activeTab === "raw_data" && (dataLoading ? <SkeletonCard rows={5} /> :
         <ProjectRawData loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
           storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
-          fastCharge={fastCharge} htCycle={htCycle} projectId={projectId!} />
+          fastCharge={fastCharge} htCycle={htCycle} projectId={projectId!}
+          onImported={() => setRefetchTrigger((n) => n + 1)} />
       )}
 
       </div>

@@ -63,11 +63,6 @@ export function ExperimentDetail() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Scrap state
-  const [scrapping, setScrapping] = useState(false);
-  const [scrapReason, setScrapReason] = useState("");
-  const [scrapModalOpen, setScrapModalOpen] = useState(false);
-
   // Invalid procurement internalCodes — used to filter ProcessData rows
   const [invalidInternalCodes, setInvalidInternalCodes] = useState<string[]>([]);
 
@@ -250,25 +245,6 @@ export function ExperimentDetail() {
     }
   };
 
-  const handleScrapExperiment = async () => {
-    if (!experiment) return;
-    setScrapping(true);
-    try {
-      const updated = await api.post<typeof experiment>(`/api/v1/experiments/${experiment.id}/scrap`, {
-        reason: scrapReason.trim() || undefined,
-      });
-      setExperiment({ ...experiment, ...updated });
-      setStepCompleted(true);
-      setScrapModalOpen(false);
-      setScrapReason("");
-      toast.success(t("scrap_success", "实验已报废，工作流已自动推进至下一工步"));
-    } catch (err: any) {
-      toast.error(err?.message ?? t("scrap_failed", "报废失败"));
-    } finally {
-      setScrapping(false);
-    }
-  };
-
   const [completingStep, setCompletingStep] = useState(false);
   const [stepCompleted, setStepCompleted] = useState(false);
 
@@ -403,15 +379,16 @@ export function ExperimentDetail() {
   }, [experiment?.projectId, experiment?.metadata?.assayType]);
 
   const renderTable = () => {
+    const tableProps = { projectId: experiment.projectId, readOnly: stepCompleted, showBatchEdit: true };
     switch (assayType) {
-      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} readOnly={stepCompleted} showBatchEdit invalidInternalCodes={invalidInternalCodes} />;
-      case "SolutionPreparation": return <SolutionPreparationTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
-      case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
-      case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
-      case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
-      case "DcrTest": return <DcrTestTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
-      case "FastCharge": return <FastChargeTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
-      case "HtCycle": return <HtCycleTable key={refreshCounter} experimentId={experiment.id} readOnly={stepCompleted} showBatchEdit />;
+      case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} {...tableProps} invalidInternalCodes={invalidInternalCodes} />;
+      case "SolutionPreparation": return <SolutionPreparationTable key={refreshCounter} experimentId={experiment.id} {...tableProps} />;
+      case "CalendarLife": return <CalendarLifeTable key={refreshCounter} experimentId={experiment.id} {...tableProps} />;
+      case "StorageSwelling": return <StorageSwellingTable key={refreshCounter} experimentId={experiment.id} {...tableProps} />;
+      case "EnergyEfficiency": return <EnergyEfficiencyTable key={refreshCounter} experimentId={experiment.id} {...tableProps} />;
+      case "DcrTest": return <DcrTestTable key={refreshCounter} experimentId={experiment.id} {...tableProps} />;
+      case "FastCharge": return <FastChargeTable key={refreshCounter} experimentId={experiment.id} {...tableProps} />;
+      case "HtCycle": return <HtCycleTable key={refreshCounter} experimentId={experiment.id} {...tableProps} />;
       default:
         return (
           <div className="p-8 text-center text-sm text-gray-500">
@@ -524,18 +501,6 @@ export function ExperimentDetail() {
             ]}
           />
 
-
-          {/* Scrap button */}
-          {canWrite && experiment.status !== "Scrapped" && (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="!text-red-600 hover:!bg-red-50 hover:!border-red-200 shrink-0"
-              onClick={() => setScrapModalOpen(true)}
-            >
-              {t("scrap", "报废")}
-            </Button>
-          )}
         </div>}
         bordered
       />
@@ -847,52 +812,6 @@ export function ExperimentDetail() {
       <Drawer open={versionsDrawerOpen || activeDrawer === "versions"} onClose={() => { setVersionsDrawerOpen(false); setActiveDrawer(null); }} title={t("history", "Version History")}>
         <VersionDiffViewer versions={versions} />
       </Drawer>
-
-      {/* Scrap Modal */}
-      <Modal
-        open={scrapModalOpen}
-        onClose={() => { setScrapModalOpen(false); setScrapReason(""); }}
-        title={t("scrap_experiment", "报废实验")}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => { setScrapModalOpen(false); setScrapReason(""); }} disabled={scrapping}>
-              {t("cancel", "取消")}
-            </Button>
-            <Button
-              variant="primary"
-              className="!bg-red-600 hover:!bg-red-700 !border-red-600"
-              loading={scrapping}
-              disabled={scrapping}
-              onClick={handleScrapExperiment}
-            >
-              {t("confirm_scrap", "确认报废")}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 rounded-lg bg-red-50 border border-red-100 px-4 py-3">
-            <span className="text-red-500 mt-0.5 shrink-0">⚠</span>
-            <p className="text-sm text-red-700 leading-5">
-              {t("scrap_warning", "报废后实验将变为只读状态，此操作不可撤回，请谨慎操作。")}
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              {t("scrap_reason", "报废原因")}
-              <span className="ml-1 text-xs text-gray-400 font-normal">（可选）</span>
-            </label>
-            <textarea
-              rows={3}
-              value={scrapReason}
-              onChange={(e) => setScrapReason(e.target.value)}
-              placeholder={t("scrap_reason_placeholder", "请说明报废原因，例如：试剂无效、实验中止等...")}
-              className="block w-full rounded border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300 resize-none"
-              disabled={scrapping}
-            />
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

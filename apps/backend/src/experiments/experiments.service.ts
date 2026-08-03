@@ -427,46 +427,6 @@ export class ExperimentsService {
     return saved;
   }
 
-  async scrap(id: string, userId: string, reason?: string): Promise<Experiment> {
-    const experiment = await this.experimentsRepo.findOne({ where: { id } });
-    if (!experiment) {
-      throw new NotFoundException('Experiment not found.');
-    }
-
-    if (experiment.status === 'Scrapped') {
-      throw new ConflictException('Experiment is already scrapped.');
-    }
-
-    experiment.status = 'Scrapped';
-    experiment.reviewComment = reason ?? null;
-    experiment.reviewedAt = new Date();
-    experiment.versionNo += 1;
-
-    const saved = await this.experimentsRepo.save(experiment);
-
-    await this.versionHistoryRepo.save(
-      this.versionHistoryRepo.create({
-        id: uuid(),
-        experimentId: saved.id,
-        versionNumber: saved.versionNo,
-        changeSummary: reason ? `报废: ${reason}` : '实验已报废',
-        snapshot: JSON.parse(JSON.stringify(saved)),
-        updatedBy: userId,
-      }),
-    );
-
-    // Automatically advance the workflow if experiment is linked to a project
-    if (saved.projectId) {
-      try {
-        await this.workflowService.transition(saved.projectId, userId);
-      } catch (err: any) {
-        // Ignore if step was already completed or no active assignment for this user
-      }
-    }
-
-    return saved;
-  }
-
   async getCollaborators(id: string): Promise<ExperimentCollaborator[]> {
     return this.collaboratorsRepo.find({ where: { experimentId: id } });
   }

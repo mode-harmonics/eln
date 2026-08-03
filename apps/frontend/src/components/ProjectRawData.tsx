@@ -11,30 +11,66 @@ import {
   HtCycleTable,
 } from "./ExperimentTables";
 import { SummaryDataProps } from "../utils/dataSummary";
-import { Database, Download, UploadCloud } from "lucide-react";
+import { Check, ChevronDown, Database, Download, UploadCloud } from "lucide-react";
 import { Button } from "./Button";
+import { Dropdown } from "./Dropdown";
 import { toast } from "./Toast";
 import { api, ApiError } from "../lib/api";
 import { ExperimentChart } from "./ExperimentChart";
 
-export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]; projectId: string }) {
+export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]; projectId: string; onImported?: () => void }) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("process");
 
-  // Upload state
+  // Upload state — import mode: merge keeps existing rows, overwrite replaces them
   const [uploading, setUploading] = useState(false);
+  const [importMode, setImportMode] = useState<"merge" | "overwrite">("merge");
+  const importModeRef = useRef<"merge" | "overwrite">("merge");
   const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const pickMode = (mode: "merge" | "overwrite") => {
+    importModeRef.current = mode;
+    setImportMode(mode);
+    uploadInputRef.current?.click();
+  };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    const mode = importModeRef.current;
+
+    if (mode === "overwrite") {
+      const ok = window.confirm(
+        t("import_overwrite_confirm", "覆盖模式将删除该类型已有的全部数据后重新导入，此操作不可恢复，确定继续？"),
+      );
+      if (!ok) {
+        if (uploadInputRef.current) uploadInputRef.current.value = "";
+        return;
+      }
+    }
+
     setUploading(true);
     try {
       const form = new FormData();
       for (let i = 0; i < files.length; i++) form.append("files", files[i]);
-      form.append("mode", "merge");
-      await api.upload(`/api/v1/data/upload-project/${props.projectId}`, form);
-      toast.success(t("import_success_refresh"));
+      form.append("mode", mode);
+      const result = await api.upload<any>(`/api/v1/data/upload-project/${props.projectId}`, form);
+
+      // Build per-type row summary
+      const byType: { sheetName: string; assayType: string; rows: number }[] =
+        result?.sheetsByType ?? [];
+      const summary = byType
+        .map((r) => `${r.sheetName}: ${r.rows} 行`)
+        .join("，");
+
+      if (result?.workflowCompleted) {
+        toast.success(t("import_success_workflow", "导入成功，工作流已完成"));
+      } else if (summary) {
+        toast.success(t("import_success_detail", "导入成功：{{summary}}", { summary }));
+      } else {
+        toast.success(t("import_success", "导入成功，数据已刷新"));
+      }
+      props.onImported?.();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : t("import_failed"));
     } finally {
@@ -109,10 +145,43 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
               className="hidden"
               onChange={handleImport}
             />
-            <Button variant="secondary" size="sm" onClick={() => uploadInputRef.current?.click()} loading={uploading}>
-              <UploadCloud className="w-4 h-4" />
-              {t("import_summary")}
-            </Button>
+            <Dropdown
+              trigger={
+                <Button variant="secondary" size="sm" loading={uploading} disabled={uploading}>
+                  <UploadCloud className="w-4 h-4" />
+                  {t("import_summary")}
+                  <ChevronDown className="w-3 h-3 opacity-60" />
+                </Button>
+              }
+            >
+              <div className="py-1.5">
+                <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium text-gray-400">{t("import_mode_label", "导入模式")}</p>
+                <button
+                  onClick={() => pickMode("merge")}
+                  className="w-full flex items-start gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100 hover:text-gray-950 transition-colors"
+                >
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                    {importMode === "merge" && <Check className="h-3.5 w-3.5 text-action" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-medium">{t("merge", "合并")}</span>
+                    <span className="block text-[11px] text-gray-400">{t("import_mode_merge_desc", "保留已有数据，按电池编号合并新增/更新")}</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => pickMode("overwrite")}
+                  className="w-full flex items-start gap-2 px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-100 hover:text-gray-950 transition-colors"
+                >
+                  <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                    {importMode === "overwrite" && <Check className="h-3.5 w-3.5 text-red-500" />}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block font-medium">{t("overwrite", "覆盖")}</span>
+                    <span className="block text-[11px] text-gray-400">{t("import_mode_overwrite_desc", "删除该类型已有数据后重新导入（不可恢复）")}</span>
+                  </span>
+                </button>
+              </div>
+            </Dropdown>
             <Button variant="secondary" size="sm" onClick={handleExport}>
               <Download className="w-4 h-4" />
               {t("export_summary")}

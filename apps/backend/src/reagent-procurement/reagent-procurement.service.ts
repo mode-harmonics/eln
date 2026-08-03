@@ -3,12 +3,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
 import { WorkflowService } from '../workflow/workflow.service';
 
 import { ExperimentDesign } from '../entities/experiment-design.entity';
 import { UpdateProcurementDto } from './dto/update-procurement.dto';
+import { UpdateProcurementItemDto } from './dto/batch-update-procurement.dto';
 
 type ProcurementWithDesign = ReagentProcurement & {
   group: string;
@@ -108,5 +109,39 @@ export class ReagentProcurementService {
 
     Object.assign(record, dto);
     return this.procurementRepo.save(record);
+  }
+
+  /**
+   * Batch update multiple procurement records in one call (批量修改).
+   * All items must belong to the project; missing records fail the whole batch.
+   */
+  async updateBatch(
+    projectId: string,
+    items: UpdateProcurementItemDto[],
+  ): Promise<ReagentProcurement[]> {
+    if (!items || items.length === 0) return [];
+
+    await this.workflowService.assertStepNotCompleted(projectId, 'procurement');
+
+    const ids = items.map((i) => i.id);
+    const records = await this.procurementRepo.find({
+      where: { id: In(ids), projectId },
+    });
+    const recordMap = new Map(records.map((r) => [r.id, r]));
+
+    const missing = ids.filter((id) => !recordMap.has(id));
+    if (missing.length > 0) {
+      throw new NotFoundException(
+        `Procurement records not found: ${missing.join(', ')}`,
+      );
+    }
+
+    for (const item of items) {
+      const record = recordMap.get(item.id)!;
+      const { id, ...fields } = item;
+      Object.assign(record, fields);
+    }
+
+    return this.procurementRepo.save(records);
   }
 }

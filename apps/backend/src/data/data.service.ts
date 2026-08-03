@@ -9,6 +9,7 @@ import { Attachment } from '../entities/attachment.entity';
 import { CalendarLife } from '../entities/calendar-life.entity';
 import { RawStepData } from '../entities/raw-step-data.entity';
 import { PickedCell } from '../entities/picked-cell.entity';
+import { ScrappedCell } from '../entities/scrapped-cell.entity';
 import { DcrTest } from '../entities/dcr-test.entity';
 import { EnergyEfficiency } from '../entities/energy-efficiency.entity';
 import { FastCharge } from '../entities/fast-charge.entity';
@@ -342,12 +343,15 @@ export class DataService {
     experimentId: string,
     uploadedBy: string,
     mode?: 'overwrite' | 'merge',
+    opts?: { skipWorkflowCheck?: boolean; sheetNames?: string[] },
   ): Promise<UploadSummary> {
     const experiment = await this.getExperiment(experimentId);
     if (!experiment) throw new NotFoundException('Experiment not found');
     const assayType = experiment.metadata?.assayType as string | undefined;
 
-    if (experiment.workflowStepName) {
+    // Summary imports are project-level data and bypass the workflow step
+    // gate; the caller completes the workflow after a successful import.
+    if (!opts?.skipWorkflowCheck && experiment.workflowStepName) {
       await this.workflowService.assertStepNotCompleted(experiment.projectId, experiment.workflowStepName);
     }
 
@@ -440,6 +444,12 @@ export class DataService {
       }
 
       for (const sheet of workbook.worksheets) {
+        // Optional sheet-name whitelist — used by summary imports so each
+        // experiment only ingests the sheets routed to it.
+        if (opts?.sheetNames && !opts.sheetNames.includes(sheet.name)) {
+          continue;
+        }
+
         const parser = this.parserRegistry.resolve(sheet, assayType);
         if (!parser) {
           sheetsSkipped.push(sheet.name);
@@ -642,6 +652,149 @@ export class DataService {
     return { sheetsProcessed, sheetsSkipped, rowsInsertedByTable };
   }
 
+  // ── Summary workbook import (汇总数据导入) ────────────────────────────
+  //
+  // Imports a multi-sheet "汇总数据" workbook by routing each data sheet to
+  // the experiment of the matching assay type, based on SHEET NAME keywords.
+  // Non-data sheets (封面页 / 操作指南 / 计划日程 / 数据综合整理) are skipped.
+  // Each matched sheet is copied into a single-sheet workbook and fed through
+  // the normal upload pipeline so merge/overwrite, attachments, derived-field
+  // recomputation and picked-cell filtering all still apply.
+
+  /** Sheet-name keyword → assayType routing for summary imports. */
+  private readonly SUMMARY_SHEET_ROUTES: { keyword: string; assayType: string; label: string }[] = [
+    { keyword: '制程', assayType: 'ProcessData', label: '制程数据' },
+    { keyword: '日历', assayType: 'CalendarLife', label: '日历寿命' },
+    { keyword: '胀气', assayType: 'StorageSwelling', label: '存储胀气' },
+    { keyword: 'dcr', assayType: 'DcrTest', label: 'DCR测试' },
+    { keyword: '能效', assayType: 'EnergyEfficiency', label: '能量效率' },
+    { keyword: '快充', assayType: 'FastCharge', label: '快充时间' },
+    { keyword: '高温循环', assayType: 'HtCycle', label: '高温循环' },
+  ];
+
+  /** Route a sheet name to an assayType by keyword, or null if not a data sheet. */
+  private routeSummarySheet(sheetName: string): { assayType: string; label: string } | null {
+    const name = (sheetName || '').toLowerCase();
+    for (const route of this.SUMMARY_SHEET_ROUTES) {
+      if (name.includes(route.keyword.toLowerCase())) {
+        return { assayType: route.assayType, label: route.label };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Import summary workbooks at project level. Each data sheet is routed to
+   * the matching experiment (auto-created if missing) and imported with the
+   * given mode. Workflow step state is bypassed.
+   *
+   * Instead of copying sheets into single-sheet workbooks (which loses the
+   * merged first-column cells used by the wide-layout parsers), we route the
+   * ORIGINAL workbook to each experiment with a sheet-name whitelist so each
+   * experiment only ingests the sheets routed to it.
+   */
+  async importSummaryWorkbook(
+    files: { buffer: Buffer; originalname: string; mimetype: string }[],
+    projectId: string,
+    uploadedBy: string,
+    mode?: 'overwrite' | 'merge',
+  ): Promise<{
+    sheetsProcessed: number;
+    sheetsSkipped: string[];
+    sheetsByType: { sheetName: string; assayType: string; rows: number }[];
+    rowsInsertedByTable: Record<string, number>;
+  }> {
+    const exps = await this.getProjectExperiments(projectId);
+    const sheetsSkipped: string[] = [];
+
+    // First pass: load every workbook once and group data sheets by assayType.
+    // Each entry: { file, sheetName, assayType, label }
+    interface RoutedSheet {
+      file: { buffer: Buffer; originalname: string; mimetype: string };
+      sheetName: string;
+      assayType: string;
+      label: string;
+    }
+    const routed: RoutedSheet[] = [];
+    const fileMeta: { buffer: Buffer; originalname: string; mimetype: string }[] = [];
+
+    for (const file of files) {
+      const workbook = new ExcelJS.Workbook();
+      try {
+        // @ts-expect-error: ExcelJS typings expect pre-generic Buffer; runtime behavior is identical
+        await workbook.xlsx.load(file.buffer);
+      } catch {
+        throw new BadRequestException('Could not parse the uploaded file as an Excel workbook.');
+      }
+      fileMeta.push(file);
+
+      for (const sheet of workbook.worksheets) {
+        const route = this.routeSummarySheet(sheet.name);
+        if (!route) {
+          sheetsSkipped.push(sheet.name);
+          continue;
+        }
+        routed.push({ file, sheetName: sheet.name, assayType: route.assayType, label: route.label });
+      }
+    }
+
+    if (routed.length === 0) {
+      return { sheetsProcessed: 0, sheetsSkipped, sheetsByType: [], rowsInsertedByTable: {} };
+    }
+
+    // Group sheet names per assayType
+    const sheetsByAssay = new Map<string, string[]>();
+    for (const r of routed) {
+      const list = sheetsByAssay.get(r.assayType) ?? [];
+      list.push(r.sheetName);
+      sheetsByAssay.set(r.assayType, list);
+    }
+
+    const sheetsByType: { sheetName: string; assayType: string; rows: number }[] = [];
+    const rowsInsertedByTable: Record<string, number> = {};
+
+    // Second pass: for each assayType, run the standard upload pipeline on the
+    // original workbook restricted to that type's sheets.
+    for (const [assayType, sheetNames] of sheetsByAssay) {
+      const route = this.SUMMARY_SHEET_ROUTES.find((r) => r.assayType === assayType)!;
+      let exp = exps.find((e) => (e.metadata as any)?.assayType === assayType) ?? null;
+      if (!exp) {
+        const today = new Date().toISOString().split('T')[0];
+        exp = await this.projectsService.createExperiment(projectId, uploadedBy, {
+          title: `${route.label} - ${today}`,
+          assayType,
+        });
+        exps.push(exp);
+      }
+
+      // The upload pipeline processes each file; whitelist keeps only this type's sheets.
+      const result = await this.uploadWorkbooks(fileMeta, exp.id, uploadedBy, mode ?? 'merge', {
+        skipWorkflowCheck: true,
+        sheetNames,
+      });
+
+      for (const sheetName of sheetNames) {
+        sheetsByType.push({ sheetName, assayType, rows: 0 });
+      }
+      for (const [table, count] of Object.entries(result.rowsInsertedByTable)) {
+        rowsInsertedByTable[table] = (rowsInsertedByTable[table] ?? 0) + count;
+      }
+      // Assign the per-sheet totals after the fact (uploadWorkbooks aggregates
+      // by table, not by sheet). Reuse the routed list to give accurate rows.
+      const rowsForType = Object.values(result.rowsInsertedByTable).reduce((s, n) => s + n, 0);
+      for (const entry of sheetsByType) {
+        if (entry.assayType === assayType) entry.rows = rowsForType;
+      }
+    }
+
+    return {
+      sheetsProcessed: sheetsByType.length,
+      sheetsSkipped,
+      sheetsByType,
+      rowsInsertedByTable,
+    };
+  }
+
   /**
    * Re-calculates derived metrics across all accumulated business rows for an experiment.
    * Ensures that multi-batch uploads retain baseline-dependent calculations
@@ -776,10 +929,23 @@ export class DataService {
     if (source && (source === 'formation' || source === 'grading')) {
       where.dataSource = source;
     }
-    return this.dataSource.getRepository(RawStepData).find({
+    const rows = await this.dataSource.getRepository(RawStepData).find({
       where,
       order: { stepSeqNo: 'ASC' },
     });
+
+    // Annotate rows belonging to scrapped batteries so clients can mark/exclude them
+    const scrappedSet = await this.getScrappedCellSetForExperiment(experimentId);
+    if (scrappedSet.size > 0) {
+      for (const row of rows) {
+        const cellKey = String((row as any).cellName ?? '');
+        if (cellKey && scrappedSet.has(cellKey.trim().toLowerCase())) {
+          (row as any).scrapped = true;
+        }
+      }
+    }
+
+    return rows;
   }
 
   /**
@@ -824,6 +990,14 @@ export class DataService {
       mergedRows.set(row.cellId, existing);
     }
 
+    // ── Filter out scrapped cells (电池报废) ──
+    const scrappedSet = await this.getScrappedCellSet(projectId);
+    if (scrappedSet.size > 0) {
+      for (const cellId of [...mergedRows.keys()]) {
+        if (scrappedSet.has(cellId.trim().toLowerCase())) mergedRows.delete(cellId);
+      }
+    }
+
     // Build CellRecord[]
     const allRecords: CellRecord[] = [];
     for (const r of mergedRows.values()) {
@@ -865,12 +1039,15 @@ export class DataService {
     return (await repo.save(rows as any)) as PickedCell[];
   }
 
-  /** Get picked cells for a project */
+  /** Get picked cells for a project (scrapped cells excluded) */
   async getPickedCells(projectId: string): Promise<PickedCell[]> {
-    return this.dataSource.getRepository(PickedCell).find({
+    const rows = await this.dataSource.getRepository(PickedCell).find({
       where: { projectId } as any,
       order: { createdAt: 'ASC' },
     });
+    const scrappedSet = await this.getScrappedCellSet(projectId);
+    if (scrappedSet.size === 0) return rows;
+    return rows.filter((r) => !scrappedSet.has(r.cellId.trim().toLowerCase()));
   }
 
   /** Manual pick: replace picked cells for a project */
@@ -888,6 +1065,69 @@ export class DataService {
       pickedBy: 'manual',
     }));
     return (await repo.save(rows as any)) as PickedCell[];
+  }
+
+  // ── Scrapped cells (电池报废) ──────────────────────────────────────────
+
+  /** Get scrapped cell records for a project. */
+  async getScrappedCells(projectId: string): Promise<ScrappedCell[]> {
+    return this.dataSource.getRepository(ScrappedCell).find({
+      where: { projectId } as any,
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /** Get the set of scrapped cellIds for a project (lower-cased). */
+  async getScrappedCellSet(projectId: string): Promise<Set<string>> {
+    const records = await this.dataSource.getRepository(ScrappedCell).find({
+      where: { projectId } as any,
+      select: ['cellId'],
+    });
+    return new Set(records.map((r) => r.cellId.trim().toLowerCase()));
+  }
+
+  /** Get the set of scrapped cellIds for an experiment's project. */
+  private async getScrappedCellSetForExperiment(experimentId: string): Promise<Set<string>> {
+    const experiment = await this.dataSource.getRepository(Experiment).findOne({
+      where: { id: experimentId },
+      select: ['projectId'],
+    });
+    if (!experiment) return new Set();
+    return this.getScrappedCellSet(experiment.projectId);
+  }
+
+  /** Mark a single battery as scrapped (project-scoped). */
+  async scrapCell(projectId: string, cellId: string, userId: string, reason?: string): Promise<ScrappedCell> {
+    if (!cellId?.trim()) {
+      throw new BadRequestException('cellId is required.');
+    }
+    const repo = this.dataSource.getRepository(ScrappedCell);
+    const existing = await repo.findOne({ where: { projectId, cellId: cellId.trim() } as any });
+    if (existing) {
+      throw new ConflictException(`Battery ${cellId} is already scrapped.`);
+    }
+    const record = repo.create({
+      id: uuid(),
+      projectId,
+      cellId: cellId.trim(),
+      reason: reason?.trim() || null,
+      scrappedBy: userId,
+    });
+    return repo.save(record);
+  }
+
+  /** Restore a scrapped battery (remove the scrap record). */
+  async restoreCell(projectId: string, cellId: string): Promise<{ success: boolean }> {
+    if (!cellId?.trim()) {
+      throw new BadRequestException('cellId is required.');
+    }
+    const repo = this.dataSource.getRepository(ScrappedCell);
+    const record = await repo.findOne({ where: { projectId, cellId: cellId.trim() } as any });
+    if (!record) {
+      throw new NotFoundException(`Battery ${cellId} is not scrapped.`);
+    }
+    await repo.remove(record);
+    return { success: true };
   }
 
   /**
@@ -1046,10 +1286,24 @@ export class DataService {
       order.id = 'ASC';
     }
 
-    return repo.find({
+    return this.dataSource.getRepository(EntityClass).find({
       where: { experimentId } as Record<string, unknown>,
       order
-    });
+    }).then((rows) => this.annotateScrapped(experimentId, rows));
+  }
+
+  /** Attach `scrapped: true` to rows whose cell belongs to a scrapped battery. */
+  private async annotateScrapped(experimentId: string, rows: unknown[]): Promise<unknown[]> {
+    const scrappedSet = await this.getScrappedCellSetForExperiment(experimentId);
+    if (scrappedSet.size === 0) return rows;
+    for (const row of rows) {
+      const rec = row as Record<string, unknown>;
+      const cellKey = String(rec.cellId ?? rec.cellName ?? '');
+      if (cellKey && scrappedSet.has(cellKey.trim().toLowerCase())) {
+        rec.scrapped = true;
+      }
+    }
+    return rows;
   }
 
   /** PUT /data/:type/:id update a single data row. */
@@ -1481,7 +1735,8 @@ export class DataService {
       return workbook;
     }
 
-    const rawData = await this.findByType(typeParam, experimentId) as Record<string, any>[];
+    const rawData = (await this.findByType(typeParam, experimentId) as Record<string, any>[])
+      .filter((r) => !(r as any).scrapped);
     const headers = getColumnHeaders(typeParam);
     const fieldNames = Object.keys(headers); // ordered — same as export-columns.ts
 
@@ -1565,7 +1820,7 @@ export class DataService {
     experimentId: string,
     source?: string,
   ): Promise<void> {
-    const data = await this.findRawSteps(experimentId, source);
+    const data = (await this.findRawSteps(experimentId, source)).filter((r: any) => !r.scrapped);
     const sheet = workbook.addWorksheet(sheetName);
 
     if (data && data.length > 0) {
@@ -1587,6 +1842,9 @@ export class DataService {
   async exportProjectBuffer(projectId: string): Promise<Buffer> {
     const exps = await this.dataSource.getRepository(Experiment).find({ where: { projectId } });
     if (!exps.length) throw new NotFoundException('Project has no experiments.');
+
+    // Scrapped batteries (电池报废) are excluded from project exports
+    const scrappedSet = await this.getScrappedCellSet(projectId);
 
     const expIdsByType: Record<string, string[]> = {};
     const ASSAY_TYPE_MAP: Record<string, string> = {
@@ -1718,6 +1976,15 @@ export class DataService {
         rows.push(...batch);
       }
       if (rows.length === 0) continue;
+
+      // Exclude scrapped batteries (电池报废)
+      if (scrappedSet.size > 0) {
+        rows = rows.filter((row: any) => {
+          const key = String(row.cellId ?? row.cellName ?? '');
+          return !key || !scrappedSet.has(key.trim().toLowerCase());
+        });
+        if (rows.length === 0) continue;
+      }
 
       // Merge ProcessData by cellId (dedup across experiments)
       if (def.key === 'ProcessData') {

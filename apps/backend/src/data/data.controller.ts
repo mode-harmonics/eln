@@ -23,6 +23,7 @@ import { PermissionsGuard, hasPermission } from '../common/guards/permissions.gu
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { DataService } from './data.service';
+import { WorkflowService } from '../workflow/workflow.service';
 import { RECORD_TYPE_TO_API_TYPE as RECORD_TYPE_TO_PERMISSION } from '@eln/shared';
 import { UploadDataDto } from './dto/upload-data.dto';
 import { PickCellsDto } from '../experiments/dto/pick-cells.dto';
@@ -39,7 +40,10 @@ interface UploadedFile {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('data')
 export class DataController {
-  constructor(private readonly dataService: DataService) {}
+  constructor(
+    private readonly dataService: DataService,
+    private readonly workflowService: WorkflowService,
+  ) {}
 
   @Post('upload')
   @ApiConsumes('multipart/form-data')
@@ -84,7 +88,7 @@ export class DataController {
   @RequirePermission('data:write')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
-    summary: 'Upload Excel workbooks to a project. Auto-routes data to the correct experiments by matching assayType.',
+    summary: 'Import summary workbook(s) to a project. Routes each data sheet (by sheet name) to the matching experiment, then completes the workflow.',
   })
   @UseInterceptors(FilesInterceptor('files', 20, { limits: { fileSize: 50 * 1024 * 1024 } }))
   async uploadToProject(
@@ -97,39 +101,35 @@ export class DataController {
       throw new BadRequestException('No files uploaded. Expected multipart field "files".');
     }
 
-    const experiments = await this.dataService.getProjectExperiments(projectId);
-    if (!experiments || experiments.length === 0) {
-      throw new BadRequestException('No experiments found for this project.');
-    }
-
     const workbooks = files.map(f => ({
       buffer: f.buffer,
       originalname: f.originalname,
       mimetype: f.mimetype,
     }));
 
-    const results: { experimentId: string; assayType: string; sheetsProcessed: number; sheetsSkipped: string[]; rowsInsertedByTable: Record<string, number> }[] = [];
+    const result = await this.dataService.importSummaryWorkbook(
+      workbooks,
+      projectId,
+      user.id,
+      dto.mode ?? 'merge',
+    );
 
-    for (const exp of experiments) {
-      const assayType = (exp.metadata as any)?.assayType as string;
-      if (!assayType) continue;
-      const typeKey = RECORD_TYPE_TO_PERMISSION[assayType];
-      if (!typeKey) continue;
-
-      try {
-        const result = await this.dataService.uploadWorkbooks(workbooks, exp.id, user.id, dto.mode ?? 'merge');
-        results.push({ experimentId: exp.id, assayType, ...result });
-      } catch (err: any) {
-        if (err.status === 400 || err.status === 422) continue;
-        throw err;
-      }
+    if (result.sheetsProcessed === 0) {
+      throw new BadRequestException(
+        'No data sheets found. Expected sheets named like 数据记录-制程数据 / 数据记录-日历寿命 / 数据记录-4C DCR, etc.',
+      );
     }
 
-    if (results.length === 0) {
-      throw new BadRequestException('No data could be imported. The uploaded file may not match any experiment type.');
+    // Summary data import is the final project-level step — complete the workflow
+    let workflowCompleted = false;
+    try {
+      const wf = await this.workflowService.completeWorkflow(projectId, user.id);
+      workflowCompleted = wf.completed;
+    } catch (err: any) {
+      console.warn(`Workflow completion after summary import failed: ${err?.message}`);
     }
 
-    return results;
+    return { ...result, workflowCompleted };
   }
 
   @Get('export/summary/:expId')
@@ -203,6 +203,40 @@ export class DataController {
   @ApiOperation({ summary: 'Get picked cells for a project.' })
   async getPickedCells(@Param('projectId') projectId: string) {
     return this.dataService.getPickedCells(projectId);
+  }
+
+  @Get('scrapped-cells/:projectId')
+  @RequirePermission('data:read')
+  @ApiOperation({ summary: 'Get scrapped cells for a project.' })
+  async getScrappedCells(@Param('projectId') projectId: string) {
+    return this.dataService.getScrappedCells(projectId);
+  }
+
+  @Post('scrapped-cells/:projectId')
+  @RequirePermission('data:write')
+  @ApiOperation({ summary: 'Scrap a single battery (project-scoped).' })
+  async scrapCell(
+    @Param('projectId') projectId: string,
+    @Body() body: { cellId: string; reason?: string },
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!body?.cellId) {
+      throw new BadRequestException('cellId is required.');
+    }
+    return this.dataService.scrapCell(projectId, body.cellId, user.id, body.reason);
+  }
+
+  @Post('scrapped-cells/:projectId/restore')
+  @RequirePermission('data:write')
+  @ApiOperation({ summary: 'Restore a scrapped battery (remove the scrap record).' })
+  async restoreCell(
+    @Param('projectId') projectId: string,
+    @Body() body: { cellId: string },
+  ) {
+    if (!body?.cellId) {
+      throw new BadRequestException('cellId is required.');
+    }
+    return this.dataService.restoreCell(projectId, body.cellId);
   }
 
   @Post('sync-cells/:projectId')

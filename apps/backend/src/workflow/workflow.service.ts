@@ -734,6 +734,56 @@ export class WorkflowService {
   }
 
   // ════════════════════════════════════════════════════════════════
+  //  FORCE COMPLETE (汇总数据导入后调用)
+  // ════════════════════════════════════════════════════════════════
+
+  /**
+   * Force-complete a project's workflow. Marks every pending/in-progress
+   * step as completed (except skipped ones) and sets the instance + project
+   * to Completed. Used after a summary-data import, which is the final
+   * project-level action.
+   */
+  async completeWorkflow(projectId: string, userId: string): Promise<{ completed: boolean }> {
+    const { instance, steps } = await this.findByProject(projectId);
+    if (!instance) return { completed: false };
+    if (instance.status === WorkflowStatus.Completed) return { completed: true };
+
+    const now = new Date();
+    const dirty: WorkflowStepAssignment[] = [];
+    for (const s of steps) {
+      if (s.status !== StepStatus.Skipped && s.status !== StepStatus.Completed) {
+        s.status = StepStatus.Completed;
+        s.completedAt = s.completedAt ?? now;
+        s.completedBy = s.completedBy ?? userId;
+        dirty.push(s);
+      }
+    }
+    if (dirty.length > 0) {
+      await this.assignmentRepo.save(dirty);
+    }
+
+    instance.status = WorkflowStatus.Completed;
+    instance.currentStepIndex = Math.max(
+      ...steps.map((s) => s.stepIndex),
+      instance.currentStepIndex,
+    );
+    await this.instanceRepo.save(instance);
+    await this.projectRepo.update(projectId, { workflowStatus: WorkflowStatus.Completed });
+
+    const project = await this.projectRepo.findOne({ where: { id: projectId } });
+    if (project) {
+      await this.notificationsService.createNotification(
+        project.createdBy,
+        'WORKFLOW_COMPLETED',
+        { projectId, projectName: project.name },
+      );
+      this.logger.log(`Workflow force-completed for project ${projectId}`);
+    }
+
+    return { completed: true };
+  }
+
+  // ════════════════════════════════════════════════════════════════
   //  ASSIGNMENT MANAGEMENT
   // ════════════════════════════════════════════════════════════════
 

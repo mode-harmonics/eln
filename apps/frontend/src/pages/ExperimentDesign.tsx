@@ -111,6 +111,9 @@ export function ExperimentDesign() {
   const [savingProc, setSavingProc] = useState(false);
   const [procEditId, setProcEditId] = useState<string | null>(null);
   const [procSavingId, setProcSavingId] = useState<string | null>(null);
+  const [procBatchEditing, setProcBatchEditing] = useState(false);
+  const [procBatchDraft, setProcBatchDraft] = useState<ProcurementRow[]>([]);
+  const [procBatchSaving, setProcBatchSaving] = useState(false);
 
   // ── Fetch design data ──
   const fetchData = useCallback(async () => {
@@ -327,6 +330,72 @@ export function ExperimentDesign() {
   const toggleValid = async (record: ProcurementRow) => {
     if (procSubmitted) return;
     await updateProcField(record, "isValid", !record.isValid);
+  };
+
+  // ── Procurement: batch edit (批量修改) ──
+  const enterProcBatchEdit = () => {
+    setProcEditId(null);
+    setProcBatchDraft(procRecords.map((r) => ({ ...r })));
+    setProcBatchEditing(true);
+  };
+  const cancelProcBatchEdit = () => {
+    setProcBatchEditing(false);
+    setProcBatchDraft([]);
+  };
+  const handleProcBatchFieldChange = (index: number, field: string, value: string) => {
+    setProcBatchDraft((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+  const handleProcBatchValidChange = (index: number, value: boolean) => {
+    setProcBatchDraft((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], isValid: value };
+      return updated;
+    });
+  };
+  const saveProcBatchEdit = async () => {
+    if (!projectId) return;
+    const items = procBatchDraft
+      .map((draft, i) => {
+        const original = procRecords[i];
+        if (!draft.id || !original) return null;
+        const patch: Record<string, unknown> = { id: draft.id };
+        let changed = false;
+        for (const field of ["supplier", "batchNo", "purity", "quantity", "remark"] as const) {
+          if (String(draft[field] ?? "") !== String(original[field] ?? "")) {
+            patch[field] = draft[field] ?? null;
+            changed = true;
+          }
+        }
+        if (draft.isValid !== original.isValid) {
+          patch.isValid = draft.isValid;
+          changed = true;
+        }
+        return changed ? patch : null;
+      })
+      .filter((p): p is Record<string, unknown> => p !== null);
+
+    if (items.length === 0) {
+      toast.info(t("no_changes", "没有修改，无需保存"));
+      cancelProcBatchEdit();
+      return;
+    }
+
+    setProcBatchSaving(true);
+    try {
+      await api.put(`/api/v1/projects/${projectId}/procurement/batch`, { items });
+      toast.success(t("procurement_batch_success", "批量修改已保存"));
+      setProcBatchEditing(false);
+      setProcBatchDraft([]);
+      await fetchData();
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : t("update_failed"));
+    } finally {
+      setProcBatchSaving(false);
+    }
   };
 
   // ── Loading ──
@@ -630,16 +699,35 @@ export function ExperimentDesign() {
                   {t("procurement_submitted", "Procurement Submitted")}
                 </span>
               ) : canEditProcurement ? (
-                <Popconfirm
-                  title={t("procurement_confirm", "确认提交试剂采购？提交后将推进工作流，不可撤回。")}
-                  onConfirm={handleSubmitProcurement}
-                  placement="top"
-                >
-                  <Button size="sm" loading={savingProc}>
-                    <Save className="w-3.5 h-3.5" />
-                    {t("design_submit")}
-                  </Button>
-                </Popconfirm>
+                procBatchEditing ? (
+                  <>
+                    <Button variant="secondary" size="sm" onClick={cancelProcBatchEdit} disabled={procBatchSaving}>
+                      <X className="w-3.5 h-3.5" />
+                      {t("cancel", "取消")}
+                    </Button>
+                    <Button size="sm" onClick={saveProcBatchEdit} loading={procBatchSaving} disabled={procBatchSaving}>
+                      <Check className="w-3.5 h-3.5" />
+                      {t("save_all", "保存全部")}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="secondary" size="sm" onClick={enterProcBatchEdit}>
+                      <Edit3 className="w-3.5 h-3.5" />
+                      {t("batch_edit", "批量修改")}
+                    </Button>
+                    <Popconfirm
+                      title={t("procurement_confirm", "确认提交试剂采购？提交后将推进工作流，不可撤回。")}
+                      onConfirm={handleSubmitProcurement}
+                      placement="top"
+                    >
+                      <Button size="sm" loading={savingProc}>
+                        <Save className="w-3.5 h-3.5" />
+                        {t("design_submit")}
+                      </Button>
+                    </Popconfirm>
+                  </>
+                )
               ) : (
                 <span className="text-xs text-gray-400 flex items-center gap-1">
                   <Lock className="w-3 h-3" />
@@ -676,116 +764,172 @@ export function ExperimentDesign() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  procRecords.map((record, i) => (
-                    <TableRow
-                      key={record.experimentDesignId || i}
-                      className={cn(!record.isValid ? "opacity-60" : "")}
-                    >
-                      <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
-                      <TableCell className="font-medium text-xs">{record.group}</TableCell>
-                      <TableCell className="text-xs">{record.moleculeName}</TableCell>
-                      <TableCell>
-                        <code className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">
-                          {record.internalCode || "—"}
-                        </code>
-                      </TableCell>
-                      <TableCell>
-                        <ProcCell
-                          value={record.supplier || ""}
-                          onSave={(v) => updateProcField(record, "supplier", v)}
-                          saving={procSavingId === record.id}
-                          locked={procSubmitted}
-                          editing={procEditId === record.id}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <ProcCell
-                          value={record.batchNo || ""}
-                          onSave={(v) => updateProcField(record, "batchNo", v)}
-                          saving={procSavingId === record.id}
-                          locked={procSubmitted}
-                          editing={procEditId === record.id}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <ProcCell
-                          value={record.purity || ""}
-                          onSave={(v) => updateProcField(record, "purity", v)}
-                          saving={procSavingId === record.id}
-                          locked={procSubmitted}
-                          editing={procEditId === record.id}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <ProcCell
-                          value={record.quantity || ""}
-                          onSave={(v) => updateProcField(record, "quantity", v)}
-                          saving={procSavingId === record.id}
-                          locked={procSubmitted}
-                          editing={procEditId === record.id}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={record.isValid}
-                          onChange={() => toggleValid(record)}
-                          size="sm"
-                          disabled={procSubmitted}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <ProcCell
-                          value={record.remark || ""}
-                          onSave={(v) => updateProcField(record, "remark", v)}
-                          saving={procSavingId === record.id}
-                          locked={procSubmitted}
-                          editing={procEditId === record.id}
-                        />
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "sticky right-0 z-10 !bg-white",
-                        )}
+                  procRecords.map((record, i) => {
+                    const draft = procBatchEditing ? procBatchDraft[i] : undefined;
+                    return (
+                      <TableRow
+                        key={record.experimentDesignId || i}
+                        className={cn(!record.isValid ? "opacity-60" : "", procBatchEditing && "bg-gray-50")}
                       >
-                        <div className="flex items-center gap-1 justify-center">
-                          {procSubmitted ? (
-                            <Lock className="w-3.5 h-3.5 text-gray-300" />
-                          ) : procEditId === record.id ? (
-                            <>
-                              <Button
-                                variant="text"
-                                size="sm"
-                                onClick={() => {
-                                  setProcEditId(null);
-                                  toast.success(t("procurement_updated"));
-                                }}
-                                className="!p-1 hover:!text-emerald-600 hover:bg-emerald-50"
-                              >
-                                <Check className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="text"
-                                size="sm"
-                                onClick={() => setProcEditId(null)}
-                                className="!p-1 hover:bg-gray-100"
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </>
+                        <TableCell className="text-gray-400 text-xs">{i + 1}</TableCell>
+                        <TableCell className="font-medium text-xs">{record.group}</TableCell>
+                        <TableCell className="text-xs">{record.moleculeName}</TableCell>
+                        <TableCell>
+                          <code className="text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">
+                            {record.internalCode || "—"}
+                          </code>
+                        </TableCell>
+                        <TableCell>
+                          {procBatchEditing && draft ? (
+                            <input
+                              className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
+                              value={draft.supplier ?? ""}
+                              onChange={(e) => handleProcBatchFieldChange(i, "supplier", e.target.value)}
+                              autoFocus={i === 0}
+                            />
                           ) : (
-                            <Button
-                              variant="text"
-                              size="sm"
-                              onClick={() => setProcEditId(record.id)}
-                              className="!p-1 hover:!text-gray-900 hover:bg-gray-100"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </Button>
+                            <ProcCell
+                              value={record.supplier || ""}
+                              onSave={(v) => updateProcField(record, "supplier", v)}
+                              saving={procSavingId === record.id}
+                              locked={procSubmitted}
+                              editing={procEditId === record.id}
+                            />
                           )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        </TableCell>
+                        <TableCell>
+                          {procBatchEditing && draft ? (
+                            <input
+                              className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
+                              value={draft.batchNo ?? ""}
+                              onChange={(e) => handleProcBatchFieldChange(i, "batchNo", e.target.value)}
+                            />
+                          ) : (
+                            <ProcCell
+                              value={record.batchNo || ""}
+                              onSave={(v) => updateProcField(record, "batchNo", v)}
+                              saving={procSavingId === record.id}
+                              locked={procSubmitted}
+                              editing={procEditId === record.id}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {procBatchEditing && draft ? (
+                            <input
+                              className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
+                              value={draft.purity ?? ""}
+                              onChange={(e) => handleProcBatchFieldChange(i, "purity", e.target.value)}
+                            />
+                          ) : (
+                            <ProcCell
+                              value={record.purity || ""}
+                              onSave={(v) => updateProcField(record, "purity", v)}
+                              saving={procSavingId === record.id}
+                              locked={procSubmitted}
+                              editing={procEditId === record.id}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {procBatchEditing && draft ? (
+                            <input
+                              className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
+                              value={draft.quantity ?? ""}
+                              onChange={(e) => handleProcBatchFieldChange(i, "quantity", e.target.value)}
+                            />
+                          ) : (
+                            <ProcCell
+                              value={record.quantity || ""}
+                              onSave={(v) => updateProcField(record, "quantity", v)}
+                              saving={procSavingId === record.id}
+                              locked={procSubmitted}
+                              editing={procEditId === record.id}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {procBatchEditing && draft ? (
+                            <Switch
+                              checked={draft.isValid}
+                              onChange={(v) => handleProcBatchValidChange(i, v)}
+                              size="sm"
+                            />
+                          ) : (
+                            <Switch
+                              checked={record.isValid}
+                              onChange={() => toggleValid(record)}
+                              size="sm"
+                              disabled={procSubmitted}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {procBatchEditing && draft ? (
+                            <input
+                              className="h-7 w-full min-w-12 rounded-control border-0 bg-gray-100 px-2 text-xs outline-none focus:bg-white focus:ring-1 focus:ring-focus/35"
+                              value={draft.remark ?? ""}
+                              onChange={(e) => handleProcBatchFieldChange(i, "remark", e.target.value)}
+                            />
+                          ) : (
+                            <ProcCell
+                              value={record.remark || ""}
+                              onSave={(v) => updateProcField(record, "remark", v)}
+                              saving={procSavingId === record.id}
+                              locked={procSubmitted}
+                              editing={procEditId === record.id}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "sticky right-0 z-10 !bg-white",
+                          )}
+                        >
+                          {procBatchEditing ? (
+                            <span className="text-[10px] text-gray-300 text-center block">—</span>
+                          ) : (
+                            <div className="flex items-center gap-1 justify-center">
+                              {procSubmitted ? (
+                                <Lock className="w-3.5 h-3.5 text-gray-300" />
+                              ) : procEditId === record.id ? (
+                                <>
+                                  <Button
+                                    variant="text"
+                                    size="sm"
+                                    onClick={() => {
+                                      setProcEditId(null);
+                                      toast.success(t("procurement_updated"));
+                                    }}
+                                    className="!p-1 hover:!text-emerald-600 hover:bg-emerald-50"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="text"
+                                    size="sm"
+                                    onClick={() => setProcEditId(null)}
+                                    className="!p-1 hover:bg-gray-100"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  variant="text"
+                                  size="sm"
+                                  onClick={() => setProcEditId(record.id)}
+                                  className="!p-1 hover:!text-gray-900 hover:bg-gray-100"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>

@@ -12,6 +12,7 @@ import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { ReagentProcurementService } from './reagent-procurement.service';
 import { UpdateProcurementDto } from './dto/update-procurement.dto';
+import { BatchUpdateProcurementDto } from './dto/batch-update-procurement.dto';
 
 @ApiTags('Reagent Procurement')
 @ApiBearerAuth()
@@ -46,6 +47,18 @@ export class ReagentProcurementController {
     return {
       success: true,
       data: await this.procurementService.findInvalidInternalCodes(projectId),
+    };
+  }
+
+  @Put('projects/:projectId/procurement/batch')
+  @RequirePermission('procurement:write')
+  async updateBatch(
+    @Param('projectId') projectId: string,
+    @Body() dto: BatchUpdateProcurementDto,
+  ) {
+    return {
+      success: true,
+      data: await this.procurementService.updateBatch(projectId, dto.items),
     };
   }
 
