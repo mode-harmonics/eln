@@ -6,6 +6,8 @@ import { api } from "../lib/api";
 import { Dropdown } from "./Dropdown";
 import { formatDistanceToNow } from "date-fns";
 
+import { STEP_NAME_MAP, getStepLabelKey } from "@eln/shared";
+
 interface Notification {
   id: string;
   type: string;
@@ -98,7 +100,8 @@ export function NotificationBell() {
 
   const renderNotificationMessage = (notif: Notification) => {
     const info = renderNotificationType(notif.type);
-    const stepName = notif.payload?.stepName || notif.payload?.stepLabel;
+    const rawStep = notif.payload?.stepName || notif.payload?.stepLabel;
+    const stepName: string | null = rawStep ? (STEP_NAME_MAP[rawStep] || (t(getStepLabelKey(rawStep), { defaultValue: rawStep }) as string)) : null;
     const projectName = notif.payload?.projectName;
     const experimentTitle = notif.payload?.experimentTitle;
     const remaining = notif.payload?.remaining;

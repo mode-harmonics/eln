@@ -4,7 +4,14 @@ import {
   FileText, Layers, FlaskConical, Beaker, Clock, Thermometer, Zap, Activity
 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
-import { BuiltInStep, STEP_ASSAY_MAP } from "@eln/shared";
+import {
+  BuiltInStep,
+  STEP_ASSAY_MAP,
+  resolveBuiltInStep as bs,
+  BS_NO_AUTO_EXP,
+  BS_SPECIAL_PANEL,
+} from "@eln/shared";
+export { bs, BS_NO_AUTO_EXP, BS_SPECIAL_PANEL };
 import { toast } from "../components/Toast";
 import type { Experiment } from "../types";
 
@@ -50,40 +57,38 @@ export const STEP_ICON: Record<string, React.ReactNode> = {
   ht_cycle: <Beaker className="w-3.5 h-3.5" />,
 };
 
-/** Resolve a step's builtInStep value (for template-driven branching). */
-export function bs(meta: StepMetaMap, stepName: string): string {
-  return meta[stepName]?.builtInStep ?? stepName;
-}
-
-/** Steps whose builtInStep indicates they should NOT auto-create an experiment. */
-export const BS_NO_AUTO_EXP: string[] = [
-  BuiltInStep.ExperimentDesign, BuiltInStep.BatterySelection, BuiltInStep.Testing,
-];
-
-/** Steps whose builtInStep triggers special sidebar panels. */
-export const BS_SPECIAL_PANEL: string[] = [
-  BuiltInStep.ExperimentDesign, BuiltInStep.BatterySelection, BuiltInStep.Testing,
-];
+let cachedStepMeta: StepMetaMap | null = null;
+let stepMetaPromise: Promise<StepMetaMap> | null = null;
 
 /** Fetch default template steps from backend using normalized api.get */
 async function fetchStepMeta(): Promise<StepMetaMap> {
-  const meta: StepMetaMap = {};
-  const res = await api.get<any>("/api/v1/workflow/default-steps");
-  const data = res?.data ?? res ?? {};
-  const steps: Array<{ id: string; label: string; builtInStep?: string | null; dataType?: string | null; children?: any[] }> = data.steps || [];
+  if (cachedStepMeta) return cachedStepMeta;
+  if (!stepMetaPromise) {
+    stepMetaPromise = (async () => {
+      const meta: StepMetaMap = {};
+      const res = await api.get<any>("/api/v1/workflow/default-steps");
+      const data = res?.data ?? res ?? {};
+      const steps: Array<{ id: string; label: string; builtInStep?: string | null; dataType?: string | null; children?: any[] }> = data.steps || [];
 
-  const addNode = (n: { id: string; label: string; builtInStep?: string | null; dataType?: string | null }) => {
-    const icon = STEP_ICON[n.id] ?? <Beaker className="w-4 h-4" />;
-    meta[n.id] = { label: n.label, icon, dataType: n.dataType ?? undefined, builtInStep: n.builtInStep ?? n.id };
-  };
+      const addNode = (n: { id: string; label: string; builtInStep?: string | null; dataType?: string | null }) => {
+        const icon = STEP_ICON[n.id] ?? <Beaker className="w-4 h-4" />;
+        meta[n.id] = { label: n.label, icon, dataType: n.dataType ?? undefined, builtInStep: n.builtInStep ?? n.id };
+      };
 
-  for (const s of steps) {
-    addNode(s);
-    if (s.children) {
-      for (const c of s.children) addNode(c);
-    }
+      for (const s of steps) {
+        addNode(s);
+        if (s.children) {
+          for (const c of s.children) addNode(c);
+        }
+      }
+      cachedStepMeta = meta;
+      return meta;
+    })().catch((err) => {
+      stepMetaPromise = null;
+      throw err;
+    });
   }
-  return meta;
+  return stepMetaPromise;
 }
 
 export function useProjectWorkflow(projectId?: string) {
@@ -103,6 +108,8 @@ export function useProjectWorkflow(projectId?: string) {
 
   const [stepMeta, setStepMeta] = useState<StepMetaMap>({});
   const [stepMetaError, setStepMetaError] = useState(false);
+  const stepMetaRef = React.useRef<StepMetaMap>(stepMeta);
+  stepMetaRef.current = stepMeta;
 
   useEffect(() => {
     let cancelled = false;
@@ -128,17 +135,18 @@ export function useProjectWorkflow(projectId?: string) {
       const expsArr = Array.isArray(exps) ? exps : [];
 
       if (wfData.instance && wfData.steps.length > 0) {
+        const currentMeta = stepMetaRef.current;
         const existingStepNames = new Set(expsArr.map((e: any) => e.workflowStepName));
         const stepsNeedingExps = wfData.steps.filter(
           (s) => s.status !== 'pending' && !s.parentStepName && !existingStepNames.has(s.stepName)
-            && !BS_NO_AUTO_EXP.includes(bs(stepMeta, s.stepName)),
+            && !BS_NO_AUTO_EXP.includes(bs(currentMeta, s.stepName)),
         );
         if (stepsNeedingExps.length > 0) {
           await Promise.allSettled(
             stepsNeedingExps.map((step) =>
               api.post(`/api/v1/projects/${projectId}/experiments`, {
-                title: `${stepMeta[step.stepName]?.label || step.stepName} - ${new Date().toISOString().split('T')[0]}`,
-                assayType: STEP_ASSAY_MAP[step.stepName] || step.stepName,
+                title: `${currentMeta[step.stepName]?.label || step.stepName} - ${new Date().toISOString().split('T')[0]}`,
+                assayType: (STEP_ASSAY_MAP as Record<string, string>)[step.stepName] || step.stepName,
                 workflowStepName: step.stepName,
               }).catch(() => { }),
             ),
@@ -153,7 +161,7 @@ export function useProjectWorkflow(projectId?: string) {
       }
     } catch { /* ignore */ }
     finally { setWfLoading(false); }
-  }, [projectId, stepMeta]);
+  }, [projectId]);
 
   useEffect(() => { fetchWf(); }, [fetchWf, refetchTrigger]);
 

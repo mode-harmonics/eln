@@ -132,6 +132,8 @@ export const STEP_DATA_TYPE: Record<string, string> = {
   ht_cycle: 'htcycle',
 };
 
+import { BuiltInStep } from './enums';
+
 // ─── Chinese label map (for step display without i18n) ─────────────────
 export const STEP_NAME_MAP: Record<string, string> = {
   experiment_design: '实验设计',
@@ -150,6 +152,80 @@ export const STEP_NAME_MAP: Record<string, string> = {
   fast_charge: '快充测试',
   ht_cycle: '高温循环',
 };
+
+/** Resolve a step's Chinese display label, with English fallback. */
+export function getStepDisplayName(stepName: string): string {
+  return STEP_NAME_MAP[stepName] || getChildStepLabel(stepName);
+}
+
+/** Check if a step corresponds to the Experiment Design module (design or procurement). */
+export function isExperimentDesignStep(stepName: string, builtInStep?: string | null): boolean {
+  const b = builtInStep || stepName;
+  return b === BuiltInStep.ExperimentDesign || b === BuiltInStep.Design || b === BuiltInStep.Procurement
+    || stepName === 'experiment_design' || stepName === 'design' || stepName === 'procurement';
+}
+
+/** Check if a step corresponds to Cell Selection. */
+export function isBatterySelectionStep(stepName: string, builtInStep?: string | null): boolean {
+  const b = builtInStep || stepName;
+  return b === BuiltInStep.BatterySelection || stepName === 'battery_selection';
+}
+
+/** Check if a step corresponds to Testing group node. */
+export function isTestingStep(stepName: string, builtInStep?: string | null): boolean {
+  const b = builtInStep || stepName;
+  return b === BuiltInStep.Testing || stepName === 'testing';
+}
+
+/** Resolve builtInStep from stepMeta or fallback to stepName (supports both argument orders). */
+export function resolveBuiltInStep(a: any, b?: any): string {
+  if (typeof a === 'string') {
+    return b?.[a]?.builtInStep ?? a;
+  }
+  if (typeof b === 'string') {
+    return a?.[b]?.builtInStep ?? b;
+  }
+  return '';
+}
+
+/** Steps whose builtInStep indicates they should NOT auto-create an experiment. */
+export const BS_NO_AUTO_EXP: string[] = [
+  BuiltInStep.ExperimentDesign, BuiltInStep.Design, BuiltInStep.Procurement, BuiltInStep.BatterySelection, BuiltInStep.Testing,
+];
+
+/** Steps whose builtInStep triggers special sidebar panels. */
+export const BS_SPECIAL_PANEL: string[] = [
+  BuiltInStep.ExperimentDesign, BuiltInStep.Design, BuiltInStep.Procurement, BuiltInStep.BatterySelection, BuiltInStep.Testing,
+];
+
+/** Check if a step triggers a special sidebar panel. */
+export function isSpecialPanelStep(stepName: string, builtInStep?: string | null): boolean {
+  const b = builtInStep || stepName;
+  return BS_SPECIAL_PANEL.includes(b) || isExperimentDesignStep(stepName, builtInStep) || isBatterySelectionStep(stepName, builtInStep) || isTestingStep(stepName, builtInStep);
+}
+
+export interface ResolveStepRouteParams {
+  stepName: string;
+  projectId: string;
+  experiments?: Array<{ id: string; workflowStepName?: string | null }>;
+  builtInStep?: string | null;
+}
+
+/** Single source of truth for resolving a workflow step's frontend route URL. */
+export function resolveStepRoute(params: ResolveStepRouteParams): string | null {
+  const { stepName, projectId, experiments = [], builtInStep } = params;
+  if (isExperimentDesignStep(stepName, builtInStep)) {
+    return `/projects/${projectId}/design`;
+  }
+  if (isBatterySelectionStep(stepName, builtInStep)) {
+    return `/projects/${projectId}/cell-picker`;
+  }
+  if (isTestingStep(stepName, builtInStep)) {
+    return null;
+  }
+  const exp = experiments.find((e) => (e as any).workflowStepName === stepName);
+  return exp ? `/projects/${projectId}/experiments/${exp.id}` : null;
+}
 
 // ─── Step Graph → Step Tree Parser ───────────────────────────────────
 import type { WorkflowStepNodeDto } from './dto/workflow.dto';

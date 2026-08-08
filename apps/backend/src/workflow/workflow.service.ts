@@ -27,6 +27,7 @@ import {
   parseGraphToStepTree,
   deriveWorkflowGraphMeta,
   STEP_ASSAY_MAP,
+  STEP_NAME_MAP,
   type WorkflowGraphMeta,
 } from '@eln/shared';
 
@@ -288,10 +289,11 @@ export class WorkflowService {
     // Notify first assignee
     if (records[0]?.assignedUserId) {
       const firstNode = nodes.find((n) => n.id === order[0]);
+      const label = STEP_NAME_MAP[order[0]] || firstNode?.label || order[0];
       await this.notificationsService.createNotification(
         records[0].assignedUserId,
         'WORKFLOW_STEP_ASSIGNED',
-        { projectId: dto.projectId, stepName: order[0], stepLabel: firstNode?.label || order[0], action: 'start' },
+        { projectId: dto.projectId, stepName: order[0], stepLabel: label, action: 'start' },
       );
     }
 
@@ -299,10 +301,11 @@ export class WorkflowService {
     for (const childName of firstToActivate) {
       const child = records.find((r) => r.stepName === childName);
       if (child?.status === StepStatus.InProgress && child.assignedUserId) {
+        const label = STEP_NAME_MAP[child.stepName] || child.stepName;
         await this.notificationsService.createNotification(
           child.assignedUserId,
           'WORKFLOW_STEP_ASSIGNED',
-          { projectId: dto.projectId, stepName: child.stepName, isParallel: firstGroupIsParallel },
+          { projectId: dto.projectId, stepName: child.stepName, stepLabel: label, isParallel: firstGroupIsParallel },
         );
       }
     }
@@ -529,10 +532,11 @@ export class WorkflowService {
 
           for (const c of toActivate) {
             if (c.assignedUserId) {
+              const stepLabel = STEP_NAME_MAP[c.stepName] || c.stepName;
               await this.notificationsService.createNotification(
                 c.assignedUserId,
                 'WORKFLOW_STEP_ASSIGNED',
-                { projectId, stepName: c.stepName, isParallel },
+                { projectId, stepName: c.stepName, stepLabel, isParallel },
               );
             }
           }
@@ -705,10 +709,11 @@ export class WorkflowService {
 
       for (const c of toActivate) {
         if (c.assignedUserId) {
+          const stepLabel = STEP_NAME_MAP[c.stepName] || c.stepName;
           await this.notificationsService.createNotification(
             c.assignedUserId,
             'WORKFLOW_STEP_ASSIGNED',
-            { projectId: instance.projectId, stepName: c.stepName, isParallel },
+            { projectId: instance.projectId, stepName: c.stepName, stepLabel, isParallel },
           );
         }
       }
@@ -720,10 +725,11 @@ export class WorkflowService {
       await this.experimentsService.ensureWorkflowExperiment(instance.projectId, next.stepName);
 
       if (next.assignedUserId) {
+        const stepLabel = STEP_NAME_MAP[next.stepName] || next.stepName;
         await this.notificationsService.createNotification(
           next.assignedUserId,
           'WORKFLOW_STEP_ASSIGNED',
-          { projectId: instance.projectId, stepName: next.stepName },
+          { projectId: instance.projectId, stepName: next.stepName, stepLabel },
         );
       }
     }

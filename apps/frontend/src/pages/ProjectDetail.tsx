@@ -1,135 +1,45 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useSearchParams, Link, useRouteLoaderData, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useParams, useSearchParams, useRouteLoaderData } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import {
-  Loader2, CheckCircle2, Circle, Play, FileText, Beaker,
-  FlaskConical, Layers, Clock, Thermometer, Zap, Activity,
-  ChevronRight, User, AlertCircle, LockKeyhole, ListChecks
-} from "lucide-react";
-import { Button } from "../components/Button";
 import { cn, isCellInvalid } from "../lib/utils";
-import { usePermissions } from "../hooks/usePermissions";
 import { Tabs } from "../components/Tabs";
 import { DataSummary } from "../components/DataSummary";
 import { ProjectRawData } from "../components/ProjectRawData";
 import { SkeletonCard } from "../components/Skeleton";
-import { Popconfirm } from "../components/Popconfirm";
-import { toast } from "../components/Toast";
-import { api, ApiError } from "../lib/api";
-import { BuiltInStep, STEP_ASSAY_MAP } from "@eln/shared";
+import { api } from "../lib/api";
 import { RECORD_TYPE_TO_API_TYPE } from "../utils/recordTypes";
 import { PageHeader } from "../components/PageHeader";
+import { useProjectWorkflow } from "../hooks/useProjectWorkflow";
+import { WorkflowProgressCard } from "../components/project-detail/WorkflowProgressCard";
+import { WorkflowStepList } from "../components/project-detail/WorkflowStepList";
+import { WorkflowTaskSidebar } from "../components/project-detail/WorkflowTaskSidebar";
 import type {
   Project, Experiment, ProcessData, CalendarLife, StorageSwelling,
   EnergyEfficiency, DcrTest, FastCharge, HtCycle,
 } from "../types";
 
-// ─── Types ──────────────────────────────────────────────────────
-
-interface WfStep {
-  stepName: string;
-  stepIndex: number;
-  status: "pending" | "in_progress" | "completed" | "skipped";
-  assignedUserId: string | null;
-  isParallelGroup: boolean;
-  parentStepName: string | null;
-}
-
-interface WfData {
-  instance: { id: string; projectId: string; status: string; currentStepIndex: number } | null;
-  steps: WfStep[];
-}
-
-// ─── Step icon map (icons are UI-only; labels & dataTypes come from backend) ──
-
-const STEP_ICON: Record<string, React.ReactNode> = {
-  experiment_design: <FileText className="w-4 h-4" />,
-  design: <FileText className="w-3.5 h-3.5" />,
-  procurement: <Layers className="w-3.5 h-3.5" />,
-  solution_preparation: <FlaskConical className="w-4 h-4" />,
-  drying_injection: <FlaskConical className="w-4 h-4" />,
-  formation: <FlaskConical className="w-4 h-4" />,
-  second_sealing: <FlaskConical className="w-4 h-4" />,
-  capacity_grading: <FlaskConical className="w-4 h-4" />,
-  battery_selection: <Layers className="w-4 h-4" />,
-  testing: <Beaker className="w-4 h-4" />,
-  calendar_life: <Clock className="w-3.5 h-3.5" />,
-  storage_swelling: <Thermometer className="w-3.5 h-3.5" />,
-  energy_efficiency: <Zap className="w-3.5 h-3.5" />,
-  dcr_test: <Activity className="w-3.5 h-3.5" />,
-  fast_charge: <Zap className="w-3.5 h-3.5" />,
-  ht_cycle: <Beaker className="w-3.5 h-3.5" />,
-};
-
-type StepMetaEntry = { label: string; icon: React.ReactNode; dataType?: string; builtInStep?: string };
-type StepMetaMap = Record<string, StepMetaEntry>;
-
-/**
- * Fetch default template steps from the backend (MANDATORY — no fallback).
- */
-async function fetchStepMeta(): Promise<StepMetaMap> {
-  const meta: StepMetaMap = {};
-  const token = localStorage.getItem("token");
-  const res = await fetch("/api/v1/workflow/default-steps", {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  if (!res.ok) throw new Error(`Failed to load workflow steps: ${res.status}`);
-  const json = await res.json();
-  const data = json?.data ?? json ?? {};
-  const steps: Array<{ id: string; label: string; builtInStep?: string | null; dataType?: string | null; children?: any[] }> = data.steps || [];
-
-  const addNode = (n: { id: string; label: string; builtInStep?: string | null; dataType?: string | null }) => {
-    const icon = STEP_ICON[n.id] ?? <Beaker className="w-4 h-4" />;
-    meta[n.id] = { label: n.label, icon, dataType: n.dataType ?? undefined, builtInStep: n.builtInStep ?? n.id };
-  };
-
-  for (const s of steps) {
-    addNode(s);
-    if (s.children) {
-      for (const c of s.children) addNode(c);
-    }
-  }
-  return meta;
-}
-
-/** Resolve a step's builtInStep value (for template-driven branching). */
-function bs(meta: StepMetaMap, stepName: string): string {
-  return meta[stepName]?.builtInStep ?? stepName;
-}
-
-/** Steps whose builtInStep indicates they should NOT auto-create an experiment. */
-const BS_NO_AUTO_EXP: string[] = [
-  BuiltInStep.ExperimentDesign, BuiltInStep.BatterySelection, BuiltInStep.Testing,
-];
-
-/** Steps whose builtInStep triggers special sidebar panels (no generic experiment card). */
-const BS_SPECIAL_PANEL: string[] = [
-  BuiltInStep.ExperimentDesign, BuiltInStep.BatterySelection, BuiltInStep.Testing,
-];
-
-// ─── Main Component ─────────────────────────────────────────────
-
 export function ProjectDetail() {
   const { t } = useTranslation();
   const { projectId } = useParams<{ projectId: string }>();
-  const { hasPermission } = usePermissions();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get("tab") as "workflow" | "summary" | "raw_data") || "workflow";
 
   const loaderProject = useRouteLoaderData("project") as Project | null;
-  const [project, setProject] = useState<Project | null>(loaderProject);
-  const [error, setError] = useState<string | null>(null);
-  const [refetchTrigger, setRefetchTrigger] = useState(0);
+  const [project] = useState<Project | null>(loaderProject);
+  const [error] = useState<string | null>(null);
 
-  // Workflow
-  const [wf, setWf] = useState<WfData>({ instance: null, steps: [] });
-  const [wfLoading, setWfLoading] = useState(true);
-  const [transitioning, setTransitioning] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => localStorage.getItem("currentUserId"));
-  const [perms, setPerms] = useState<{ canViewInternalCode: boolean; visibleStepNames: string[]; currentStepName: string | null }>({ canViewInternalCode: false, visibleStepNames: [], currentStepName: null });
 
-
+  // Workflow state & handlers via custom hook
+  const {
+    wf,
+    wfLoading,
+    experiments,
+    stepMeta,
+    stepMetaError,
+    refetchTrigger,
+    setRefetchTrigger,
+  } = useProjectWorkflow(projectId);
 
   // Summary data
   const [processData, setProcessData] = useState<ProcessData[]>([]);
@@ -141,117 +51,32 @@ export function ProjectDetail() {
   const [htCycle, setHtCycle] = useState<HtCycle[]>([]);
   const [loadedTypes, setLoadedTypes] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
-
-  // Cell groups removed - experiment design groups are used instead
   const [pickedCells, setPickedCells] = useState<string[]>([]);
-  const [experiments, setExperiments] = useState<Experiment[]>([]);
 
-  // Dynamic step meta — fetched from backend default template (MANDATORY)
-  const [STEP_META, setStepMeta] = useState<StepMetaMap>({});
-  const [stepMetaError, setStepMetaError] = useState(false);
-
-  // Fetch canonical step definitions from the backend default template
-  useEffect(() => {
-    let cancelled = false;
-    fetchStepMeta()
-      .then((meta) => { if (!cancelled) { setStepMeta(meta); setStepMetaError(false); } })
-      .catch(() => { if (!cancelled) setStepMetaError(true); });
-    return () => { cancelled = true; };
-  }, []);
-
-  // ── User ID ──
+  // Current User ID
   useEffect(() => {
     const stored = localStorage.getItem("currentUserId");
-    if (stored) { setCurrentUserId(stored); }
-    else {
-      api.get<any>("/api/v1/users/me").then((d) => { if (d?.id) { setCurrentUserId(d.id); localStorage.setItem("currentUserId", d.id); } }).catch(() => { });
+    if (stored) {
+      setCurrentUserId(stored);
+    } else {
+      api.get<any>("/api/v1/users/me")
+        .then((d) => {
+          if (d?.id) {
+            setCurrentUserId(d.id);
+            localStorage.setItem("currentUserId", d.id);
+          }
+        })
+        .catch(() => { });
     }
   }, []);
 
-  const [isDesignSubmitted, setIsDesignSubmitted] = useState(false);
-
-  // ── Fetch workflow + permissions ──
-  const fetchWf = useCallback(async () => {
+  // Load picked cells
+  useEffect(() => {
     if (!projectId) return;
-    setWfLoading(true);
-    try {
-      const [wfData, permData, exps, designData] = await Promise.all([
-        api.get<WfData>(`/api/v1/workflow/instances/${projectId}`).catch(() => ({ instance: null, steps: [] })),
-        api.get<any>(`/api/v1/workflow/instances/${projectId}/permissions`).catch(() => ({ visibleStepNames: [], canViewInternalCode: false })),
-        api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`).catch(() => []),
-        api.get<any[]>(`/api/v1/projects/${projectId}/design`).catch(() => []),
-      ]);
-      setWf(wfData);
-      setPerms(permData);
-      setIsDesignSubmitted(Array.isArray(designData) && designData.length > 0);
-      const expsArr = Array.isArray(exps) ? exps : [];
-
-      if (wfData.instance && wfData.steps.length > 0) {
-        const existingStepNames = new Set(expsArr.map((e: any) => e.workflowStepName));
-        const stepsNeedingExps = wfData.steps.filter(
-          (s) => s.status !== 'pending' && !s.parentStepName && !existingStepNames.has(s.stepName)
-            && !BS_NO_AUTO_EXP.includes(bs(STEP_META, s.stepName)),
-        );
-        if (stepsNeedingExps.length > 0) {
-          await Promise.allSettled(
-            stepsNeedingExps.map((step) =>
-              api.post(`/api/v1/projects/${projectId}/experiments`, {
-                title: `${STEP_META[step.stepName]?.label || step.stepName} - ${new Date().toISOString().split('T')[0]}`,
-                assayType: STEP_ASSAY_MAP[step.stepName] || step.stepName,
-                workflowStepName: step.stepName,
-              }).catch(() => { }),
-            ),
-          );
-          const updatedExps = await api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`).catch(() => []);
-          setExperiments(Array.isArray(updatedExps) ? updatedExps : expsArr);
-        } else {
-          setExperiments(expsArr);
-        }
-      } else {
-        setExperiments(expsArr);
-      }
-    } catch { /* ignore */ }
-    finally { setWfLoading(false); }
-  }, [projectId]);
-
-  useEffect(() => { fetchWf(); }, [fetchWf, refetchTrigger]);
-
-  // ── Derive visible steps ──
-  // Backend findByProject already filters steps by user visibility.
-  // Only filter out "skipped" status locally.
-  const isCreator = project?.createdBy === currentUserId;
-  const visibleSteps = wf.steps.filter((s) => s.status !== "skipped");
-
-  // ── Current user steps ──
-  const userActiveSteps = wf.steps.filter(
-    (s) => s.status === "in_progress" && s.assignedUserId === currentUserId && !s.isParallelGroup,
-  );
-  const parallelActiveSteps = wf.steps.filter(
-    (s) => s.status === "in_progress" && s.assignedUserId === currentUserId && !!s.parentStepName,
-  );
-  const currentStep = userActiveSteps[0] || null;
-  const allUserSteps = [...userActiveSteps, ...parallelActiveSteps];
-
-  // ── Admin Force Transition ──
-  const handleTransition = async () => {
-    if (!projectId) return;
-    setTransitioning(true);
-    try {
-      const r = await api.put<any>(`/api/v1/workflow/instances/${projectId}/transition`);
-      setWf(r);
-      toast.success(t("step_completed", "步骤已强制标记完成"));
-      setRefetchTrigger((n) => n + 1);
-    } catch (err) {
-      toast.error(err instanceof ApiError ? err.message : t("transition_failed", "提交步骤失败"));
-    } finally {
-      setTransitioning(false);
-    }
-  };
-
-
-
-  // ── Load picked cells ──
-  useEffect(() => { if (!projectId) return; api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`).then((d) => setPickedCells((d || []).map((p: any) => p.cellId))).catch(() => { }); }, [projectId, refetchTrigger]);
+    api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`)
+      .then((d) => setPickedCells((d || []).map((p: any) => p.cellId)))
+      .catch(() => { });
+  }, [projectId, refetchTrigger]);
 
   // Summary / Raw data fetch — loads when either summary or raw_data tab is active
   useEffect(() => {
@@ -262,24 +87,38 @@ export function ProjectDetail() {
     api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`).then((allExps) => {
       if (cancelled || !Array.isArray(allExps)) return;
       const expIdsByType: Record<string, string[]> = {};
-      for (const exp of allExps) { const at = exp.metadata?.assayType as string; if (at && RECORD_TYPE_TO_API_TYPE[at]) { if (!expIdsByType[at]) expIdsByType[at] = []; expIdsByType[at].push(exp.id); } }
-      const setters: Record<string, any> = { ProcessData: ["process", setProcessData], CalendarLife: ["calendar", setCalendarLife], StorageSwelling: ["swelling", setStorageSwelling], EnergyEfficiency: ["efficiency", setEnergyEfficiency], DcrTest: ["dcr", setDcrTest], FastCharge: ["fastcharge", setFastCharge], HtCycle: ["htcycle", setHtCycle] };
+      for (const exp of allExps) {
+        const at = exp.metadata?.assayType as string;
+        if (at && RECORD_TYPE_TO_API_TYPE[at]) {
+          if (!expIdsByType[at]) expIdsByType[at] = [];
+          expIdsByType[at].push(exp.id);
+        }
+      }
+      const setters: Record<string, (data: any[]) => void> = {
+        ProcessData: setProcessData,
+        CalendarLife: setCalendarLife,
+        StorageSwelling: setStorageSwelling,
+        EnergyEfficiency: setEnergyEfficiency,
+        DcrTest: setDcrTest,
+        FastCharge: setFastCharge,
+        HtCycle: setHtCycle,
+      };
       api.get<string[]>(`/api/v1/projects/${projectId}/procurement/invalid-internalcodes`).catch(() => []).then((invalidCodesData) => {
         const invalidCodes = Array.isArray(invalidCodesData) ? invalidCodesData : [];
-        const tasks = Object.entries(setters).map(([at, [apiType, setter]]) => {
+        const tasks = Object.entries(setters).map(([at, setter]) => {
+          const apiType = RECORD_TYPE_TO_API_TYPE[at];
+          if (!apiType) return null;
           const ids = expIdsByType[at] || [];
-          if (!ids.length) { setter([]); setLoadedTypes((p) => [...p, apiType]); return; }
+          if (!ids.length) { setter([]); setLoadedTypes((p) => [...p, apiType]); return null; }
           return Promise.all(ids.map((eid: string) => api.get<any[]>(`/api/v1/data/${apiType}/${eid}`).catch(() => []))).then((rs) => {
             if (!cancelled) {
               let rows = rs.flat();
-              // Deduplicate ProcessData by cellId (multiple experiments may share the same cellId)
               if (at === "ProcessData") {
                 const seen = new Map<string, any>();
                 for (const row of rows) {
                   const key = row.cellId || row.id;
                   if (!seen.has(key)) seen.set(key, row);
                   else {
-                    // Merge non-null fields from later rows
                     const existing = seen.get(key);
                     for (const [k, v] of Object.entries(row)) {
                       if (v != null && v !== '' && (existing[k] == null || existing[k] === '')) existing[k] = v;
@@ -288,11 +127,9 @@ export function ProjectDetail() {
                 }
                 rows = Array.from(seen.values());
               }
-              // Exclude rows belonging to invalid procurement groups
               if (invalidCodes.length > 0) {
                 rows = rows.filter((r: any) => !isCellInvalid(r.cellId || r.cellName, invalidCodes));
               }
-              // Exclude scrapped batteries (电池报废)
               rows = rows.filter((r: any) => !r.scrapped);
               setter(rows);
               setLoadedTypes((p) => [...p, apiType]);
@@ -308,46 +145,42 @@ export function ProjectDetail() {
   if (error || !project) return <div className="p-10 text-red-500">{error ?? t("project_not_found")}</div>;
   if (stepMetaError) return <div className="p-10 text-red-500">{t("load_steps_failed", "无法加载流程步骤定义，请确保后端已配置默认流程模板")}</div>;
 
-  const stepParents = visibleSteps.filter((s) => !s.parentStepName);
-  const stepChildren = (parentName: string) => {
-    return visibleSteps.filter((s) => s.parentStepName === parentName).sort((a, b) => a.stepIndex - b.stepIndex);
-  };
+  const isCreator = project?.createdBy === currentUserId;
+  const isArchived = project.status === "Archived";
 
-  const completedStepCount = stepParents.filter((step) => step.status === "completed").length;
-  const activeStepCount = stepParents.filter((step) => step.status === "in_progress").length;
-  const workflowProgress = stepParents.length > 0
-    ? Math.round((completedStepCount / stepParents.length) * 100)
-    : 0;
+  const userActiveSteps = wf.steps.filter(
+    (s) => s.status === "in_progress" && s.assignedUserId === currentUserId && !s.isParallelGroup,
+  );
+  const currentStep = userActiveSteps[0] || null;
   const focusedStep = currentStep || (isCreator
     ? wf.steps.find((step) => step.status === "in_progress" && !step.isParallelGroup) || null
     : null);
-
-  const isArchived = project.status === "Archived";
 
   return (
     <div className="flex min-h-0 flex-col space-y-4">
       <PageHeader
         title={project.name}
         description={project.description || t("no_description")}
-        badges={<span className={cn(
-              "inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium",
-              project.status === "Approved" && "bg-green-50 text-green-700 border border-green-200",
-              isArchived && "bg-gray-50 text-gray-400 border border-gray-200",
-              !project.status || (project.status !== "Approved" && !isArchived) && "bg-gray-100 text-gray-700"
-            )}>
-              <span className={cn("h-1.5 w-1.5 rounded-full", project.status === "Approved" ? "bg-green-500" : isArchived ? "bg-gray-400" : "bg-gray-500")} />
-              {t(project.status === "Approved" ? "status_approved" : isArchived ? "status_inactive" : project.status === "Active" || !project.status ? "status_active" : project.status === "Draft" ? "status_draft" : project.status === "In Review" ? "status_in_review" : "status_active")}
-            </span>}
+        badges={
+          <span className={cn(
+            "inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium",
+            project.status === "Approved" && "bg-green-50 text-green-700 border border-green-200",
+            isArchived && "bg-gray-50 text-gray-400 border border-gray-200",
+            !project.status || (project.status !== "Approved" && !isArchived) && "bg-gray-100 text-gray-700",
+          )}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", project.status === "Approved" ? "bg-green-500" : isArchived ? "bg-gray-400" : "bg-gray-500")} />
+            {t(project.status === "Approved" ? "status_approved" : isArchived ? "status_inactive" : project.status === "Active" || !project.status ? "status_active" : project.status === "Draft" ? "status_draft" : project.status === "In Review" ? "status_in_review" : "status_active")}
+          </span>
+        }
         actions={currentStep ? (
           <div className="flex shrink-0 items-center gap-2 text-[13px] sm:pt-1">
             <span className="text-gray-400">{t("current_step", "当前步骤")}</span>
-            <span className="h-1.5 w-1.5 rounded-full bg-action"></span>
-            <span className="font-medium text-gray-700">{t(STEP_META[currentStep.stepName]?.label || currentStep.stepName, STEP_META[currentStep.stepName]?.label || currentStep.stepName)}</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-action" />
+            <span className="font-medium text-gray-700">{t(stepMeta[currentStep.stepName]?.label || currentStep.stepName, stepMeta[currentStep.stepName]?.label || currentStep.stepName)}</span>
           </div>
         ) : undefined}
       />
 
-      {/* ── Tabs ── */}
       <Tabs
         variant="segmented"
         items={[
@@ -361,281 +194,49 @@ export function ProjectDetail() {
         onChange={(key) => setSearchParams({ tab: key })}
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      {/* ═══════════ Workflow Tab ═══════════ */}
-      {activeTab === "workflow" && (
-        <div className="space-y-5">
-          <section className="rounded-lg bg-gray-50 px-5 py-4 sm:px-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <ListChecks className="h-4 w-4 text-gray-600" />
-                  <h2 className="text-[15px] font-semibold text-gray-900">{t("workflow_progress", "流程进度")}</h2>
-                </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  {completedStepCount} / {stepParents.length} {t("step_completed", "步骤已完成")}
-                  {activeStepCount > 0 && ` · ${activeStepCount} ${t("step_in_progress", "进行中")}`}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 sm:min-w-64">
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-valuenow={workflowProgress} aria-valuemin={0} aria-valuemax={100}>
-                  <div className="h-full rounded-full bg-action transition-[width] duration-500" style={{ width: `${workflowProgress}%` }} />
-                </div>
-                <span className="w-10 text-right text-sm font-semibold tabular-nums text-gray-900">{workflowProgress}%</span>
-              </div>
+      <div className="flex-1 min-h-0">
+        {/* Workflow Tab */}
+        {activeTab === "workflow" && (
+          <div className="space-y-5">
+            <WorkflowProgressCard steps={wf.steps} />
+
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <WorkflowStepList
+                wf={wf}
+                wfLoading={wfLoading}
+                projectId={projectId!}
+                isArchived={isArchived}
+                experiments={experiments}
+                stepMeta={stepMeta}
+              />
+
+              <WorkflowTaskSidebar
+                focusedStep={focusedStep}
+                projectId={projectId!}
+                isArchived={isArchived}
+                pickedCellsCount={pickedCells.length}
+                experiments={experiments}
+                stepMeta={stepMeta}
+              />
             </div>
-          </section>
-
-          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="overflow-hidden rounded-lg bg-gray-50/70">
-              <div className="px-5 pb-3 pt-5 sm:px-6">
-                <h2 className="text-[15px] font-semibold text-gray-900">{t("workflow", "工作流程")}</h2>
-                <p className="mt-1 text-xs text-gray-500">{t("workflow_subtitle")}</p>
-              </div>
-
-              {wfLoading ? (
-                <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-gray-500" /></div>
-              ) : !wf.instance ? (
-                <div className="px-6 py-16 text-center text-sm text-gray-500">
-                  <ListChecks className="mx-auto mb-3 h-9 w-9 text-gray-300" />
-                  {t("no_workflow", "当前项目暂无工作流实例")}
-                </div>
-              ) : (
-                <div className="space-y-1 px-2 pb-2 sm:px-3 sm:pb-3">
-                  {stepParents.map((step, index) => {
-                    const meta = STEP_META[step.stepName] || { label: step.stepName, icon: <Circle className="h-4 w-4" /> };
-                    const children = stepChildren(step.stepName);
-                    const isComplete = step.status === "completed";
-                    const isInProgress = step.status === "in_progress";
-                    const isPending = step.status === "pending";
-                    const route = isPending ? null : stepRoute(step.stepName, projectId!, experiments, STEP_META);
-                    const canOpen = !isArchived && !!route;
-
-                    return (
-                      <div key={step.stepName} className={cn("relative rounded-surface px-3 py-3 transition-colors sm:px-4", isInProgress && "bg-action-subtle/60")}>
-                        {index < stepParents.length - 1 && <div className="absolute bottom-[-6px] left-7 top-11 w-px -translate-x-1/2 bg-gray-200 sm:left-8" aria-hidden="true" />}
-                        <Link
-                          to={isArchived ? "#" : (route || "#")}
-                          aria-current={isInProgress ? "step" : undefined}
-                          onClick={(event) => {
-                            if (isArchived) { event.preventDefault(); return; }
-                            if (!route) event.preventDefault();
-                          }}
-                          className={cn(
-                            "group flex min-w-0 items-center gap-3 no-underline",
-                            canOpen ? "cursor-pointer" : isPending || isArchived ? "cursor-not-allowed" : "cursor-default",
-                          )}
-                        >
-                          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
-                            <div className={cn(
-                              "relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold",
-                              isComplete ? "border-transparent bg-emerald-50 text-emerald-700" :
-                                isInProgress ? "border-transparent bg-action text-white" :
-                                  "border-transparent bg-gray-100 text-gray-400",
-                            )}>
-                              {isComplete ? <CheckCircle2 className="h-4 w-4" /> : isInProgress ? <Play className="ml-0.5 h-3.5 w-3.5 fill-current" /> : index + 1}
-                            </div>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className={cn("text-sm font-medium", isPending ? "text-gray-500" : "text-gray-900")}>
-                                <span className="text-gray-400 font-normal mr-1.5">{index + 1}.</span>
-                                {t(meta.label, meta.label)}
-                              </span>
-                              <StatusBadge status={step.status} />
-                            </div>
-                            <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
-                              {step.assignedUserId ? (
-                                <><User className="h-3 w-3" /><span className="truncate">{t("assignee", "执行人")}: {(step as any).assignedUserName || `用户 #${step.assignedUserId.slice(0, 6)}`}</span></>
-                              ) : isPending ? (
-                                <><LockKeyhole className="h-3 w-3" /><span>{t("step_pending", "等待前置步骤完成")}</span></>
-                              ) : null}
-                            </div>
-                          </div>
-                          {canOpen && <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-700" />}
-                        </Link>
-
-                        {children.length > 0 && (
-                          <div className="ml-11 mt-3 overflow-hidden rounded-md bg-gray-100/80 p-1">
-                            {children.map((child, childIndex) => {
-                              const childMeta = STEP_META[child.stepName] || { label: child.stepName, icon: <Circle className="h-3 w-3" /> };
-                              const childPending = child.status === "pending";
-                              const childRoute = childPending ? null : stepRoute(child.stepName, projectId!, experiments, STEP_META);
-                              const childCanOpen = !isArchived && !!childRoute;
-                              return (
-                                <Link
-                                  key={child.stepName}
-                                  to={isArchived ? "#" : (childRoute || "#")}
-                                  onClick={(event) => { if (!childCanOpen) event.preventDefault(); }}
-                                  className={cn(
-                                    "group flex min-w-0 items-center gap-3 px-3 py-2.5 no-underline transition-colors",
-                                    childIndex > 0 && "mt-0.5",
-                                    childCanOpen ? "rounded hover:bg-white" : "cursor-not-allowed",
-                                  )}
-                                >
-                                  <div className={cn(
-                                    "flex h-6 w-6 shrink-0 items-center justify-center rounded",
-                                    child.status === "completed" ? "bg-emerald-50 text-emerald-600" :
-                                      child.status === "in_progress" ? "bg-action-subtle text-action-muted" : "bg-white text-gray-400",
-                                  )}>
-                                    {React.isValidElement(childMeta.icon)
-                                      ? React.cloneElement(childMeta.icon as React.ReactElement<{ className?: string }>, { className: "h-3 w-3" })
-                                      : childMeta.icon}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className={cn("truncate text-[13px]", child.status === "in_progress" ? "font-medium text-action-muted" : "text-gray-700")}>
-                                      <span className="text-gray-400 font-normal mr-1.5">{index + 1}.{childIndex + 1}</span>
-                                      {t(childMeta.label, childMeta.label)}
-                                    </p>
-                                    {child.assignedUserId && <p className="mt-0.5 truncate text-[11px] text-gray-400">{t("assignee", "执行人")}: {(child as any).assignedUserName || `用户 #${child.assignedUserId.slice(0, 6)}`}</p>}
-                                  </div>
-                                  <StatusBadge status={child.status} />
-                                  {childCanOpen && <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-gray-700" />}
-                                </Link>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            <aside className="lg:sticky lg:top-5">
-              {focusedStep ? (
-                <div className="overflow-hidden rounded-lg bg-gray-50">
-                  <div className="bg-action-subtle px-5 py-4">
-                    <div className="flex items-center gap-2 text-xs font-medium text-action-muted">
-                      <span className="h-2 w-2 rounded-full bg-action" />
-                      {t("current_task", "当前任务")}
-                    </div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-action-muted">
-                        {STEP_META[focusedStep.stepName]?.icon || <Circle className="h-4 w-4" />}
-                      </div>
-                      <h3 className="text-[15px] font-semibold text-gray-900">{t(STEP_META[focusedStep.stepName]?.label || focusedStep.stepName, STEP_META[focusedStep.stepName]?.label || focusedStep.stepName)}</h3>
-                    </div>
-                  </div>
-                  <div className="space-y-4 p-5">
-                    <div className="flex gap-2.5 text-[13px] text-gray-600">
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
-                      <p className="leading-5">完成当前阶段的数据录入与校验后，可在对应实验页面提交并推进流程。</p>
-                    </div>
-
-                    {focusedStep.assignedUserId && (
-                      <div className="flex items-center gap-2 pt-1 text-xs text-gray-500">
-                        <User className="h-3.5 w-3.5" />
-                        <span>{t("assignee", "执行人")}: {(focusedStep as any).assignedUserName || `用户 #${focusedStep.assignedUserId.slice(0, 6)}`}</span>
-                      </div>
-                    )}
-
-                    {bs(STEP_META, focusedStep.stepName) === BuiltInStep.ExperimentDesign && (
-                      isArchived ? (
-                        <Button variant="secondary" className="w-full" disabled>
-                          <LockKeyhole className="h-4 w-4" />
-                          实验设计已归档
-                        </Button>
-                      ) : (
-                        <Link to={`/projects/${projectId}/design`} className="block no-underline">
-                          <Button variant="primary" className="w-full">
-                            <FileText className="h-4 w-4" />
-                            前往实验设计
-                            <ChevronRight className="ml-auto h-4 w-4" />
-                          </Button>
-                        </Link>
-                      )
-                    )}
-
-                    {bs(STEP_META, focusedStep.stepName) === BuiltInStep.BatterySelection && (
-                      isArchived ? (
-                        <Button variant="secondary" className="w-full" disabled>
-                          <LockKeyhole className="h-4 w-4" />
-                          挑选已归档
-                        </Button>
-                      ) : (
-                        <Button variant="primary" className="w-full" onClick={() => navigate(`/projects/${projectId}/cell-picker`)}>
-                          <Layers className="h-4 w-4" />
-                          挑选实验电池 ({pickedCells.length})
-                          <ChevronRight className="ml-auto h-4 w-4" />
-                        </Button>
-                      )
-                    )}
-
-                    {!BS_SPECIAL_PANEL.includes(bs(STEP_META, focusedStep.stepName)) && (() => {
-                      const taskRoute = stepRoute(focusedStep.stepName, projectId!, experiments, STEP_META);
-                      return taskRoute ? (
-                        isArchived ? (
-                          <Button variant="secondary" className="w-full" disabled>
-                            <LockKeyhole className="h-4 w-4" />
-                            记录已归档
-                          </Button>
-                        ) : (
-                          <Link to={taskRoute} className="block no-underline">
-                            <Button variant="primary" className="w-full">
-                              打开实验记录
-                              <ChevronRight className="ml-auto h-4 w-4" />
-                            </Button>
-                          </Link>
-                        )
-                      ) : null;
-                    })()}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-lg bg-gray-50 p-6 text-center">
-                  <CheckCircle2 className="mx-auto mb-3 h-9 w-9 text-emerald-500" />
-                  <h3 className="text-sm font-medium text-gray-900">{t("workflow_completed", "暂无待办任务")}</h3>
-                  <p className="mt-1 text-xs leading-5 text-gray-500">{t("workflow_completed_desc", "所有步骤已完成或尚未启动")}</p>
-                </div>
-              )}
-            </aside>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ═══════════ Summary Tab ═══════════ */}
-      {activeTab === "summary" && (dataLoading ? <SkeletonCard rows={5} /> :
-        <DataSummary loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
-          storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
-          fastCharge={fastCharge} htCycle={htCycle} />
-      )}
+        {/* Summary Tab */}
+        {activeTab === "summary" && (dataLoading ? <SkeletonCard rows={5} /> :
+          <DataSummary loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
+            storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
+            fastCharge={fastCharge} htCycle={htCycle} />
+        )}
 
-      {/* ═══════════ Raw Data Tab ═══════════ */}
-      {activeTab === "raw_data" && (dataLoading ? <SkeletonCard rows={5} /> :
-        <ProjectRawData loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
-          storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
-          fastCharge={fastCharge} htCycle={htCycle} projectId={projectId!}
-          onImported={() => setRefetchTrigger((n) => n + 1)} />
-      )}
-
+        {/* Raw Data Tab */}
+        {activeTab === "raw_data" && (dataLoading ? <SkeletonCard rows={5} /> :
+          <ProjectRawData loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
+            storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
+            fastCharge={fastCharge} htCycle={htCycle} projectId={projectId!}
+            onImported={() => setRefetchTrigger((n) => n + 1)} />
+        )}
       </div>
     </div>
   );
-}
-
-// ─── Helpers ────────────────────────────────────────────────────
-
-function stepRoute(stepName: string, projectId: string, experiments: Experiment[], meta: StepMetaMap): string | null {
-  const b = bs(meta, stepName);
-  switch (b) {
-    case BuiltInStep.ExperimentDesign: return `/projects/${projectId}/design`;
-    case BuiltInStep.Testing: return null;
-    case BuiltInStep.BatterySelection: return `/projects/${projectId}/cell-picker`;
-  }
-  const exp = experiments.find((e) => (e as any).workflowStepName === stepName);
-  return exp ? `/projects/${projectId}/experiments/${exp.id}` : null;
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const { t } = useTranslation();
-  const map: Record<string, { key: string; cls: string }> = {
-    pending: { key: "step_pending", cls: "bg-gray-100 text-gray-500" },
-    in_progress: { key: "step_in_progress", cls: "bg-action-subtle text-action-muted font-medium" },
-    completed: { key: "step_completed", cls: "bg-emerald-100/80 text-emerald-700 font-medium" },
-    skipped: { key: "step_skipped", cls: "bg-gray-100 text-gray-400" },
-  };
-  const s = map[status] || map.pending;
-  return <span className={cn("text-[10px] px-2 py-0.5 rounded-md shrink-0", s.cls)}>{t(s.key)}</span>;
 }
