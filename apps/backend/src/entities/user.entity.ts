@@ -23,8 +23,8 @@ export class User {
   username!: string;
 
   @Index({ unique: true })
-  @Column({ type: 'varchar', length: 128, comment: '邮箱' })
-  email!: string;
+  @Column({ type: 'varchar', length: 128, nullable: true, comment: '邮箱' })
+  email!: string | null;
 
   @Column({ name: 'passwordHash', type: 'varchar', length: 255, comment: '密码哈希' })
   passwordHash!: string;

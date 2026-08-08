@@ -10,16 +10,18 @@ interface FieldProps {
   label: string;
   htmlFor?: string;
   error?: string;
+  required?: boolean;
   children: React.ReactNode;
   className?: string;
 }
 
-export function Field({ label, htmlFor, error, children, className }: FieldProps) {
+export function Field({ label, htmlFor, error, required, children, className }: FieldProps) {
   const errorId = useId();
   return (
     <div className={cn("space-y-1", className)}>
       <label htmlFor={htmlFor} className="block text-xs font-medium text-gray-700">
         {label}
+        {required && <span className="ml-1 text-red-500 font-semibold">*</span>}
       </label>
       {children}
       {error && <p id={errorId} role="alert" className="text-xs text-red-500">{error}</p>}
@@ -38,7 +40,7 @@ interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
-  ({ label, error, className, id, ...props }, ref) => {
+  ({ label, error, className, id, required, ...props }, ref) => {
     const generatedId = useId();
     const inputId = id ?? generatedId;
     const errorId = `${inputId}-error`;
@@ -46,13 +48,14 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(
       <input
         ref={ref}
         id={inputId}
+        required={required}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? errorId : props["aria-describedby"]}
         className={cn(inputClass, className)}
         {...props}
       />
     );
-    if (label) return <Field label={label} htmlFor={inputId}>{input}{error && <p id={errorId} role="alert" className="text-xs text-red-500">{error}</p>}</Field>;
+    if (label) return <Field label={label} htmlFor={inputId} required={required} error={error}>{input}{error && <p id={errorId} role="alert" className="text-xs text-red-500">{error}</p>}</Field>;
     return input;
   }
 );
@@ -73,6 +76,7 @@ interface SelectProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChan
   placeholder?: string;
   className?: string;
   error?: string;
+  required?: boolean;
 }
 
 export function Select({
@@ -83,6 +87,7 @@ export function Select({
   placeholder = "Select...",
   className,
   error,
+  required,
   ...props
 }: SelectProps) {
   const triggerId = useId();
@@ -182,7 +187,7 @@ export function Select({
 
   return (
     <>
-      {label ? <Field label={label} htmlFor={triggerId} error={error}>{trigger}</Field> : trigger}
+      {label ? <Field label={label} htmlFor={triggerId} required={required} error={error}>{trigger}</Field> : trigger}
 
       {open && createPortal(
         <div id={listboxId} role="listbox" style={dropdownStyle} className="bg-white rounded-surface shadow-lg border border-gray-200 py-0.5 max-h-[240px] overflow-y-auto z-[9999] animate-in fade-in zoom-in-95 duration-150">
@@ -515,11 +520,12 @@ interface NativeSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement
 }
 
 export const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
-  ({ label, className, id, children, ...props }, ref) => {
+  ({ label, className, id, required, children, ...props }, ref) => {
     const select = (
       <select
         ref={ref}
         id={id}
+        required={required}
         className={cn(
           "block w-full appearance-none rounded-md border border-gray-300 bg-white px-2.5 py-1.5 pr-8 text-xs text-gray-900 cursor-pointer transition-colors",
           "hover:border-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300",
@@ -530,7 +536,7 @@ export const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProp
         {children}
       </select>
     );
-    if (label) return <Field label={label} htmlFor={id}>{select}</Field>;
+    if (label) return <Field label={label} htmlFor={id} required={required}>{select}</Field>;
     return (
       <div className="relative">
         {select}
@@ -551,18 +557,19 @@ interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
 }
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ label, className, id, ...props }, ref) => {
+  ({ label, className, id, required, ...props }, ref) => {
     const textarea = (
       <textarea
         ref={ref}
         id={id}
+        required={required}
         className={cn(inputClass, "resize-y", className)}
         {...props}
       />
     );
     if (label) {
       return (
-        <Field label={label} htmlFor={id}>
+        <Field label={label} htmlFor={id} required={required}>
           {textarea}
         </Field>
       );

@@ -59,6 +59,10 @@ export function Users() {
   };
 
   useEffect(() => {
+    loadRolesIfNeeded();
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
     const queryParams = new URLSearchParams();
@@ -78,11 +82,15 @@ export function Users() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUserEmail || !newUserName || !newUserUsername) return;
+    if (!newUserName || !newUserUsername) return;
+    if (/[\u4e00-\u9fa5]/.test(newUserUsername) || !/^[a-zA-Z0-9_.-]+$/.test(newUserUsername)) {
+      alert(t("username_no_chinese", "用户名不能包含中文或非法字符，只能包含英文字母、数字、下划线、连字符或点"));
+      return;
+    }
     try {
       await api.post<any>("/api/v1/users", {
         username: newUserUsername,
-        email: newUserEmail,
+        email: newUserEmail ? newUserEmail.trim() : undefined,
         fullName: newUserName,
         roleId: newUserRole || undefined,
       });
@@ -109,10 +117,15 @@ export function Users() {
     const roleId = (form.elements.namedItem("edit-role") as HTMLSelectElement).value;
     const isActive = (form.elements.namedItem("edit-active") as HTMLInputElement).checked;
 
+    if (/[\u4e00-\u9fa5]/.test(username) || !/^[a-zA-Z0-9_.-]+$/.test(username)) {
+      alert(t("username_no_chinese", "用户名不能包含中文或非法字符，只能包含英文字母、数字、下划线、连字符或点"));
+      return;
+    }
+
     try {
       await api.put(`/api/v1/users/${editingUser.id}`, {
         username,
-        email,
+        email: email ? email.trim() : "",
         fullName: name,
         roleId: roleId || undefined,
         isActive,
@@ -213,7 +226,7 @@ export function Users() {
                       </TableCell>
                       <TableCell>
                         <div className="text-[13px] text-gray-500">
-                          {user.email}
+                          {user.email || "-"}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -284,7 +297,7 @@ export function Users() {
                     @{user.username}
                   </p>
                   <p className="text-[13px] text-gray-500 mt-2 mb-4">
-                    {user.email}
+                    {user.email || "-"}
                   </p>
 
                   <div className="flex items-center gap-2 mt-auto">
@@ -326,29 +339,29 @@ export function Users() {
             <Button size="sm" type="submit" form="modal-user-edit-form">{t("save_changes")}</Button>
           </>
         }>
-        <form id="modal-user-edit-form" onSubmit={handleUpdateUser} className="space-y-5">
+        <form id="modal-user-edit-form" key={editingUser?.id || "edit-form"} onSubmit={handleUpdateUser} className="space-y-5">
           <TextInput
             id="edit-username"
-            label="Username"
+            label={t("username", "用户名")}
             required
             defaultValue={editingUser?.username}
           />
           <TextInput
             id="edit-email"
-            label={t("email")}
+            label={t("email", "邮箱")}
             type="email"
-            required
             defaultValue={editingUser?.email}
           />
           <TextInput
             id="edit-name"
-            label={t("name")}
+            label={t("name", "姓名")}
             required
             defaultValue={editingUser?.fullName}
           />
           <FormSelect
             id="edit-role"
-            label={t("role")}
+            label={t("role", "角色")}
+            key={editingUser?.roleId || "no-role"}
             defaultValue={editingUser?.roleId || ""}
           >
             <option value="">No Role</option>
@@ -358,7 +371,7 @@ export function Users() {
           </FormSelect>
           <Checkbox
             id="edit-active"
-            label={t("active")}
+            label={t("active", "激活状态")}
             defaultChecked={editingUser?.isActive}
           />
         </form>
@@ -374,24 +387,23 @@ export function Users() {
         <form id="modal-user-form" onSubmit={handleCreateUser} className="space-y-5">
           <TextInput
             id="username"
-            label="Username"
+            label={t("username", "用户名")}
             required
-            placeholder="e.g. johndoe"
+            placeholder={t("username_placeholder", "例如：johndoe")}
             value={newUserUsername}
             onChange={(e) => setNewUserUsername(e.target.value)}
           />
           <TextInput
             id="email"
-            label={t("email")}
+            label={t("email", "邮箱")}
             type="email"
-            required
             placeholder={t("email_placeholder")}
             value={newUserEmail}
             onChange={(e) => setNewUserEmail(e.target.value)}
           />
           <TextInput
             id="name"
-            label={t("name")}
+            label={t("name", "姓名")}
             required
             placeholder={t("name_placeholder")}
             value={newUserName}
@@ -399,7 +411,7 @@ export function Users() {
           />
           <FormSelect
             id="role"
-            label={t("role")}
+            label={t("role", "角色")}
             value={newUserRole}
             onChange={(e) => setNewUserRole(e.target.value)}
           >

@@ -9,7 +9,7 @@ import * as bcrypt from 'bcrypt';
 export interface CurrentUserResult {
   id: string;
   username: string;
-  email: string;
+  email: string | null;
   fullName: string;
   avatar: string | null;
   roleId: string | null;
@@ -114,10 +114,17 @@ export class UsersService {
     return { items, total };
   }
 
-  async create(dto: { username: string; email: string; fullName: string; roleId?: string; password?: string }): Promise<User> {
-    const existingEmail = await this.usersRepo.findOne({ where: { email: dto.email } });
-    if (existingEmail) {
-      throw new ConflictException('Email already exists.');
+  async create(dto: { username: string; email?: string; fullName: string; roleId?: string; password?: string }): Promise<User> {
+    if (/[\u4e00-\u9fa5]/.test(dto.username) || !/^[a-zA-Z0-9_.-]+$/.test(dto.username)) {
+      throw new BadRequestException('用户名不能包含中文或特殊字符，只能包含英文字母、数字、下划线、连字符或点。');
+    }
+
+    const normalizedEmail = dto.email?.trim() || null;
+    if (normalizedEmail) {
+      const existingEmail = await this.usersRepo.findOne({ where: { email: normalizedEmail } });
+      if (existingEmail) {
+        throw new ConflictException('Email already exists.');
+      }
     }
     const existingUsername = await this.usersRepo.findOne({ where: { username: dto.username } });
     if (existingUsername) {
@@ -130,7 +137,7 @@ export class UsersService {
     const user = this.usersRepo.create({
       id: uuid(),
       username: dto.username,
-      email: dto.email,
+      email: normalizedEmail,
       fullName: dto.fullName,
       passwordHash,
       roleId: dto.roleId ?? null,
@@ -146,7 +153,10 @@ export class UsersService {
       throw new NotFoundException('User not found.');
     }
 
-    if (dto.username && dto.username !== user.username) {
+    if (dto.username !== undefined && dto.username !== user.username) {
+      if (/[\u4e00-\u9fa5]/.test(dto.username) || !/^[a-zA-Z0-9_.-]+$/.test(dto.username)) {
+        throw new BadRequestException('用户名不能包含中文或特殊字符，只能包含英文字母、数字、下划线、连字符或点。');
+      }
       const existing = await this.usersRepo.findOne({ where: { username: dto.username } });
       if (existing) {
         throw new ConflictException('Username already exists.');
@@ -154,12 +164,15 @@ export class UsersService {
       user.username = dto.username;
     }
 
-    if (dto.email && dto.email !== user.email) {
-      const existing = await this.usersRepo.findOne({ where: { email: dto.email } });
-      if (existing) {
-        throw new ConflictException('Email already exists.');
+    if (dto.email !== undefined) {
+      const normalizedEmail = dto.email.trim() || null;
+      if (normalizedEmail && normalizedEmail !== user.email) {
+        const existing = await this.usersRepo.findOne({ where: { email: normalizedEmail } });
+        if (existing) {
+          throw new ConflictException('Email already exists.');
+        }
       }
-      user.email = dto.email;
+      user.email = normalizedEmail;
     }
 
     if (dto.fullName !== undefined) user.fullName = dto.fullName;
