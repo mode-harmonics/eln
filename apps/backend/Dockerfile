@@ -8,7 +8,7 @@
 # =============================================================================
 
 FROM node:20-alpine AS deps
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+RUN npm install -g pnpm@9.12.0
 WORKDIR /app
 
 # Root manifests
@@ -22,7 +22,7 @@ RUN pnpm install --frozen-lockfile
 
 # ---------------------------------------------------------------------------
 FROM node:20-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+RUN npm install -g pnpm@9.12.0
 WORKDIR /app
 
 COPY --from=deps /app /app
@@ -36,7 +36,7 @@ RUN pnpm --filter @eln/shared run build && \
 
 # ---------------------------------------------------------------------------
 FROM node:20-alpine AS production
-RUN corepack enable && corepack prepare pnpm@9.12.0 --activate
+RUN npm install -g pnpm@9.12.0
 WORKDIR /app
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

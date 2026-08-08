@@ -11,12 +11,12 @@
 set -e
 
 echo "→ Running database migrations..."
-npx typeorm migration:run -d apps/backend/dist/data-source.js
+pnpm --filter @eln/backend run typeorm:run:prod
 echo "✓ Migrations complete."
 
 if [ "${RUN_SEED}" = "true" ]; then
   echo "→ Seeding database..."
-  node apps/backend/dist/seed.js
+  pnpm --filter @eln/backend run seed:prod
   echo "✓ Seed complete."
 fi
 
