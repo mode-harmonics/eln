@@ -316,6 +316,7 @@ export function Projects() {
                 <TableHead>{t("project_name")}</TableHead>
                 <TableHead>{t("pi")}</TableHead>
                 <TableHead>{t("status")}</TableHead>
+                <TableHead>{t("workflow_progress", "流程进度")}</TableHead>
                 <TableHead>{t("created")}</TableHead>
                 {hasPermission("projects:write") && <TableHead className="sticky right-0 z-20 bg-gray-50 text-right">{t("actions")}</TableHead>}
               </TableRow>
@@ -330,6 +331,24 @@ export function Projects() {
                   <TableCell>{project.creator?.fullName || project.createdBy}</TableCell>
                   <TableCell>
                     {projectStatusBadge(project, t)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5 min-w-[140px]">
+                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-gray-100 flex-none" role="progressbar" aria-valuenow={project.progress?.percentage || 0} aria-valuemin={0} aria-valuemax={100}>
+                        <div
+                          className="h-full rounded-full bg-action transition-all duration-300"
+                          style={{ width: `${project.progress?.percentage || 0}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold tabular-nums text-gray-700">
+                        {project.progress?.percentage || 0}%
+                      </span>
+                      {project.progress && project.progress.total > 0 && (
+                        <span className="text-[11px] text-gray-400">
+                          ({project.progress.completed}/{project.progress.total})
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>{format(new Date(project.createdAt), "yyyy年M月d日")}</TableCell>
                   {hasPermission("projects:write") && (
@@ -352,7 +371,7 @@ export function Projects() {
               ))}
               {projects.length === 0 && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={5} className="py-24">
+                  <TableCell colSpan={6} className="py-24">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                         <FileText className="w-5 h-5 text-gray-500" />

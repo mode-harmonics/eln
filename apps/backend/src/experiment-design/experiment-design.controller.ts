@@ -25,7 +25,7 @@ export class ExperimentDesignController {
   ) {}
 
   @Get('projects/:projectId/design')
-  @RequirePermission('experiment_design:read')
+  @RequirePermission('experiments:read')
   async list(@Param('projectId') projectId: string) {
     return {
       success: true,
@@ -34,7 +34,7 @@ export class ExperimentDesignController {
   }
 
   @Post('projects/:projectId/design')
-  @RequirePermission('experiment_design:write')
+  @RequirePermission('experiments:write')
   async batchCreate(
     @Param('projectId') projectId: string,
     @Body() dto: BatchCreateDesignDto,
@@ -46,7 +46,7 @@ export class ExperimentDesignController {
   }
 
   @Put('projects/:projectId/design/:id')
-  @RequirePermission('experiment_design:write')
+  @RequirePermission('experiments:write')
   async update(
     @Param('projectId') projectId: string,
     @Param('id') id: string,
@@ -59,7 +59,7 @@ export class ExperimentDesignController {
   }
 
   @Delete('projects/:projectId/design/:id')
-  @RequirePermission('experiment_design:write')
+  @RequirePermission('experiments:write')
   async remove(
     @Param('projectId') projectId: string,
     @Param('id') id: string,

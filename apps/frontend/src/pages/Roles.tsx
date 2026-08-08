@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Shield, Loader2, ChevronDown, ChevronRight, Plus, Edit3, HelpCircle } from "lucide-react";
+import { Shield, Loader2, Plus, Edit3, Check, RotateCcw } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { PERMISSION_TREE_META, PermissionGroupMeta } from "@eln/shared";
 import { Pagination } from "../components/Pagination";
 import { ViewToggle } from "../components/ViewToggle";
 import { Button } from "../components/Button";
 import { Modal } from "../components/Modal";
 import { TextInput } from "../components/FormFields";
 import { SearchInput } from "../components/SearchInput";
-import { Tooltip } from "../components/Tooltip";
 import { Card, CardHeader, CardContent, CardFooter } from "../components/Card";
 import { TableWrapper, Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "../components/Table";
 import { useViewMode } from "../hooks/useViewMode";
@@ -34,7 +34,7 @@ export function Roles() {
 
   const [permissionList, setPermissionList] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [refetchTrigger, setRefetchTrigger] = useState(0);
 
   // Create role state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -54,6 +54,7 @@ export function Roles() {
       setNewRoleName("");
       setNewRoleDesc("");
       setCurrentPage(1);
+      setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
       alert(err instanceof ApiError ? err.message : t("create_failed"));
     } finally {
@@ -63,50 +64,7 @@ export function Roles() {
 
   useEffect(() => {
     if (editingRole) {
-      const raw = editingRole.permissionList || [];
-      const expanded = new Set(raw);
-
-      // Expand wildcard permissions into individual checkboxes for the editor
-      const expandableResources = [
-        { wildcard: 'experiment_design:*', actions: ['read', 'write'] },
-        { wildcard: 'procurement:*', actions: ['read', 'write'] },
-        { wildcard: 'dashboard:*', actions: ['read'] },
-        { wildcard: 'projects:*', actions: ['read', 'write'] },
-        { wildcard: 'experiments:*', actions: ['read', 'write'] },
-        { wildcard: 'workflow:*', actions: ['read', 'write'] },
-        { wildcard: 'users:*', actions: ['read', 'write'] },
-        { wildcard: 'roles:*', actions: ['read', 'write'] },
-      ];
-      for (const { wildcard, actions } of expandableResources) {
-        if (raw.includes(wildcard)) {
-          for (const act of actions) expanded.add(wildcard.replace(':*', `:${act}`));
-        }
-      }
-
-      // data child permissions (data_${type}:action)
-      const childKeys = [
-        "data_process", "data_calendar", "data_swelling", "data_efficiency",
-        "data_dcr", "data_fastcharge", "data_htcycle",
-      ];
-
-      // data:* → all child perms (all actions)
-      if (raw.includes("data:*")) {
-        expanded.add("data:read");
-        expanded.add("data:write");
-        for (const action of ["read", "write", "*"]) {
-          childKeys.forEach((c) => expanded.add(`${c}:${action}`));
-        }
-      }
-      // data:read → all child :read (only if data:* not present)
-      if (!raw.includes("data:*") && raw.includes("data:read")) {
-        childKeys.forEach((c) => expanded.add(`${c}:read`));
-      }
-      // data:write → all child :write (only if data:* not present)
-      if (!raw.includes("data:*") && raw.includes("data:write")) {
-        childKeys.forEach((c) => expanded.add(`${c}:write`));
-      }
-
-      setPermissionList(Array.from(expanded));
+      setPermissionList(editingRole.permissionList || []);
     } else {
       setPermissionList([]);
     }
@@ -127,7 +85,7 @@ export function Roles() {
       .catch((err) => { if (!cancelled) setError(err instanceof ApiError ? err.message : "加载角色列表失败"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [currentPage, pageSize, searchQuery]);
+  }, [currentPage, pageSize, searchQuery, refetchTrigger]);
 
   const handleUpdateRole = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,179 +105,44 @@ export function Roles() {
     }
   };
 
-  // ── Permission row helper ──
+  const isOwner = editingRole?.name === "Owner";
+
+  const isPermChecked = (permKey: string) => {
+    if (isOwner || permissionList.includes("*")) return true;
+    const [res] = permKey.split(":");
+    if (permissionList.includes(`${res}:*`)) return true;
+    return permissionList.includes(permKey);
+  };
+
+  const togglePerm = (permKey: string, checked: boolean) => {
+    if (isOwner) return;
+    setPermissionList((prev) => {
+      if (checked) {
+        return Array.from(new Set([...prev, permKey]));
+      } else {
+        const [res] = permKey.split(":");
+        return prev.filter((p) => p !== permKey && p !== "*" && p !== `${res}:*`);
+      }
+    });
+  };
+
+  const applyPreset = (preset: "read_all" | "full_all" | "reset") => {
+    if (isOwner) return;
+    if (preset === "full_all") {
+      setPermissionList(["experiments:*", "workflow:*", "system:*"]);
+    } else if (preset === "read_all") {
+      setPermissionList(["experiments:read", "workflow:read", "system:read"]);
+    } else {
+      setPermissionList(editingRole?.permissionList || []);
+    }
+  };
+
   const Cb = ({ checked, disabled, onChange }: { checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) => (
-    <label className={`flex items-center justify-center w-5 h-5 flex-none rounded border-2 transition-colors cursor-pointer mx-auto ${checked ? 'bg-action border-action' : 'border-gray-300 hover:border-gray-400'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
+    <label className={`flex items-center justify-center w-5 h-5 flex-none rounded border-2 transition-colors cursor-pointer ${checked ? 'bg-action border-action' : 'border-gray-300 hover:border-gray-400'} ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="sr-only" />
-      <svg className={`w-3 h-3 text-white pointer-events-none ${checked ? 'block' : 'hidden'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-      </svg>
+      <Check className={`w-3 h-3 text-white pointer-events-none ${checked ? 'block' : 'hidden'}`} strokeWidth={3} />
     </label>
   );
-
-  const permRow = (key: string, label: string) => {
-    const isFC = permissionList.includes(`${key}:*`);
-    const isRead = isFC || permissionList.includes(`${key}:read`);
-    const isWrite = isFC || permissionList.includes(`${key}:write`);
-    const toggle = (action: string, checked: boolean) => {
-      const perm = `${key}:${action}`;
-      if (checked) setPermissionList((prev) => [...prev, perm]);
-      else setPermissionList((prev) => prev.filter((p) => p !== perm));
-    };
-    const disabled = editingRole?.name === "Owner";
-    return (
-      <tr key={key} className="hover:bg-gray-50/50 transition-colors">
-        <td className="px-4 py-3 text-sm font-medium text-gray-700">{label}</td>
-        <td className="px-4 py-3 text-center">
-          <Cb checked={isRead} disabled={disabled || isFC} onChange={(v) => toggle("read", v)} />
-        </td>
-        <td className="px-4 py-3 text-center">
-          <Cb checked={isWrite} disabled={disabled || isFC} onChange={(v) => toggle("write", v)} />
-        </td>
-        <td className="px-4 py-3 text-center">
-          <Cb checked={isFC} disabled={disabled} onChange={(v) => toggle("*", v)} />
-        </td>
-      </tr>
-    );
-  };
-
-  const specialActionRow = (key: string, action: string, label: string) => {
-    const isFC = permissionList.includes(`${key}:*`);
-    const perm = `${key}:${action}`;
-    const hasPerm = isFC || permissionList.includes(perm);
-    const disabled = editingRole?.name === "Owner" || isFC;
-    const toggle = (checked: boolean) => {
-      if (checked) setPermissionList((prev) => [...prev, perm]);
-      else setPermissionList((prev) => prev.filter((p) => p !== perm));
-    };
-    return (
-      <tr key={`${key}-${action}`} className="hover:bg-gray-50/50 transition-colors bg-gray-50/30">
-        <td className="px-4 py-3 text-sm text-gray-600 pl-8 flex items-center gap-2">
-          <div className="w-1 h-1 bg-gray-300 rounded-full" />
-          {label}
-        </td>
-        <td className="px-4 py-3 text-center"></td>
-        <td className="px-4 py-3 text-center">
-          <Cb checked={hasPerm} disabled={disabled} onChange={toggle} />
-        </td>
-        <td className="px-4 py-3 text-center"></td>
-      </tr>
-    );
-  };
-
-  // ── Data (7 business tables) — expandable group ──
-  const DATA_CHILD_KEYS = [
-    "data_process", "data_calendar", "data_swelling", "data_efficiency",
-    "data_dcr", "data_fastcharge", "data_htcycle",
-  ];
-
-  const DATA_CHILD_RESOURCES = [
-    { key: "data_process", label: t("process_data") },
-    { key: "data_calendar", label: t("calendar_life") },
-    { key: "data_swelling", label: t("storage_swelling") },
-    { key: "data_efficiency", label: t("energy_efficiency") },
-    { key: "data_dcr", label: t("dcr_test") },
-    { key: "data_fastcharge", label: t("fast_charge") },
-    { key: "data_htcycle", label: t("ht_cycle") },
-  ];
-
-  const dataGroup = () => {
-    const groupKey = "data_group";
-    const isExpanded = expandedGroups.has(groupKey);
-    const toggleGroup = () =>
-      setExpandedGroups((prev) => {
-        const next = new Set(prev);
-        if (next.has(groupKey)) next.delete(groupKey);
-        else next.add(groupKey);
-        return next;
-      });
-
-    const parentFC = permissionList.includes("data:*");
-    const parentRead = parentFC || permissionList.includes("data:read");
-    const parentWrite = parentFC || permissionList.includes("data:write");
-    const disabled = editingRole?.name === "Owner";
-
-    const handleParent = (action: string, checked: boolean) => {
-      if (checked) {
-        const additions: string[] = [`data:${action}`];
-        if (action === "*") {
-          // data:* → data:read + data:write + all children *:read:write
-          additions.push("data:read", "data:write");
-          for (const c of DATA_CHILD_KEYS) {
-            additions.push(`${c}:*`, `${c}:read`, `${c}:write`);
-          }
-        } else {
-          // data:read or data:write → only matching child action
-          for (const c of DATA_CHILD_KEYS) {
-            additions.push(`${c}:${action}`);
-          }
-        }
-        setPermissionList((prev) => [...new Set([...prev, ...additions])]);
-      } else {
-        // Uncheck: remove parent perm and matching child perms
-        const removeKeys: string[] = [`data:${action}`];
-        for (const c of DATA_CHILD_KEYS) {
-          if (action === "*") {
-            removeKeys.push(`${c}:read`, `${c}:write`, `${c}:*`);
-          } else {
-            removeKeys.push(`${c}:${action}`);
-          }
-        }
-        if (action === "*") {
-          removeKeys.push("data:read", "data:write");
-        }
-        const removeSet = new Set(removeKeys);
-        setPermissionList((prev) => prev.filter((p) => !removeSet.has(p)));
-      }
-    };
-
-    return (
-      <React.Fragment key="data-group">
-        {/* Parent / group header row */}
-        <tr className="cursor-pointer select-none bg-action-subtle hover:bg-orange-100/70" onClick={toggleGroup}>
-          <td className="px-4 py-3 text-sm font-semibold text-action-muted">
-            <span className="inline-flex items-center gap-1.5">
-              {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              {t("data")}
-              <Tooltip content={`${t("data")}: read/write/* → 控制所有子表`}>
-                <HelpCircle className="w-3.5 h-3.5 text-gray-400" />
-              </Tooltip>
-            </span>
-          </td>
-          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-            <Cb checked={parentRead} disabled={parentFC || editingRole?.name === "Owner"} onChange={(v) => handleParent("read", v)} />
-          </td>
-          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-            <Cb checked={parentWrite} disabled={parentFC || editingRole?.name === "Owner"} onChange={(v) => handleParent("write", v)} />
-          </td>
-          <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-            <Cb checked={parentFC} disabled={editingRole?.name === "Owner"} onChange={(v) => handleParent("*", v)} />
-          </td>
-        </tr>
-
-        {/* Child rows */}
-        {isExpanded && DATA_CHILD_RESOURCES.map((r) => {
-          const isFC = permissionList.includes(`${r.key}:*`);
-          const isRead = isFC || permissionList.includes(`${r.key}:read`);
-          const isWrite = isFC || permissionList.includes(`${r.key}:write`);
-          const toggle = (action: string, checked: boolean) => {
-            const perm = `${r.key}:${action}`;
-            if (checked) setPermissionList((prev) => [...prev, perm]);
-            else setPermissionList((prev) => prev.filter((p) => p !== perm));
-          };
-          const disabled = editingRole?.name === "Owner";
-          return (
-            <tr key={r.key} className="border-l-2 border-action/30 bg-gray-50/80 hover:bg-gray-100/60">
-              <td className="pl-9 pr-4 py-2.5 text-sm text-gray-600">{r.label}</td>
-              <td className="px-4 py-2.5 text-center"><Cb checked={isRead} disabled={disabled || isFC} onChange={(v) => toggle("read", v)} /></td>
-              <td className="px-4 py-2.5 text-center"><Cb checked={isWrite} disabled={disabled || isFC} onChange={(v) => toggle("write", v)} /></td>
-              <td className="px-4 py-2.5 text-center"><Cb checked={isFC} disabled={disabled} onChange={(v) => toggle("*", v)} /></td>
-            </tr>
-          );
-        })}
-      </React.Fragment>
-    );
-  };
 
   if (loading) {
     return (
@@ -346,99 +169,101 @@ export function Roles() {
             placeholder={t("search_roles")}
           />}
           view={<ViewToggle
-              viewMode={viewMode}
-              setViewMode={setViewMode}
-              className="hidden sm:flex"
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            className="hidden sm:flex"
           />}
-          actions={<Button size="sm" variant="secondary" onClick={() => setIsCreateModalOpen(true)}>
+          actions={hasPermission("system:write") ? (
+            <Button size="sm" variant="secondary" onClick={() => setIsCreateModalOpen(true)}>
               <Plus className="w-4 h-4" />
               {t("create_role")}
-          </Button>}
+            </Button>
+          ) : undefined}
         />
 
         {viewMode === "list" ? (
-        <TableWrapper>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("role_name")}</TableHead>
-                <TableHead>{t("permissions")}</TableHead>
-                {hasPermission("roles:write") && <TableHead className="sticky right-0 z-20 bg-gray-50 text-right">{t("actions")}</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {roles.map((role) => (
-                <TableRow key={role.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-gray-50 rounded text-gray-600">
-                        <Shield className="w-4 h-4" />
-                      </div>
-                      <div className="text-[13px] font-medium text-gray-900">
-                        {role.name}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-[13px] text-gray-500 truncate max-w-md">
-                      {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No explicit permissions"}
-                    </div>
-                  </TableCell>
-                  {hasPermission("roles:write") && (
-                    <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
-                      <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-action!">
-                        <Edit3 className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  )}
+          <TableWrapper>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("role_name")}</TableHead>
+                  <TableHead>{t("permissions")}</TableHead>
+                  {hasPermission("system:write") && <TableHead className="sticky right-0 z-20 bg-gray-50 text-right">{t("actions")}</TableHead>}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableWrapper>
+              </TableHeader>
+              <TableBody>
+                {roles.map((role) => (
+                  <TableRow key={role.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <div className="p-1.5 bg-gray-50 rounded text-gray-600">
+                          <Shield className="w-4 h-4" />
+                        </div>
+                        <div className="text-[13px] font-medium text-gray-900">
+                          {role.name}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-[13px] text-gray-500 truncate max-w-md">
+                        {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "未配置特定权限"}
+                      </div>
+                    </TableCell>
+                    {hasPermission("system:write") && (
+                      <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
+                        <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-action!">
+                          <Edit3 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableWrapper>
         ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {roles.map((role) => (
-            <Card key={role.id} className="flex flex-col">
-              <CardHeader className="pb-0 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-gray-50 rounded text-gray-600">
-                    <Shield className="w-5 h-5" />
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {roles.map((role) => (
+              <Card key={role.id} className="flex flex-col">
+                <CardHeader className="pb-0 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gray-50 rounded text-gray-600">
+                      <Shield className="w-5 h-5" />
+                    </div>
+                    <h3 className="font-semibold text-[17px] text-gray-900">
+                      {role.name}
+                    </h3>
                   </div>
-                  <h3 className="font-semibold text-[17px] text-gray-900">
-                    {role.name}
-                  </h3>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-[13px] text-gray-600">
-                  {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "No permissions configured"}
-                </p>
-              </CardContent>
-              {hasPermission("roles:write") && (
-                <CardFooter className="justify-center mt-auto">
-                  <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-action!">
-                    <Edit3 className="w-4 h-4" />
-                  </Button>
-                </CardFooter>
-              )}
-            </Card>
-          ))}
-        </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-[13px] text-gray-600 break-words">
+                    {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "未配置特定权限"}
+                  </p>
+                </CardContent>
+                {hasPermission("system:write") && (
+                  <CardFooter className="justify-center mt-auto">
+                    <Button variant="text" onClick={() => { setEditingRole(role); setIsEditModalOpen(true); }} className="text-gray-400! hover:text-action!">
+                      <Edit3 className="w-4 h-4" />
+                    </Button>
+                  </CardFooter>
+                )}
+              </Card>
+            ))}
+          </div>
         )}
         {totalItems > pageSize && (
-        <div className="flex justify-end pt-4 border-t border-gray-100">
-          <Pagination
-            currentPage={currentPage}
-            totalItems={totalItems}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={(newSize) => {
-              setPageSize(newSize);
-              setCurrentPage(1);
-            }}
-          />
-        </div>
+          <div className="flex justify-end pt-4 border-t border-gray-100">
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(newSize) => {
+                setPageSize(newSize);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
         )}
       </div>
 
@@ -472,57 +297,70 @@ export function Roles() {
         </form>
       </Modal>
 
-      <Modal open={isEditModalOpen && !!editingRole} onClose={() => setIsEditModalOpen(false)} title={`${t("edit_permissions")}`} maxWidth="2xl"
+      {/* Edit Role Permissions Modal */}
+      <Modal open={isEditModalOpen && !!editingRole} onClose={() => setIsEditModalOpen(false)} title="配置角色权限" maxWidth="2xl"
         footer={
           <>
             <Button size="sm" variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
-            <Button size="sm" type="submit" form="modal-role-form" loading={saving} disabled={saving || editingRole?.name === "Owner"}>{t("save")}</Button>
+            <Button size="sm" type="submit" form="modal-role-form" loading={saving} disabled={saving || isOwner}>{t("save")}</Button>
           </>
         }>
-        <form id="modal-role-form" onSubmit={handleUpdateRole} className="space-y-5">
-          {/* Role info header */}
-          <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
-            <div className="p-2 bg-gray-50 rounded-lg text-gray-600">
-              <Shield className="w-5 h-5" />
+        <form id="modal-role-form" onSubmit={handleUpdateRole} className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gray-50 rounded-lg text-gray-600">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{editingRole?.name}</p>
+                <p className="text-xs text-gray-500">配置该角色的功能权限与可访问范围</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-900">{editingRole?.name}</p>
-            </div>
-            {editingRole?.name === "Owner" && (
-              <span className="ml-auto inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">
-                {t("full_control")}
+            {!isOwner && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="secondary" type="button" onClick={() => applyPreset("read_all")}>只读权限</Button>
+                <Button size="sm" variant="secondary" type="button" onClick={() => applyPreset("full_all")}>全部权限</Button>
+                <Button size="sm" variant="text" type="button" onClick={() => applyPreset("reset")}><RotateCcw className="w-3.5 h-3.5" /></Button>
+              </div>
+            )}
+            {isOwner && (
+              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-700">
+                超级管理员
               </span>
             )}
           </div>
 
-          <p className="text-sm text-gray-600">{t("adjust_access")}</p>
+          {/* Clean 3-Domain Matrix */}
+          <div className="space-y-5">
+            {PERMISSION_TREE_META.map((group: PermissionGroupMeta) => (
+              <div key={group.key} className="rounded-xl border border-gray-200/80 bg-white p-4 shadow-2xs transition-all hover:border-gray-300">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900">{group.label}</h4>
+                    <p className="text-xs text-gray-500 mt-0.5">{group.description}</p>
+                  </div>
+                </div>
 
-          <TableWrapper>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("module_resource")}</TableHead>
-                  <TableHead className="text-center">{t("read")}</TableHead>
-                  <TableHead className="text-center">{t("write")}</TableHead>
-                  <TableHead className="text-center">{t("full_control")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {permRow("projects", t("projects"))}
-                {permRow("experiments", t("experiments"))}
-                {specialActionRow("experiments", "approve", `${t("approve_experiments")} (Approve)`)}
-                {specialActionRow("experiments", "archive", `${t("edit")} (Archive)`)}
-                {dataGroup()}
-                {permRow("workflow", "工作流")}
-                {specialActionRow("workflow", "transition", "提交步骤 (Transition)")}
-                {permRow("users", t("user_management"))}
-                {permRow("roles", t("role_management"))}
-                {permRow("experiment_design", t("experiment_design"))}
-                {permRow("procurement", t("reagent_procurement"))}
-                {permRow("dashboard", t("dashboard"))}
-              </TableBody>
-            </Table>
-          </TableWrapper>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
+                  {group.actions.map((act) => {
+                    const permKey = `${group.key}:${act.key}`;
+                    const checked = isPermChecked(permKey);
+                    return (
+                      <div
+                        key={act.key}
+                        onClick={() => togglePerm(permKey, !checked)}
+                        className={`flex items-center gap-2.5 p-2 rounded-lg border transition-all cursor-pointer ${checked ? 'bg-orange-50/60 border-action/40 text-action-muted' : 'border-gray-100 hover:border-gray-200 text-gray-700'}`}
+                      >
+                        <Cb checked={checked} disabled={isOwner} onChange={(v) => togglePerm(permKey, v)} />
+                        <span className="text-xs font-medium select-none">{act.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         </form>
       </Modal>
     </div>

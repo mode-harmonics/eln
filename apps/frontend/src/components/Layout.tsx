@@ -28,15 +28,15 @@ import { NotificationBell } from "./NotificationBell";
 import { TempUploadDrawer } from "./TempUploadDrawer";
 
 const NAVIGATION = [
-  // { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "projects:read" },
-  { nameKey: "projects", href: "/projects", icon: Folder, requiredPermission: "projects:read" },
-  // { nameKey: "inventory", href: "/inventory", icon: Database, requiredPermission: "data:read" },
+  // { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "experiments:read" },
+  { nameKey: "projects", href: "/projects", icon: Folder, requiredPermission: "experiments:read" },
+  // { nameKey: "inventory", href: "/inventory", icon: Database, requiredPermission: "system:read" },
 ];
 
 const SYSTEM_NAVIGATION = [
-  { nameKey: "user_management", href: "/users", icon: Users, requiredPermission: "users:read" },
-  { nameKey: "role_management", href: "/roles", icon: Shield, requiredPermission: "roles:read" },
-  { nameKey: "workflow_config", href: "/workflow-config", icon: Layers, requiredPermission: "roles:write" },
+  { nameKey: "user_management", href: "/users", icon: Users, requiredPermission: "system:read" },
+  { nameKey: "role_management", href: "/roles", icon: Shield, requiredPermission: "system:read" },
+  { nameKey: "workflow_config", href: "/workflow-config", icon: Layers, requiredPermission: "workflow:write" },
 ];
 
 export function Layout() {

@@ -14,7 +14,7 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  @RequirePermission('dashboard:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get dashboard summary data' })
   async getSummary(@Request() req: any) {
     const summary = await this.dashboardService.getSummary(req.user.userId);

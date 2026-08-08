@@ -20,7 +20,7 @@ export class UsersController {
   }
 
   @Get()
-  @RequirePermission('users:read')
+  @RequirePermission('system:read')
   @ApiOperation({ summary: 'Get list of all users.' })
   async findAll(
     @Query('page') page?: number,
@@ -35,14 +35,14 @@ export class UsersController {
   }
 
   @Post()
-  @RequirePermission('users:write')
+  @RequirePermission('system:write')
   @ApiOperation({ summary: 'Create a new user.' })
   async create(@Body() dto: { username: string; email: string; fullName: string; roleId?: string }) {
     return this.usersService.create(dto);
   }
 
   @Put(':id')
-  @RequirePermission('users:write')
+  @RequirePermission('system:write')
   @ApiOperation({ summary: 'Update an existing user.' })
   async update(@Param('id') id: string, @Body() dto: { username?: string; email?: string; fullName?: string; roleId?: string; isActive?: boolean }) {
     return this.usersService.update(id, dto);
@@ -55,7 +55,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @RequirePermission('users:write')
+  @RequirePermission('system:write')
   @ApiOperation({ summary: 'Delete a user.' })
   async remove(@Param('id') id: string) {
     return this.usersService.remove(id);

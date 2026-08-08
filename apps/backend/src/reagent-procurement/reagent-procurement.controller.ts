@@ -24,7 +24,7 @@ export class ReagentProcurementController {
   ) {}
 
   @Get('projects/:projectId/procurement')
-  @RequirePermission('procurement:read')
+  @RequirePermission('experiments:read')
   async list(@Param('projectId') projectId: string) {
     return {
       success: true,
@@ -33,7 +33,7 @@ export class ReagentProcurementController {
   }
 
   @Get('projects/:projectId/procurement/valid-groups')
-  @RequirePermission('procurement:read')
+  @RequirePermission('experiments:read')
   async validGroups(@Param('projectId') projectId: string) {
     return {
       success: true,
@@ -42,7 +42,7 @@ export class ReagentProcurementController {
   }
 
   @Get('projects/:projectId/procurement/invalid-internalcodes')
-  @RequirePermission('procurement:read')
+  @RequirePermission('experiments:read')
   async invalidInternalCodes(@Param('projectId') projectId: string) {
     return {
       success: true,
@@ -51,7 +51,7 @@ export class ReagentProcurementController {
   }
 
   @Put('projects/:projectId/procurement/batch')
-  @RequirePermission('procurement:write')
+  @RequirePermission('experiments:write')
   async updateBatch(
     @Param('projectId') projectId: string,
     @Body() dto: BatchUpdateProcurementDto,
@@ -63,7 +63,7 @@ export class ReagentProcurementController {
   }
 
   @Put('projects/:projectId/procurement/:id')
-  @RequirePermission('procurement:write')
+  @RequirePermission('experiments:write')
   async update(
     @Param('projectId') projectId: string,
     @Param('id') id: string,

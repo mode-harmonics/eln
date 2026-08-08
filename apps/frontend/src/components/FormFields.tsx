@@ -368,7 +368,7 @@ export function MultiSelect({
         }
       }}
       className={cn(
-        "relative flex items-center justify-between w-full rounded-md border px-2.5 py-1.5 text-xs cursor-pointer select-none transition-colors min-h-[30px]",
+        "relative flex items-center justify-between w-full rounded-md border px-2.5 py-1 text-xs cursor-pointer select-none transition-colors min-h-[32px]",
         "bg-white hover:border-gray-400",
         open ? "border-gray-500 ring-1 ring-gray-300" : "border-gray-300",
         error && "border-red-400 ring-1 ring-red-400",
@@ -376,24 +376,24 @@ export function MultiSelect({
       )}
       {...props}
     >
-      <div className="flex-1 flex items-center gap-1 flex-wrap overflow-hidden mr-1">
+      <div className="flex-1 flex items-center gap-1 flex-wrap overflow-hidden mr-1 min-h-[22px]">
         {selectedOptions.length === 0 ? (
-          <span className="text-gray-400 truncate">{placeholder}</span>
+          <span className="text-gray-400 truncate leading-5">{placeholder}</span>
         ) : selectedOptions.length <= 2 ? (
           selectedOptions.map((opt) => (
             <span
               key={opt.value}
-              className="inline-flex items-center gap-1 bg-action-subtle text-action-muted rounded-sm px-1.5 py-0.5 text-xs font-medium"
+              className="inline-flex items-center gap-1 bg-action-subtle text-action-muted rounded px-1.5 h-5 text-xs font-medium leading-none"
             >
               <span className="truncate max-w-[80px]">{opt.label}</span>
-              <button type="button" aria-label={`Remove ${opt.label}`} className="shrink-0 rounded-sm hover:text-orange-900" onClick={(e) => handleRemoveTag(e, opt.value)}>
-                <X className="w-2.5 h-2.5" aria-hidden="true" />
+              <button type="button" aria-label={`Remove ${opt.label}`} className="shrink-0 rounded hover:text-orange-900 focus:outline-none" onClick={(e) => handleRemoveTag(e, opt.value)}>
+                <X className="w-3 h-3" aria-hidden="true" />
               </button>
             </span>
           ))
         ) : (
-          <span className="text-action-muted font-medium">
-            {`${selectedOptions.length} 项`}
+          <span className="inline-flex items-center bg-action-subtle text-action-muted rounded px-1.5 h-5 text-xs font-medium leading-none">
+            {`${selectedOptions.length} 项已选`}
           </span>
         )}
       </div>

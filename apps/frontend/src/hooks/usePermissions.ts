@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { hasPermission as checkPermission } from "@eln/shared";
 
 export function usePermissions() {
   const [permissions, setPermissions] = useState<string[]>(() => {
@@ -29,12 +30,7 @@ export function usePermissions() {
   }, []);
 
   const hasPermission = (required: string): boolean => {
-    if (!permissions || permissions.length === 0) return false;
-    const [resource, action] = required.split(":");
-    return permissions.some((p) => {
-      if (p === "*" || p === `${resource}:*` || p === required) return true;
-      return false;
-    });
+    return checkPermission(permissions, required);
   };
 
   return { permissions, hasPermission };

@@ -1,5 +1,11 @@
 import { ProjectStatus, RoleName } from '../enums';
 
+export interface ProjectProgressDto {
+  completed: number;
+  total: number;
+  percentage: number;
+}
+
 export interface ProjectDto {
   id: string;
   name: string;
@@ -13,6 +19,7 @@ export interface ProjectDto {
     fullName: string;
     email: string;
   };
+  progress?: ProjectProgressDto;
 }
 
 export interface CreateProjectDto {

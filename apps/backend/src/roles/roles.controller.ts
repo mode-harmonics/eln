@@ -1,9 +1,10 @@
-import { Controller, Get, Put, UseGuards, Query, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, UseGuards, Query, Body, Param } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { RolesService } from './roles.service';
+import { CreateRoleDto } from './dto/create-role.dto';
 
 @ApiTags('roles')
 @ApiBearerAuth()
@@ -12,8 +13,15 @@ import { RolesService } from './roles.service';
 export class RolesController {
   constructor(private readonly rolesService: RolesService) { }
 
+  @Post()
+  @RequirePermission('system:write')
+  @ApiOperation({ summary: 'Create a new role.' })
+  async create(@Body() dto: CreateRoleDto) {
+    return this.rolesService.create(dto);
+  }
+
   @Get()
-  @RequirePermission('roles:read')
+  @RequirePermission('system:read')
   @ApiOperation({ summary: 'List the global RBAC role matrix (for Admin config UIs).' })
   async findAll(
     @Query('page') page?: number,
@@ -26,7 +34,7 @@ export class RolesController {
   }
 
   @Put(':id')
-  @RequirePermission('roles:write')
+  @RequirePermission('system:write')
   @ApiOperation({ summary: 'Update a role permission list.' })
   async update(
     @Param('id') id: string,

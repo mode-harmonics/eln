@@ -1,7 +1,8 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, In } from 'typeorm';
 import { v4 as uuid } from 'uuid';
+import { deriveWorkflowGraphMeta } from '@eln/shared';
 import { Experiment } from '../entities/experiment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
 import { Project } from '../entities/project.entity';
@@ -9,6 +10,7 @@ import { Attachment } from '../entities/attachment.entity';
 import { PickedCell } from '../entities/picked-cell.entity';
 import { WorkflowInstance } from '../entities/workflow-instance.entity';
 import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
+import { WorkflowTemplate } from '../entities/workflow-template.entity';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 import { CreateExperimentDto } from '../experiments/dto';
 
@@ -27,7 +29,7 @@ export class ProjectsService {
     page?: number,
     limit?: number,
     search?: string,
-  ): Promise<{ items: Project[]; total?: number } | Project[]> {
+  ): Promise<{ items: any[]; total?: number } | any[]> {
     const query = (await this.buildVisibleProjectsQuery(userId)).leftJoinAndSelect('project.creator', 'creator');
 
     if (search && search.trim() !== '') {
@@ -43,10 +45,82 @@ export class ProjectsService {
     if (page !== undefined && limit !== undefined) {
       query.skip((page - 1) * limit).take(limit);
       const [items, total] = await query.getManyAndCount();
-      return { items, total };
+      const enrichedItems = await this.attachProgressToProjects(items);
+      return { items: enrichedItems, total };
     }
 
-    return query.getMany();
+    const items = await query.getMany();
+    return this.attachProgressToProjects(items);
+  }
+
+  private async attachProgressToProjects(projects: Project[]): Promise<any[]> {
+    if (!projects || projects.length === 0) return [];
+
+    const projectIds = projects.map((p) => p.id);
+
+    const instances = await this.dataSource.getRepository(WorkflowInstance).find({
+      where: { projectId: In(projectIds) },
+    });
+
+    if (instances.length === 0) {
+      return projects.map((p) => ({
+        ...p,
+        progress: { completed: 0, total: 0, percentage: 0 },
+      }));
+    }
+
+    const instanceIds = instances.map((i) => i.id);
+    const templateIds = [...new Set(instances.map((i) => i.templateId))];
+
+    const [assignments, templates] = await Promise.all([
+      this.dataSource.getRepository(WorkflowStepAssignment).find({
+        where: { workflowInstanceId: In(instanceIds) },
+        order: { stepIndex: 'ASC' },
+      }),
+      this.dataSource.getRepository(WorkflowTemplate).find({
+        where: { id: In(templateIds) },
+      }),
+    ]);
+
+    const templateMap = new Map(templates.map((t) => [t.id, t]));
+    const assignmentsByInstance = new Map<string, WorkflowStepAssignment[]>();
+    for (const a of assignments) {
+      if (!assignmentsByInstance.has(a.workflowInstanceId)) {
+        assignmentsByInstance.set(a.workflowInstanceId, []);
+      }
+      assignmentsByInstance.get(a.workflowInstanceId)!.push(a);
+    }
+
+    const progressMap = new Map<string, { completed: number; total: number; percentage: number }>();
+
+    for (const inst of instances) {
+      const tpl = templateMap.get(inst.templateId);
+      const graphMeta = deriveWorkflowGraphMeta((tpl?.steps as any) || {});
+      const steps = assignmentsByInstance.get(inst.id) || [];
+
+      // Filter out skipped steps
+      const visibleSteps = steps.filter((s) => s.status !== 'skipped');
+      // Top-level parent steps only (where parentOf is undefined/null)
+      const stepParents = visibleSteps.filter((s) => !graphMeta.parentOf[s.stepName]);
+
+      const completedCount = stepParents.filter((s) => s.status === 'completed').length;
+      const totalCount = stepParents.length;
+      const percentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+      progressMap.set(inst.projectId, {
+        completed: completedCount,
+        total: totalCount,
+        percentage,
+      });
+    }
+
+    return projects.map((p) => {
+      const prog = progressMap.get(p.id) || { completed: 0, total: 0, percentage: 0 };
+      return {
+        ...p,
+        progress: prog,
+      };
+    });
   }
 
   private async buildVisibleProjectsQuery(userId: string) {
@@ -93,7 +167,7 @@ export class ProjectsService {
       );
   }
 
-  async findOne(id: string, userId?: string): Promise<Project> {
+  async findOne(id: string, userId?: string): Promise<any> {
     const project = await this.projectsRepo.findOne({
       where: { id },
       relations: ['creator'],
@@ -103,7 +177,8 @@ export class ProjectsService {
     if (userId && !(await this.isVisibleToUser(id, userId))) {
       throw new ForbiddenException('You do not have access to this project.');
     }
-    return project;
+    const [enriched] = await this.attachProgressToProjects([project]);
+    return enriched;
   }
 
   /**

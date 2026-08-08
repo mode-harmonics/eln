@@ -46,6 +46,7 @@ export class DataController {
   ) {}
 
   @Post('upload')
+  @RequirePermission('experiments:write')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Upload multiple multi-sheet Excel workbooks; parses and inserts into the 7 battery-data tables.',
@@ -64,17 +65,6 @@ export class DataController {
     if (!experiment) {
       throw new BadRequestException('Experiment not found.');
     }
-    const assayType = experiment.metadata?.assayType as string;
-    const typeKey = RECORD_TYPE_TO_PERMISSION[assayType];
-    const requiredPermission = typeKey ? `data_${typeKey}:write` : 'data:write';
-
-    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
-    const hasGeneral = hasPermission(user.permissionList, 'data:write');
-    if (!hasSpecific && !hasGeneral) {
-      throw new ForbiddenException(
-        `You do not have the required permission: ${requiredPermission} or data:write`,
-      );
-    }
 
     const workbooks = files.map(f => ({
       buffer: f.buffer,
@@ -85,7 +75,7 @@ export class DataController {
   }
 
   @Post('upload-project/:projectId')
-  @RequirePermission('data:write')
+  @RequirePermission('experiments:write')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Import summary workbook(s) to a project. Routes each data sheet (by sheet name) to the matching experiment, then completes the workflow.',
@@ -133,7 +123,7 @@ export class DataController {
   }
 
   @Get('export/summary/:expId')
-  @RequirePermission('data:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Export summary data for an experiment.' })
   async exportSummary(@Param('expId') expId: string) {
     const buffer = await this.dataService.exportSummaryBuffer(expId);
@@ -147,7 +137,7 @@ export class DataController {
   }
 
   @Get('export/raw/:expId')
-  @RequirePermission('data:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Export raw data for an experiment.' })
   async exportRaw(@Param('expId') expId: string) {
     const buffer = await this.dataService.exportRawBuffer(expId);
@@ -161,7 +151,7 @@ export class DataController {
   }
 
   @Get('export/project/:projectId')
-  @RequirePermission('data:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Export ALL business data for a project as an Excel workbook with Chinese headers.' })
   async exportProjectData(@Param('projectId') projectId: string) {
     const buffer = await this.dataService.exportProjectBuffer(projectId);
@@ -175,7 +165,7 @@ export class DataController {
   }
 
   @Get('raw/:expId')
-  @RequirePermission('data:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Query raw step data rows for an experiment. Optional ?source=formation|grading to filter by data source.' })
   async findRawSteps(
     @Param('expId') expId: string,
@@ -185,7 +175,7 @@ export class DataController {
   }
 
   @Post('pick-cells/:projectId')
-  @RequirePermission('data:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Auto or manual pick cells for a project (project-scoped).' })
   async pickCells(
     @Param('projectId') projectId: string,
@@ -199,21 +189,21 @@ export class DataController {
   }
 
   @Get('picked-cells/:projectId')
-  @RequirePermission('data:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get picked cells for a project.' })
   async getPickedCells(@Param('projectId') projectId: string) {
     return this.dataService.getPickedCells(projectId);
   }
 
   @Get('scrapped-cells/:projectId')
-  @RequirePermission('data:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get scrapped cells for a project.' })
   async getScrappedCells(@Param('projectId') projectId: string) {
     return this.dataService.getScrappedCells(projectId);
   }
 
   @Post('scrapped-cells/:projectId')
-  @RequirePermission('data:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Scrap a single battery (project-scoped).' })
   async scrapCell(
     @Param('projectId') projectId: string,
@@ -227,7 +217,7 @@ export class DataController {
   }
 
   @Post('scrapped-cells/:projectId/restore')
-  @RequirePermission('data:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Restore a scrapped battery (remove the scrap record).' })
   async restoreCell(
     @Param('projectId') projectId: string,
@@ -240,7 +230,7 @@ export class DataController {
   }
 
   @Post('sync-cells/:projectId')
-  @RequirePermission('data:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Sync picked cells to all 6 target business tables (project-scoped, destructive).' })
   async syncCells(
     @Param('projectId') projectId: string,
@@ -250,26 +240,19 @@ export class DataController {
   }
 
   @Get(':type/:expId')
+  @RequirePermission('experiments:read')
   @ApiOperation({
     summary: 'Query rows for a business table by type (process/calendar/swelling/efficiency/dcr/fastcharge/htcycle) and experiment.',
   })
   async findByType(
     @Param('type') type: string,
     @Param('expId') expId: string,
-    @CurrentUser() user: RequestUser,
   ) {
-    const requiredPermission = `data_${type}:read`;
-    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
-    const hasGeneral = hasPermission(user.permissionList, 'data:read');
-    if (!hasSpecific && !hasGeneral) {
-      throw new ForbiddenException(
-        `You do not have the required permission: ${requiredPermission} or data:read`,
-      );
-    }
     return this.dataService.findByType(type, expId);
   }
 
   @Post(':type/:expId')
+  @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Create a new row in a business table (for manual entry, e.g. StorageSwelling).',
   })
@@ -277,21 +260,13 @@ export class DataController {
     @Param('type') type: string,
     @Param('expId') expId: string,
     @Body() body: Record<string, unknown>,
-    @CurrentUser() user: RequestUser,
   ) {
-    const requiredPermission = `data_${type}:write`;
-    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
-    const hasGeneral = hasPermission(user.permissionList, 'data:write');
-    if (!hasSpecific && !hasGeneral) {
-      throw new ForbiddenException(
-        `You do not have the required permission: ${requiredPermission} or data:write`,
-      );
-    }
     return this.dataService.createRow(type, expId, body);
   }
 
   /** Batch update rows of a business table — single PUT /api/v1/data/:type/batch */
   @Put(':type/batch')
+  @RequirePermission('experiments:write')
   @HttpCode(200)
   @ApiOperation({
     summary: 'Batch update rows of a business table. Accepts { rows: [{ id, ...fields }] }.',
@@ -299,21 +274,13 @@ export class DataController {
   async batchUpdate(
     @Param('type') type: string,
     @Body() body: { rows: Record<string, unknown>[] },
-    @CurrentUser() user: RequestUser,
   ) {
-    const requiredPermission = `data_${type}:write`;
-    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
-    const hasGeneral = hasPermission(user.permissionList, 'data:write');
-    if (!hasSpecific && !hasGeneral) {
-      throw new ForbiddenException(
-        `You do not have the required permission: ${requiredPermission} or data:write`,
-      );
-    }
     const count = await this.dataService.batchUpdateRows(type, body.rows);
     return { success: true, data: { updated: count } };
   }
 
   @Put(':type/:id')
+  @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Update a single data row by type and row ID.',
   })
@@ -321,36 +288,19 @@ export class DataController {
     @Param('type') type: string,
     @Param('id') id: string,
     @Body() body: Record<string, unknown>,
-    @CurrentUser() user: RequestUser,
   ) {
-    const requiredPermission = `data_${type}:write`;
-    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
-    const hasGeneral = hasPermission(user.permissionList, 'data:write');
-    if (!hasSpecific && !hasGeneral) {
-      throw new ForbiddenException(
-        `You do not have the required permission: ${requiredPermission} or data:write`,
-      );
-    }
     return this.dataService.updateRow(type, id, body);
   }
 
   @Delete(':type/:id')
+  @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Delete a single data row by type and row ID.',
   })
   async deleteRow(
     @Param('type') type: string,
     @Param('id') id: string,
-    @CurrentUser() user: RequestUser,
   ) {
-    const requiredPermission = `data_${type}:write`;
-    const hasSpecific = hasPermission(user.permissionList, requiredPermission);
-    const hasGeneral = hasPermission(user.permissionList, 'data:write');
-    if (!hasSpecific && !hasGeneral) {
-      throw new ForbiddenException(
-        `You do not have the required permission: ${requiredPermission} or data:write`,
-      );
-    }
     return this.dataService.deleteRow(type, id);
   }
 }

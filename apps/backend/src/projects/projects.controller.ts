@@ -16,7 +16,7 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Get()
-  @RequirePermission('projects:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: "List projects visible to the current user's membership/ownership." })
   async findAll(
     @CurrentUser() user: RequestUser,
@@ -30,14 +30,14 @@ export class ProjectsController {
   }
 
   @Get(':id')
-  @RequirePermission('projects:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get a single project by ID.' })
   async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     return this.projectsService.findOne(id, user.id);
   }
 
   @Get(':id/experiments')
-  @RequirePermission('projects:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'List all experiments belonging to this project.' })
   async findExperiments(
     @Param('id') id: string,
@@ -51,14 +51,14 @@ export class ProjectsController {
   }
 
   @Get(':id/stats')
-  @RequirePermission('projects:read')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get quick stats for a project (e.g. hasPickedCells).' })
   async getStats(@Param('id') id: string) {
     return this.projectsService.getStats(id);
   }
 
   @Post(':id/experiments')
-  @RequirePermission('projects:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Create a new experiment (record) under this project.' })
   async createExperiment(
     @Param('id') id: string,
@@ -69,28 +69,28 @@ export class ProjectsController {
   }
 
   @Post()
-  @RequirePermission('projects:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Create a new project, owned by the current user.' })
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateProjectDto) {
     return this.projectsService.create(user.id, dto);
   }
 
   @Put(':id')
-  @RequirePermission('projects:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Update a project by ID.' })
   async update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
     return this.projectsService.update(id, dto);
   }
 
   @Delete(':id')
-  @RequirePermission('projects:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Delete a project by ID.' })
   async remove(@Param('id') id: string) {
     return this.projectsService.remove(id);
   }
 
   @Put(':id/members')
-  @RequirePermission('projects:write')
+  @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Bulk upsert experimentCollaborators across all experiments in this project.',
   })
