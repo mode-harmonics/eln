@@ -28,6 +28,7 @@
     "typeorm:run:prod": "typeorm migration:run -d dist/data-source.js",
     "typeorm:revert:prod": "typeorm migration:revert -d dist/data-source.js",
     "seed": "ts-node src/seed.ts -- --env local",
+    "seed:chart-demo": "ts-node src/seed-chart-demo.ts -- --env local",
     "seed:test": "ts-node src/seed.ts -- --env test",
     "seed:prod": "node dist/seed.js"
   },

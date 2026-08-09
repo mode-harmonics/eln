@@ -10,7 +10,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
   Scatter,
   ErrorBar,
   ComposedChart,
@@ -112,6 +111,58 @@ function EmptyChart() {
   return <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">{t("no_data")}</div>;
 }
 
+function validNumber(v: any): number | null {
+  if (v == null || v === '') return null;
+  const parsed = typeof v === 'number' ? v : parseFloat(v);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function useLegendToggle(keys: string[]) {
+  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setHidden((current) => new Set([...current].filter((key) => keys.includes(key))));
+  }, [keys.join('|')]);
+  const toggle = (key: string) => setHidden((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+  return { hidden, toggle };
+}
+
+function GroupLegend({ groups, groupMap, hidden, onToggle }: {
+  groups: string[];
+  groupMap: Map<string, string>;
+  hidden: Set<string>;
+  onToggle: (group: string) => void;
+}) {
+  return (
+    <div className="mt-1 flex min-h-5 flex-wrap justify-center gap-x-3 gap-y-1">
+      {groups.map((group) => (
+        <button
+          key={group}
+          type="button"
+          onClick={() => onToggle(group)}
+          aria-pressed={!hidden.has(group)}
+          className={`flex items-center gap-1 text-[11px] transition-opacity ${hidden.has(group) ? 'opacity-35' : 'opacity-100'}`}
+        >
+          <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: groupMap.get(group) }} />
+          组 {group}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ChartPanel({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <h4 className="mb-1 text-xs font-semibold text-gray-700">{title}</h4>
+      <div className="min-h-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 /* ── 1. 制程数据：首次放电容量 (qdFirst) 箱形图 ──────────────── */
 
 function ProcessBoxPlotChart({ data }: { data: any[] }) {
@@ -192,11 +243,13 @@ function ProcessBoxPlotChart({ data }: { data: any[] }) {
 
 function CalendarLifeCharts({ data }: { data: any[] }) {
   const { groupMap, groups } = useGroupColorMap(data);
+  const capacityLegend = useLegendToggle(groups);
+  const dcrLegend = useLegendToggle(groups);
 
   // Group by dayCount and groupName
   const { barData, lineData } = useMemo(() => {
     const daysSet = new Set<number>();
-    const byDayGroup = new Map<string, { qRetentionSum: number; qRecoverySum: number; ddcrSum: number; count: number }>();
+    const byDayGroup = new Map<string, { qRetentionSum: number; qRetentionCount: number; ddcrSum: number; ddcrCount: number }>();
 
     for (const r of data) {
       const day = r.dayCount;
@@ -205,12 +258,11 @@ function CalendarLifeCharts({ data }: { data: any[] }) {
 
       const g = getGroupName(r);
       const key = `${day}_${g}`;
-      const curr = byDayGroup.get(key) || { qRetentionSum: 0, qRecoverySum: 0, ddcrSum: 0, count: 0 };
-
-      curr.qRetentionSum += n(r.qRetention);
-      curr.qRecoverySum += n(r.qRecovery);
-      curr.ddcrSum += n(r.ddcrGrowth);
-      curr.count += 1;
+      const curr = byDayGroup.get(key) || { qRetentionSum: 0, qRetentionCount: 0, ddcrSum: 0, ddcrCount: 0 };
+      const retention = validNumber(r.qRetention);
+      const ddcr = validNumber(r.ddcrGrowth);
+      if (retention !== null) { curr.qRetentionSum += retention; curr.qRetentionCount += 1; }
+      if (ddcr !== null) { curr.ddcrSum += ddcr; curr.ddcrCount += 1; }
       byDayGroup.set(key, curr);
     }
 
@@ -220,7 +272,7 @@ function CalendarLifeCharts({ data }: { data: any[] }) {
       const point: any = { dayCount: `${day}天` };
       for (const g of groups) {
         const item = byDayGroup.get(`${day}_${g}`);
-        point[`${g}_retention`] = item && item.count ? item.qRetentionSum / item.count : 0;
+        point[`${g}_retention`] = item?.qRetentionCount ? item.qRetentionSum / item.qRetentionCount : null;
       }
       return point;
     });
@@ -229,7 +281,7 @@ function CalendarLifeCharts({ data }: { data: any[] }) {
       const point: any = { dayCount: `${day}天` };
       for (const g of groups) {
         const item = byDayGroup.get(`${day}_${g}`);
-        point[g] = item && item.count ? item.ddcrSum / item.count : null;
+        point[g] = item?.ddcrCount ? item.ddcrSum / item.ddcrCount : null;
       }
       return point;
     });
@@ -240,7 +292,7 @@ function CalendarLifeCharts({ data }: { data: any[] }) {
   if (barData.length === 0) return <EmptyChart />;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+    <div className="grid h-full grid-cols-1 grid-rows-2 gap-4 md:grid-cols-2 md:grid-rows-1">
       {/* 容量保持率柱形图 */}
       <div className="h-full flex flex-col">
         <h4 className="text-xs font-semibold text-gray-700 mb-1">容量保持率对比 (柱形图)</h4>
@@ -251,13 +303,13 @@ function CalendarLifeCharts({ data }: { data: any[] }) {
               <XAxis dataKey="dayCount" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={5} />
               <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} domain={[0, 'auto']} />
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${n(v).toFixed(2)}%`, '容量保持率']} />
-              <Legend wrapperStyle={{ fontSize: '11px' }} />
               {groups.map((g) => (
-                <Bar key={g} dataKey={`${g}_retention`} name={`组 ${g}`} fill={groupMap.get(g)} radius={[3, 3, 0, 0]} maxBarSize={30} />
+                <Bar key={g} hide={capacityLegend.hidden.has(g)} dataKey={`${g}_retention`} name={`组 ${g}`} fill={groupMap.get(g)} radius={[3, 3, 0, 0]} maxBarSize={30} />
               ))}
             </BarChart>
           </ResponsiveContainer>
         </div>
+        <GroupLegend groups={groups} groupMap={groupMap} hidden={capacityLegend.hidden} onToggle={capacityLegend.toggle} />
       </div>
 
       {/* DCR 增长率折线图 */}
@@ -270,10 +322,10 @@ function CalendarLifeCharts({ data }: { data: any[] }) {
               <XAxis dataKey="dayCount" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={5} />
               <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} domain={['auto', 'auto']} />
               <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${n(v).toFixed(2)}%`, 'DCR增长率']} />
-              <Legend wrapperStyle={{ fontSize: '11px' }} />
               {groups.map((g) => (
                 <Line
                   key={g}
+                  hide={dcrLegend.hidden.has(g)}
                   type="monotone"
                   dataKey={g}
                   name={`组 ${g}`}
@@ -286,6 +338,7 @@ function CalendarLifeCharts({ data }: { data: any[] }) {
             </LineChart>
           </ResponsiveContainer>
         </div>
+        <GroupLegend groups={groups} groupMap={groupMap} hidden={dcrLegend.hidden} onToggle={dcrLegend.toggle} />
       </div>
     </div>
   );
@@ -295,10 +348,12 @@ function CalendarLifeCharts({ data }: { data: any[] }) {
 
 function StorageSwellingChart({ data }: { data: any[] }) {
   const { groupMap, groups } = useGroupColorMap(data);
+  const vgLegend = useLegendToggle(groups);
+  const volumeLegend = useLegendToggle(groups);
 
   const lineData = useMemo(() => {
     const daysSet = new Set<number>();
-    const byDayGroup = new Map<string, { vgSum: number; count: number }>();
+    const byDayGroup = new Map<string, { vgSum: number; vgCount: number; volumeSum: number; volumeCount: number }>();
 
     for (const r of data) {
       const day = r.dayCount;
@@ -307,9 +362,11 @@ function StorageSwellingChart({ data }: { data: any[] }) {
 
       const g = getGroupName(r);
       const key = `${day}_${g}`;
-      const curr = byDayGroup.get(key) || { vgSum: 0, count: 0 };
-      curr.vgSum += n(r.vg);
-      curr.count += 1;
+      const curr = byDayGroup.get(key) || { vgSum: 0, vgCount: 0, volumeSum: 0, volumeCount: 0 };
+      const vg = validNumber(r.vg);
+      const volume = validNumber(r.v);
+      if (vg !== null) { curr.vgSum += vg; curr.vgCount += 1; }
+      if (volume !== null) { curr.volumeSum += volume; curr.volumeCount += 1; }
       byDayGroup.set(key, curr);
     }
 
@@ -318,7 +375,8 @@ function StorageSwellingChart({ data }: { data: any[] }) {
       const point: any = { dayCount: `${day}天` };
       for (const g of groups) {
         const item = byDayGroup.get(`${day}_${g}`);
-        point[g] = item && item.count ? item.vgSum / item.count : null;
+        point[`${g}_vg`] = item?.vgCount ? item.vgSum / item.vgCount : null;
+        point[`${g}_volume`] = item?.volumeCount ? item.volumeSum / item.volumeCount : null;
       }
       return point;
     });
@@ -326,137 +384,119 @@ function StorageSwellingChart({ data }: { data: any[] }) {
 
   if (lineData.length === 0) return <EmptyChart />;
 
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={lineData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-        <CartesianGrid {...GRID_STYLE} />
-        <XAxis dataKey="dayCount" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
-        <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
-        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: any, name: any) => [`${n(value).toFixed(3)} mL/Ah`, `组 ${name}`]} />
-        <Legend wrapperStyle={{ fontSize: '12px' }} />
-        {groups.map((g) => (
-          <Line
-            key={g}
-            type="monotone"
-            dataKey={g}
-            name={`组 ${g}`}
-            stroke={groupMap.get(g)}
-            strokeWidth={2}
-            dot={{ r: 3 }}
-            activeDot={{ r: 5 }}
-            connectNulls
-          />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
+  const renderLines = (suffix: 'vg' | 'volume', legend: ReturnType<typeof useLegendToggle>) => (
+    <>
+      <ResponsiveContainer width="100%" height="90%">
+        <LineChart data={lineData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+          <CartesianGrid {...GRID_STYLE} />
+          <XAxis dataKey="dayCount" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={8} />
+          <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: any) => [`${n(value).toFixed(3)}${suffix === 'vg' ? ' mL/Ah' : ' mL'}`, '']} />
+          {groups.map((g) => <Line key={g} hide={legend.hidden.has(g)} type="monotone" dataKey={`${g}_${suffix}`} name={`组 ${g}`} stroke={groupMap.get(g)} strokeWidth={2} dot={{ r: 3 }} connectNulls />)}
+        </LineChart>
+      </ResponsiveContainer>
+      <GroupLegend groups={groups} groupMap={groupMap} hidden={legend.hidden} onToggle={legend.toggle} />
+    </>
   );
+
+  return <div className="grid h-full grid-cols-1 grid-rows-2 gap-4 md:grid-cols-2 md:grid-rows-1">
+    <ChartPanel title="归一化产气量趋势">{renderLines('vg', vgLegend)}</ChartPanel>
+    <ChartPanel title="电池体积趋势">{renderLines('volume', volumeLegend)}</ChartPanel>
+  </div>;
 }
 
 /* ── 4. 4CDCR：DCR图 (柱形图) ──────────────────────────────── */
 
 function DcrGroupChart({ data }: { data: any[] }) {
   const { groupMap, groups } = useGroupColorMap(data);
+  const dcrLegend = useLegendToggle(groups);
+  const rcLegend = useLegendToggle(groups);
 
   const chartData = useMemo(() => {
-    const groupSums = new Map<string, { ddcrSum: number; cdcrSum: number; count: number }>();
+    type Metric = 'ddcr' | 'cdcr' | 'dRc' | 'cRc';
+    const sums = new Map<string, Record<Metric, { sum: number; count: number }>>();
     for (const d of data) {
       const g = getGroupName(d);
-      const curr = groupSums.get(g) || { ddcrSum: 0, cdcrSum: 0, count: 0 };
-      curr.ddcrSum += n(d.ddcr);
-      curr.cdcrSum += n(d.cdcr);
-      curr.count += 1;
-      groupSums.set(g, curr);
+      const curr = sums.get(g) || { ddcr: { sum: 0, count: 0 }, cdcr: { sum: 0, count: 0 }, dRc: { sum: 0, count: 0 }, cRc: { sum: 0, count: 0 } };
+      const values: Record<Metric, number | null> = { ddcr: validNumber(d.ddcr), cdcr: validNumber(d.cdcr), dRc: validNumber(d.dRcProduct), cRc: validNumber(d.cRcProduct) };
+      (Object.keys(values) as Metric[]).forEach((field) => { const value = values[field]; if (value !== null) { curr[field].sum += value; curr[field].count += 1; } });
+      sums.set(g, curr);
     }
-
-    return groups.map((g) => {
-      const item = groupSums.get(g) || { ddcrSum: 0, cdcrSum: 0, count: 0 };
-      return {
-        group: g,
-        ddcrAvg: item.count ? item.ddcrSum / item.count : 0,
-        cdcrAvg: item.count ? item.cdcrSum / item.count : 0,
-        color: groupMap.get(g) || PALETTE[0],
-      };
+    const build = (labels: Array<[string, 'ddcr' | 'cdcr' | 'dRc' | 'cRc']>) => labels.map(([metric, field]) => {
+      const point: any = { metric };
+      groups.forEach((g) => { const metric = sums.get(g)?.[field]; point[g] = metric?.count ? metric.sum / metric.count : null; });
+      return point;
     });
-  }, [data, groups, groupMap]);
+    return { dcr: build([['放电 DCR', 'ddcr'], ['充电 DCR', 'cdcr']]), rc: build([['放电 R-C', 'dRc'], ['充电 R-C', 'cRc']]) };
+  }, [data, groups]);
 
-  if (chartData.length === 0) return <EmptyChart />;
+  if (!groups.length) return <EmptyChart />;
 
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-        <CartesianGrid {...GRID_STYLE} />
-        <XAxis dataKey="group" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
-        <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
-        <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${n(v).toFixed(4)} Ω`, '']} />
-        <Legend wrapperStyle={{ fontSize: '12px' }} />
-        <Bar dataKey="ddcrAvg" name="放电 DCR (平均)" radius={[4, 4, 0, 0]} maxBarSize={40}>
-          {chartData.map((entry, idx) => (
-            <Cell key={idx} fill={entry.color} />
-          ))}
-        </Bar>
-        <Bar dataKey="cdcrAvg" name="充电 DCR (平均)" radius={[4, 4, 0, 0]} maxBarSize={40}>
-          {chartData.map((entry, idx) => (
-            <Cell key={idx} fill={entry.color} fillOpacity={0.6} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
+  const renderBars = (rows: any[], unit: string, legend: ReturnType<typeof useLegendToggle>) => <>
+    <ResponsiveContainer width="100%" height="90%"><BarChart data={rows} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+      <CartesianGrid {...GRID_STYLE} /><XAxis dataKey="metric" axisLine={false} tickLine={false} tick={AXIS_STYLE} /><YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
+      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${n(v).toFixed(4)} ${unit}`, '']} />
+      {groups.map((g) => <Bar key={g} hide={legend.hidden.has(g)} dataKey={g} name={`组 ${g}`} fill={groupMap.get(g)} radius={[3, 3, 0, 0]} maxBarSize={32} />)}
+    </BarChart></ResponsiveContainer>
+    <GroupLegend groups={groups} groupMap={groupMap} hidden={legend.hidden} onToggle={legend.toggle} />
+  </>;
+  return <div className="grid h-full grid-cols-1 grid-rows-2 gap-4 md:grid-cols-2 md:grid-rows-1">
+    <ChartPanel title="充放电 DCR 对比">{renderBars(chartData.dcr, 'Ω', dcrLegend)}</ChartPanel>
+    <ChartPanel title="充放电 R-C 乘积对比">{renderBars(chartData.rc, 'Ah·Ω', rcLegend)}</ChartPanel>
+  </div>;
 }
 
 /* ── 5. 能效：能效图 (柱形图) ──────────────────────────────── */
 
 function EfficiencyGroupChart({ data }: { data: any[] }) {
   const { groupMap, groups } = useGroupColorMap(data);
+  const efficiencyLegend = useLegendToggle(groups);
+  const energyLegend = useLegendToggle(groups);
 
   const chartData = useMemo(() => {
-    const groupSums = new Map<string, { eeSum: number; count: number }>();
+    type Metric = 'ee' | 'de' | 'ce';
+    const sums = new Map<string, Record<Metric, { sum: number; count: number }>>();
     for (const d of data) {
       const g = getGroupName(d);
-      const curr = groupSums.get(g) || { eeSum: 0, count: 0 };
-      curr.eeSum += n(d.ee || (n(d.de) && n(d.ce) ? n(d.de) / n(d.ce) : 0));
-      curr.count += 1;
-      groupSums.set(g, curr);
+      const curr = sums.get(g) || { ee: { sum: 0, count: 0 }, de: { sum: 0, count: 0 }, ce: { sum: 0, count: 0 } };
+      const de = validNumber(d.de); const ce = validNumber(d.ce); const storedEe = validNumber(d.ee);
+      const values: Record<Metric, number | null> = { ee: storedEe ?? (de !== null && ce ? de / ce : null), de, ce };
+      (Object.keys(values) as Metric[]).forEach((field) => { const value = values[field]; if (value !== null) { curr[field].sum += value; curr[field].count += 1; } });
+      sums.set(g, curr);
     }
+    const efficiency: any = { metric: '能量效率' };
+    const energy = [{ metric: '放电能量' } as any, { metric: '充电能量' } as any];
+    groups.forEach((g) => { const item = sums.get(g); efficiency[g] = item?.ee.count ? item.ee.sum / item.ee.count * 100 : null; energy[0][g] = item?.de.count ? item.de.sum / item.de.count : null; energy[1][g] = item?.ce.count ? item.ce.sum / item.ce.count : null; });
+    return { efficiency: [efficiency], energy };
+  }, [data, groups]);
 
-    return groups.map((g) => {
-      const item = groupSums.get(g) || { eeSum: 0, count: 0 };
-      return {
-        group: g,
-        eeAvg: item.count ? item.eeSum / item.count : 0,
-        color: groupMap.get(g) || PALETTE[0],
-      };
-    });
-  }, [data, groups, groupMap]);
+  if (!groups.length) return <EmptyChart />;
 
-  if (chartData.length === 0) return <EmptyChart />;
-
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-        <CartesianGrid {...GRID_STYLE} />
-        <XAxis dataKey="group" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
-        <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} domain={[0, 'auto']} />
-        <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${(n(v) * 100).toFixed(2)}%`, '平均能效比 (ee)']} />
-        <Bar dataKey="eeAvg" name="能量效率比" radius={[4, 4, 0, 0]} maxBarSize={45}>
-          {chartData.map((entry, idx) => (
-            <Cell key={idx} fill={entry.color} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
+  const renderBars = (rows: any[], unit: string, legend: ReturnType<typeof useLegendToggle>) => <>
+    <ResponsiveContainer width="100%" height="90%"><BarChart data={rows} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+      <CartesianGrid {...GRID_STYLE} /><XAxis dataKey="metric" axisLine={false} tickLine={false} tick={AXIS_STYLE} /><YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} domain={[0, 'auto']} />
+      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${n(v).toFixed(2)}${unit}`, '']} />
+      {groups.map((g) => <Bar key={g} hide={legend.hidden.has(g)} dataKey={g} name={`组 ${g}`} fill={groupMap.get(g)} radius={[3, 3, 0, 0]} maxBarSize={34} />)}
+    </BarChart></ResponsiveContainer>
+    <GroupLegend groups={groups} groupMap={groupMap} hidden={legend.hidden} onToggle={legend.toggle} />
+  </>;
+  return <div className="grid h-full grid-cols-1 grid-rows-2 gap-4 md:grid-cols-2 md:grid-rows-1">
+    <ChartPanel title="平均能量效率">{renderBars(chartData.efficiency, '%', efficiencyLegend)}</ChartPanel>
+    <ChartPanel title="充放电能量对比">{renderBars(chartData.energy, ' Wh', energyLegend)}</ChartPanel>
+  </div>;
 }
 
 /* ── 6. 高温循环：循环图 (带平滑线的散点/折线图) ────────────────── */
 
 function HtCycleGroupChart({ data }: { data: any[] }) {
   const { groupMap, groups } = useGroupColorMap(data);
+  const retentionLegend = useLegendToggle(groups);
+  const capacityLegend = useLegendToggle(groups);
 
   // Group by cycle and groupName
   const chartData = useMemo(() => {
     const cycleSet = new Set<number>();
-    const byCycleGroup = new Map<string, { retSum: number; count: number }>();
+    const byCycleGroup = new Map<string, { retSum: number; retCount: number; capacitySum: number; capacityCount: number }>();
 
     for (const r of data) {
       const cycle = r.cycle;
@@ -465,9 +505,11 @@ function HtCycleGroupChart({ data }: { data: any[] }) {
 
       const g = getGroupName(r);
       const key = `${cycle}_${g}`;
-      const curr = byCycleGroup.get(key) || { retSum: 0, count: 0 };
-      curr.retSum += n(r.capacityRetention);
-      curr.count += 1;
+      const curr = byCycleGroup.get(key) || { retSum: 0, retCount: 0, capacitySum: 0, capacityCount: 0 };
+      const retention = validNumber(r.capacityRetention);
+      const capacity = validNumber(r.dischargeCapacity);
+      if (retention !== null) { curr.retSum += retention; curr.retCount += 1; }
+      if (capacity !== null) { curr.capacitySum += capacity; curr.capacityCount += 1; }
       byCycleGroup.set(key, curr);
     }
 
@@ -476,7 +518,8 @@ function HtCycleGroupChart({ data }: { data: any[] }) {
       const point: any = { cycle };
       for (const g of groups) {
         const item = byCycleGroup.get(`${cycle}_${g}`);
-        point[g] = item && item.count ? item.retSum / item.count : null;
+        point[`${g}_retention`] = item?.retCount ? item.retSum / item.retCount : null;
+        point[`${g}_capacity`] = item?.capacityCount ? item.capacitySum / item.capacityCount : null;
       }
       return point;
     });
@@ -484,51 +527,45 @@ function HtCycleGroupChart({ data }: { data: any[] }) {
 
   if (chartData.length === 0) return <EmptyChart />;
 
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-        <CartesianGrid {...GRID_STYLE} />
-        <XAxis dataKey="cycle" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} name="循环圈数" />
-        <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} domain={['auto', 'auto']} />
-        <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any, name: any) => [`${n(v).toFixed(2)}%`, `组 ${name}`]} />
-        <Legend wrapperStyle={{ fontSize: '12px' }} />
-        {groups.map((g) => (
-          <Line
-            key={g}
-            type="monotone"
-            dataKey={g}
-            name={`组 ${g}`}
-            stroke={groupMap.get(g)}
-            strokeWidth={2}
-            dot={{ r: 3.5, strokeWidth: 1 }}
-            activeDot={{ r: 6 }}
-            connectNulls
-          />
-        ))}
-      </LineChart>
-    </ResponsiveContainer>
-  );
+  const renderLines = (suffix: 'retention' | 'capacity', unit: string, legend: ReturnType<typeof useLegendToggle>) => <>
+    <ResponsiveContainer width="100%" height="90%"><LineChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+      <CartesianGrid {...GRID_STYLE} /><XAxis dataKey="cycle" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={8} /><YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} domain={['auto', 'auto']} />
+      <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${n(v).toFixed(3)}${unit}`, '']} />
+      {groups.map((g) => <Line key={g} hide={legend.hidden.has(g)} type="monotone" dataKey={`${g}_${suffix}`} name={`组 ${g}`} stroke={groupMap.get(g)} strokeWidth={2} dot={{ r: 3 }} connectNulls />)}
+    </LineChart></ResponsiveContainer>
+    <GroupLegend groups={groups} groupMap={groupMap} hidden={legend.hidden} onToggle={legend.toggle} />
+  </>;
+  return <div className="grid h-full grid-cols-1 grid-rows-2 gap-4 md:grid-cols-2 md:grid-rows-1">
+    <ChartPanel title="容量保持率趋势">{renderLines('retention', '%', retentionLegend)}</ChartPanel>
+    <ChartPanel title="放电容量趋势">{renderLines('capacity', ' Ah', capacityLegend)}</ChartPanel>
+  </div>;
 }
 
 /* ── 快充时间默认图表 ────────────────────────────────────────── */
 
 function FastChargeChart({ data }: { data: any[] }) {
-  const { groupMap } = useGroupColorMap(data);
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-        <CartesianGrid {...GRID_STYLE} />
-        <XAxis dataKey="cellName" axisLine={false} tickLine={false} tick={AXIS_STYLE} dy={10} />
-        <YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} />
-        <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={TOOLTIP_STYLE} />
-        <Bar dataKey="computedFastChargeTime" radius={[4, 4, 0, 0]} maxBarSize={40} name="10%-80% SOC (min)">
-          {data.map((entry, idx) => (
-            <Cell key={idx} fill={groupMap.get(getGroupName(entry)) || PALETTE[idx % PALETTE.length]} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
+  const { groupMap, groups } = useGroupColorMap(data);
+  const timeLegend = useLegendToggle(groups);
+  const socLegend = useLegendToggle(groups);
+  const { timeData, socData } = useMemo(() => {
+    const time: any = { metric: '10%–80% SOC' };
+    const timeSums = new Map<string, { sum: number; count: number }>();
+    const stepSums = new Map<string, { sum: number; count: number }>();
+    const stepSet = new Set<number>();
+    data.forEach((row) => {
+      const g = getGroupName(row);
+      const t = validNumber(row.computedFastChargeTime ?? row.providedFastChargeTime);
+      const ts = timeSums.get(g) || { sum: 0, count: 0 }; if (t !== null && t > 0) { ts.sum += t; ts.count += 1; } timeSums.set(g, ts);
+      (row.steps || []).forEach((step: any) => { const no = Number(step.stepNo); const soc = validNumber(step.cumulativeSoc); if (!Number.isFinite(no) || soc === null) return; stepSet.add(no); const key = `${no}_${g}`; const s = stepSums.get(key) || { sum: 0, count: 0 }; s.sum += soc * 100; s.count += 1; stepSums.set(key, s); });
+    });
+    groups.forEach((g) => { const item = timeSums.get(g); time[g] = item?.count ? item.sum / item.count : null; });
+    const soc = [...stepSet].sort((a, b) => a - b).map((stepNo) => { const point: any = { stepNo }; groups.forEach((g) => { const item = stepSums.get(`${stepNo}_${g}`); point[g] = item?.count ? item.sum / item.count : null; }); return point; });
+    return { timeData: [time], socData: soc };
+  }, [data, groups]);
+  return <div className="grid h-full grid-cols-1 grid-rows-2 gap-4 md:grid-cols-2 md:grid-rows-1">
+    <ChartPanel title="平均快充时间"><ResponsiveContainer width="100%" height="90%"><BarChart data={timeData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}><CartesianGrid {...GRID_STYLE} /><XAxis dataKey="metric" axisLine={false} tickLine={false} tick={AXIS_STYLE} /><YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} /><Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${n(v).toFixed(2)} min`, '']} />{groups.map((g) => <Bar key={g} hide={timeLegend.hidden.has(g)} dataKey={g} fill={groupMap.get(g)} name={`组 ${g}`} radius={[3, 3, 0, 0]} maxBarSize={34} />)}</BarChart></ResponsiveContainer><GroupLegend groups={groups} groupMap={groupMap} hidden={timeLegend.hidden} onToggle={timeLegend.toggle} /></ChartPanel>
+    <ChartPanel title="累计 SOC 工步曲线"><ResponsiveContainer width="100%" height="90%"><LineChart data={socData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}><CartesianGrid {...GRID_STYLE} /><XAxis dataKey="stepNo" axisLine={false} tickLine={false} tick={AXIS_STYLE} /><YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} /><Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: any) => [`${n(v).toFixed(2)}%`, '']} />{groups.map((g) => <Line key={g} hide={socLegend.hidden.has(g)} type="monotone" dataKey={g} name={`组 ${g}`} stroke={groupMap.get(g)} strokeWidth={2} dot={{ r: 3 }} connectNulls />)}</LineChart></ResponsiveContainer><GroupLegend groups={groups} groupMap={groupMap} hidden={socLegend.hidden} onToggle={socLegend.toggle} /></ChartPanel>
+  </div>;
 }
 
 /* ── Main Component ──────────────────────────────────────────── */
@@ -577,16 +614,17 @@ export function ExperimentChart({ assayType, experimentId, projectId, title, sta
 
   const { t } = useTranslation();
   const displayName = title || t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType);
+  const hasTwoCharts = ['CalendarLife', 'StorageSwelling', 'EnergyEfficiency', 'DcrTest', 'FastCharge', 'HtCycle'].includes(assayType);
 
   return (
-    <div className="bg-white rounded-xl p-5 h-80 w-full border border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)] mb-5">
+    <div className={`bg-white rounded-xl p-5 w-full border border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)] mb-5 ${hasTwoCharts ? 'h-[36rem] md:h-80' : 'h-80'}`}>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
           <span className="w-1.5 h-3.5 bg-action rounded-full"></span>
           {displayName} - 数据对比图
         </h3>
       </div>
-      <div className="h-60 w-full">{renderChart()}</div>
+      <div className={`w-full ${hasTwoCharts ? 'h-[31rem] md:h-60' : 'h-60'}`}>{renderChart()}</div>
     </div>
   );
 }
