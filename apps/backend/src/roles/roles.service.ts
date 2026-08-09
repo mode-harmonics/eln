@@ -26,7 +26,7 @@ export class RolesService {
 
   async findAll(page?: number, limit?: number, search?: string): Promise<any> {
     if (page === undefined && limit === undefined) {
-      return this.rolesRepo.find({ order: { name: 'ASC' } });
+      return this.rolesRepo.find({ order: { createdAt: 'DESC', id: 'ASC' } });
     }
 
     const pageNum = page ? parseInt(page as any, 10) : 1;
@@ -40,7 +40,7 @@ export class RolesService {
       });
     }
 
-    query.orderBy('role.name', 'ASC');
+    query.orderBy('role.createdAt', 'DESC').addOrderBy('role.id', 'ASC');
 
     const skip = (pageNum - 1) * limitNum;
     query.skip(skip).take(limitNum);

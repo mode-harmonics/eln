@@ -17,6 +17,37 @@ import type { Role } from "../types";
 import { PageHeader } from "../components/PageHeader";
 import { ListToolbar } from "../components/ListToolbar";
 
+const HIDDEN_PERMISSION_KEYS = new Set(["experiments:approve", "experiments:archive"]);
+const PERMISSION_LABELS: Record<string, string> = {
+  "*": "全部权限",
+  "experiments:*": "项目与实验：全部权限",
+  "experiments:read": "项目与实验：查看",
+  "experiments:write": "项目与实验：编辑/推进",
+  "workflow:*": "工作流模板：全部权限",
+  "workflow:read": "工作流模板：查看",
+  "workflow:write": "工作流模板：编辑",
+  "workflow_step:*": "工作流步骤：全部步骤",
+  "system:*": "系统与账号：全部权限",
+  "system:read": "系统与账号：查看",
+  "system:write": "系统与账号：编辑",
+};
+const visiblePermissionSummary = (
+  permissions: string[] | undefined,
+  workflowSteps: Array<{ id: string; label: string }>,
+) => {
+  const visible = (permissions ?? []).filter((permission) => !HIDDEN_PERMISSION_KEYS.has(permission));
+  if (visible.length === 0) return "未配置特定权限";
+  const stepLabelMap = new Map(workflowSteps.map((step) => [step.id, step.label]));
+  return visible.map((permission) => {
+    if (PERMISSION_LABELS[permission]) return PERMISSION_LABELS[permission];
+    if (permission.startsWith("workflow_step:")) {
+      const stepId = permission.slice("workflow_step:".length);
+      return `工作流步骤：${stepLabelMap.get(stepId) ?? stepId}`;
+    }
+    return permission;
+  }).join("、");
+};
+
 export function Roles() {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
@@ -35,6 +66,7 @@ export function Roles() {
   const [permissionList, setPermissionList] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
+  const [workflowSteps, setWorkflowSteps] = useState<Array<{ id: string; label: string; parentLabel?: string }>>([]);
 
   // Create role state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -87,6 +119,28 @@ export function Roles() {
     return () => { cancelled = true; };
   }, [currentPage, pageSize, searchQuery, refetchTrigger]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.get<any>("/api/v1/workflow/default-steps")
+      .then((response) => {
+        if (cancelled) return;
+        const steps = response?.steps ?? response?.data?.steps ?? [];
+        const flattened: Array<{ id: string; label: string; parentLabel?: string }> = [];
+        for (const step of steps) {
+          if (step.children?.length) {
+            for (const child of step.children) {
+              flattened.push({ id: child.id, label: child.label, parentLabel: step.label });
+            }
+          } else {
+            flattened.push({ id: step.id, label: step.label });
+          }
+        }
+        setWorkflowSteps(flattened);
+      })
+      .catch(() => setWorkflowSteps([]));
+    return () => { cancelled = true; };
+  }, []);
+
   const handleUpdateRole = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRole) return;
@@ -126,12 +180,33 @@ export function Roles() {
     });
   };
 
+  const toggleWorkflowStep = (stepId: string | "*", checked: boolean) => {
+    if (isOwner) return;
+    setPermissionList((previous) => {
+      const withoutStepPermissions = previous.filter((permission) => !permission.startsWith("workflow_step:"));
+      if (stepId === "*") {
+        return checked ? [...withoutStepPermissions, "workflow_step:*"] : withoutStepPermissions;
+      }
+
+      const wildcardSelected = previous.includes("workflow_step:*");
+      const selectedStepIds = wildcardSelected
+        ? workflowSteps.map((step) => step.id)
+        : previous
+          .filter((permission) => permission.startsWith("workflow_step:") && permission !== "workflow_step:*")
+          .map((permission) => permission.slice("workflow_step:".length));
+      const nextIds = new Set(selectedStepIds);
+      if (checked) nextIds.add(stepId);
+      else nextIds.delete(stepId);
+      return [...withoutStepPermissions, ...[...nextIds].map((id) => `workflow_step:${id}`)];
+    });
+  };
+
   const applyPreset = (preset: "read_all" | "full_all" | "reset") => {
     if (isOwner) return;
     if (preset === "full_all") {
-      setPermissionList(["experiments:*", "workflow:*", "system:*"]);
+      setPermissionList(["experiments:*", "workflow:*", "workflow_step:*", "system:*"]);
     } else if (preset === "read_all") {
-      setPermissionList(["experiments:read", "workflow:read", "system:read"]);
+      setPermissionList(["experiments:read", "workflow:read", "workflow_step:*", "system:read"]);
     } else {
       setPermissionList(editingRole?.permissionList || []);
     }
@@ -206,7 +281,7 @@ export function Roles() {
                     </TableCell>
                     <TableCell>
                       <div className="text-[13px] text-gray-500 truncate max-w-md">
-                        {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "未配置特定权限"}
+                        {visiblePermissionSummary(role.permissionList, workflowSteps)}
                       </div>
                     </TableCell>
                     {hasPermission("system:write") && (
@@ -237,7 +312,7 @@ export function Roles() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-[13px] text-gray-600 break-words">
-                    {Array.isArray(role.permissionList) ? role.permissionList.join(", ") : "未配置特定权限"}
+                    {visiblePermissionSummary(role.permissionList, workflowSteps)}
                   </p>
                 </CardContent>
                 {hasPermission("system:write") && (
@@ -343,7 +418,7 @@ export function Roles() {
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-gray-100">
-                  {group.actions.map((act) => {
+                  {group.actions.filter((act) => !HIDDEN_PERMISSION_KEYS.has(`${group.key}:${act.key}`)).map((act) => {
                     const permKey = `${group.key}:${act.key}`;
                     const checked = isPermChecked(permKey);
                     return (
@@ -360,6 +435,42 @@ export function Roles() {
                 </div>
               </div>
             ))}
+
+            <div className="rounded-xl border border-gray-200/80 bg-white p-4 shadow-2xs">
+              <div className="mb-3 flex items-start justify-between gap-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900">工作流步骤可见权限</h4>
+                  <p className="mt-0.5 text-xs text-gray-500">用户只能查看已勾选的流程步骤，项目内的执行人和可见人员配置仍同时生效。</p>
+                </div>
+                <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-600">
+                  <Cb
+                    checked={isPermChecked("workflow_step:*")}
+                    disabled={isOwner}
+                    onChange={(checked) => toggleWorkflowStep("*", checked)}
+                  />
+                  全部步骤
+                </label>
+              </div>
+              <div className="grid grid-cols-1 gap-2 border-t border-gray-100 pt-3 sm:grid-cols-2">
+                {workflowSteps.map((step) => {
+                  const permission = `workflow_step:${step.id}`;
+                  const checked = isPermChecked(permission);
+                  return (
+                    <div
+                      key={step.id}
+                      onClick={() => toggleWorkflowStep(step.id, !checked)}
+                      className={`flex cursor-pointer items-center gap-2.5 rounded-lg border p-2 transition-all ${checked ? "border-action/40 bg-orange-50/60 text-action-muted" : "border-gray-100 text-gray-700 hover:border-gray-200"}`}
+                    >
+                      <Cb checked={checked} disabled={isOwner} onChange={(value) => toggleWorkflowStep(step.id, value)} />
+                      <span className="min-w-0 text-xs font-medium">
+                        {step.parentLabel && <span className="text-gray-400">{step.parentLabel} / </span>}
+                        {step.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </form>
       </Modal>

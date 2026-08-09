@@ -28,6 +28,7 @@ import {
   deriveWorkflowGraphMeta,
   STEP_ASSAY_MAP,
   STEP_NAME_MAP,
+  hasPermission,
   type WorkflowGraphMeta,
 } from '@eln/shared';
 
@@ -354,10 +355,15 @@ export class WorkflowService {
     steps: T[],
     meta: WorkflowGraphMeta,
   ): WorkflowStepView[] {
+    const availableStepNames = new Set(steps.map((step) => step.stepName));
     return steps.map((s) => ({
       ...s,
       isParallelGroup: !!meta.isGroup[s.stepName],
-      parentStepName: meta.parentOf[s.stepName] ?? null,
+      // A child whose parent is hidden by role permissions is rendered as a
+      // standalone step instead of leaking the parent group or disappearing.
+      parentStepName: availableStepNames.has(meta.parentOf[s.stepName])
+        ? meta.parentOf[s.stepName]
+        : null,
       groupType: meta.groupType[s.stepName] ?? null,
     }));
   }
@@ -370,7 +376,7 @@ export class WorkflowService {
   //  QUERIES
   // ════════════════════════════════════════════════════════════════
 
-  async findByProject(projectId: string, userId?: string): Promise<{
+  async findByProject(projectId: string, userId?: string, permissionList?: string[]): Promise<{
     instance: WorkflowInstance | null;
     steps: WorkflowStepView[];
   }> {
@@ -416,6 +422,10 @@ export class WorkflowService {
           (s) => allowed.has(s.stepName) || !!meta.isGroup[s.stepName],
         );
       }
+
+      // Role step permissions are strict: no unselected parent/group nodes
+      // are included merely to preserve hierarchy.
+      steps = steps.filter((s) => hasPermission(permissionList, `workflow_step:${s.stepName}`));
     }
 
     // Enrich steps with user display names
@@ -880,12 +890,13 @@ export class WorkflowService {
   async getUserProjectPermissions(
     projectId: string,
     userId: string,
+    permissionList: string[],
   ): Promise<{
     canViewInternalCode: boolean;
     visibleStepNames: string[];
     currentStepName: string | null;
   }> {
-    const { instance, steps } = await this.findByProject(projectId);
+    const { instance, steps } = await this.findByProject(projectId, userId, permissionList);
     if (!instance) {
       return { canViewInternalCode: false, visibleStepNames: [], currentStepName: null };
     }

@@ -25,7 +25,7 @@ import { SolutionPreparation } from '../entities/solution-preparation.entity';
 import { SubmitExperimentDto, UpdateExperimentDto } from './dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WorkflowService } from '../workflow/workflow.service';
-import { ExperimentStatus, STEP_ASSAY_MAP, STEP_NAME_MAP } from '@eln/shared';
+import { ExperimentStatus, STEP_ASSAY_MAP, STEP_NAME_MAP, hasPermission } from '@eln/shared';
 
 export interface ExperimentDetail extends Experiment {
   attachments: Attachment[];
@@ -167,7 +167,7 @@ export class ExperimentsService {
     if (rows.length > 0) await solutionRepo.save(rows);
   }
 
-  async findDetail(id: string, userId?: string): Promise<ExperimentDetail> {
+  async findDetail(id: string, userId?: string, permissionList?: string[]): Promise<ExperimentDetail> {
     const experiment = await this.experimentsRepo.findOne({ where: { id } });
     if (!experiment) {
       throw new NotFoundException('Experiment not found.');
@@ -175,6 +175,9 @@ export class ExperimentsService {
 
     // If experiment is linked to a workflow step, check user has access
     if (userId && experiment.workflowStepName) {
+      if (!hasPermission(permissionList, `workflow_step:${experiment.workflowStepName}`)) {
+        throw new ForbiddenException('您的角色没有查看该工作流步骤的权限');
+      }
       await this.assertCanAccessStep(experiment.projectId, experiment.workflowStepName, userId);
     }
 

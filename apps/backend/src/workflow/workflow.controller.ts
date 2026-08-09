@@ -13,7 +13,7 @@ import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
 import { WorkflowService } from './workflow.service';
 import {
   CreateWorkflowInstanceDto,
@@ -91,8 +91,8 @@ export class WorkflowController {
   @Get('workflow/instances/:projectId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get workflow instance + steps visible to current user for a project' })
-  async getInstance(@Param('projectId') projectId: string, @CurrentUser('id') userId: string) {
-    return { success: true, data: await this.workflowService.findByProject(projectId, userId) };
+  async getInstance(@Param('projectId') projectId: string, @CurrentUser() user: RequestUser) {
+    return { success: true, data: await this.workflowService.findByProject(projectId, user.id, user.permissionList) };
   }
 
   @Get('workflow/instances/:projectId/steps')
@@ -110,11 +110,11 @@ export class WorkflowController {
   })
   async transition(
     @Param('projectId') projectId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
   ) {
     return {
       success: true,
-      data: await this.workflowService.transition(projectId, userId),
+      data: await this.workflowService.transition(projectId, user.id),
     };
   }
 
@@ -138,11 +138,11 @@ export class WorkflowController {
   @ApiOperation({ summary: 'Get current user permissions for this project workflow' })
   async getPermissions(
     @Param('projectId') projectId: string,
-    @CurrentUser('id') userId: string,
+    @CurrentUser() user: RequestUser,
   ) {
     return {
       success: true,
-      data: await this.workflowService.getUserProjectPermissions(projectId, userId),
+      data: await this.workflowService.getUserProjectPermissions(projectId, user.id, user.permissionList),
     };
   }
 

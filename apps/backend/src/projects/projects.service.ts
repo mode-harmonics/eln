@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/commo
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, In } from 'typeorm';
 import { v4 as uuid } from 'uuid';
-import { deriveWorkflowGraphMeta } from '@eln/shared';
+import { deriveWorkflowGraphMeta, hasPermission } from '@eln/shared';
 import { Experiment } from '../entities/experiment.entity';
 import { ExperimentCollaborator } from '../entities/experiment-collaborator.entity';
 import { Project } from '../entities/project.entity';
@@ -200,15 +200,16 @@ export class ProjectsService {
     page?: number,
     limit?: number,
     search?: string,
+    permissionList?: string[],
   ): Promise<any> {
     const project = await this.projectsRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found.');
 
     if (page === undefined && limit === undefined) {
-      const experiments = await this.experimentsRepo.find({
+      const experiments = (await this.experimentsRepo.find({
         where: { projectId },
         order: { updatedAt: 'DESC' },
-      });
+      })).filter((experiment) => !experiment.workflowStepName || hasPermission(permissionList, `workflow_step:${experiment.workflowStepName}`));
       return Promise.all(
         experiments.map(async (exp) => {
           const attachments = await this.dataSource.getRepository(Attachment).find({
@@ -225,6 +226,15 @@ export class ProjectsService {
 
     const query = this.experimentsRepo.createQueryBuilder('experiment')
       .where('experiment.projectId = :projectId', { projectId });
+
+    const allowedStepNames = (permissionList ?? [])
+      .filter((permission) => permission.startsWith('workflow_step:') && permission !== 'workflow_step:*')
+      .map((permission) => permission.slice('workflow_step:'.length));
+    if (!hasPermission(permissionList, 'workflow_step:*')) {
+      query.andWhere('(experiment.workflowStepName IS NULL OR experiment.workflowStepName IN (:...allowedStepNames))', {
+        allowedStepNames: allowedStepNames.length ? allowedStepNames : ['__none__'],
+      });
+    }
 
     if (search) {
       query.andWhere('LOWER(experiment.title) LIKE :search', {

@@ -6,6 +6,7 @@
 export const PERMISSION_RESOURCES = [
   'experiments',
   'workflow',
+  'workflow_step',
   'system',
 ] as const;
 
@@ -60,9 +61,9 @@ export const PERMISSION_TREE_META: PermissionGroupMeta[] = [
 /** Role presets — used by seed.ts and referenced by Roles.tsx */
 export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
   Owner: ['*'],
-  Admin: ['experiments:*', 'workflow:*', 'system:*'],
-  Editor: ['experiments:read', 'experiments:write', 'workflow:read'],
-  Viewer: ['experiments:read'],
+  Admin: ['experiments:*', 'workflow:*', 'workflow_step:*', 'system:*'],
+  Editor: ['experiments:read', 'experiments:write', 'workflow:read', 'workflow_step:*'],
+  Viewer: ['experiments:read', 'workflow_step:*'],
 };
 
 /** Normalize legacy permission strings to the 3 consolidated domains */

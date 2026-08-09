@@ -185,9 +185,9 @@ export function Projects() {
               assignments.push({
                 stepName: step.name,
                 assignedUserIds: parentUserIds,
-                canViewOtherSteps: true,
-                canViewInternalCode: true,
-                visibleToUserIds: stepVisibleTo[step.name] || [],
+                  canViewOtherSteps: true,
+                  canViewInternalCode: true,
+                  visibleToUserIds: stepVisibleTo[step.name] || [],
               });
             }
             // Sub-step assignments

@@ -41,13 +41,14 @@ export class ProjectsController {
   @ApiOperation({ summary: 'List all experiments belonging to this project.' })
   async findExperiments(
     @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('search') search?: string,
   ) {
     const pageNum = page ? parseInt(page as any, 10) : undefined;
     const limitNum = limit ? parseInt(limit as any, 10) : undefined;
-    return this.projectsService.findExperiments(id, pageNum, limitNum, search);
+    return this.projectsService.findExperiments(id, pageNum, limitNum, search, user.permissionList);
   }
 
   @Get(':id/stats')

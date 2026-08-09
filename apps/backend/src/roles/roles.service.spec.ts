@@ -61,4 +61,16 @@ describe('RolesService', () => {
       await expect(service.update('invalid-id', [])).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('findAll', () => {
+    it('orders roles by newest creation time first', async () => {
+      rolesRepo.find.mockResolvedValue([]);
+
+      await service.findAll();
+
+      expect(rolesRepo.find).toHaveBeenCalledWith({
+        order: { createdAt: 'DESC', id: 'ASC' },
+      });
+    });
+  });
 });

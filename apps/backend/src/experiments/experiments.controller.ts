@@ -20,8 +20,8 @@ export class ExperimentsController {
   @Get(':id')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get experiment detail including attachments and collaborators.' })
-  async findOne(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    return this.experimentsService.findDetail(id, userId);
+  async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
+    return this.experimentsService.findDetail(id, user.id, user.permissionList);
   }
 
   @Put(':id')
