@@ -1,12 +1,13 @@
 # ELN Agent Guide
 
-ELN is a pnpm/Turbo monorepo for a battery-lab electronic notebook. Use [README.md](./README.md) for setup and product context. Treat [BACKEND_SPEC.md](./BACKEND_SPEC.md) as the original backend contract; verify current behavior in source because the application has grown beyond that specification.
+ELN is a pnpm/Turbo monorepo for a battery-lab electronic notebook. Treat [BACKEND_SPEC.md](./BACKEND_SPEC.md) as the original backend contract and [README.md](./README.md) as historical setup context. Both lag the current application in places (notably, the frontend is no longer a placeholder), so source code and package scripts are authoritative.
 
 ## Workspace Boundaries
 
 - `apps/backend`: NestJS, TypeORM, and PostgreSQL API. Controllers own HTTP/auth concerns; services own persistence, transactions, workflow checks, and derived values.
 - `apps/frontend`: React 19 and Vite SPA. [App.tsx](./apps/frontend/src/App.tsx) owns routing/loaders; pages own requests and mutation state; `components/` is the shared UI layer.
 - `packages/shared`: framework-independent API routes, enums, DTO interfaces, response types, colors, and workflow contracts. Put cross-application contracts here, then update both consumers.
+- The product now extends beyond the original experiment/data API with workflow, dashboard, inventory, reagent procurement, and experiment-design modules. Search the current module and its nearest tests before relying on the original specification.
 - Do not edit generated `dist/`, `build/`, coverage, Turbo cache, or TypeScript build-info artifacts.
 
 ## Setup And Commands
@@ -20,7 +21,7 @@ pnpm --filter @eln/backend run seed
 pnpm run dev
 ```
 
-`pnpm run dev` starts backend, frontend, and shared watch tasks. Backend environment files live at `apps/backend/env/<name>.env`; local runtime defaults to `env/local.env`. Start from `apps/backend/env/example.env`.
+`pnpm run dev` starts backend, frontend, and shared watch tasks. Backend environment files live at `apps/backend/env/<name>.env`; local runtime defaults to `env/local.env`. Start from `apps/backend/env/example.env`. Never edit or commit the checked-in/local secret-bearing environment files as part of an unrelated task.
 
 Prefer the narrowest validation that covers the change:
 
@@ -65,6 +66,7 @@ pnpm --filter @eln/backend run test:e2e
 - Secure endpoints with both `JwtAuthGuard` and the appropriate permission check. `PermissionsGuard` only authorizes when `@RequirePermission` metadata exists; dynamic permissions need an explicit check such as those in [data.controller.ts](./apps/backend/src/data/data.controller.ts).
 - Keep application-managed optimistic locking intact: compare `versionNo`, reject stale writes with 409, increment it, and preserve version-history behavior.
 - Parser registry order is significant because matching is first-win. A new uploaded data type usually needs coordinated parser registration, entity exports/module registration, and mappings in [data.service.ts](./apps/backend/src/data/data.service.ts).
+- Keep multi-row imports and workflow transitions atomic. Follow existing `QueryRunner` transaction patterns and release runners in `finally` blocks.
 - Preserve the standard API envelope and exception shape implemented in [all-exceptions.filter.ts](./apps/backend/src/common/filters/all-exceptions.filter.ts).
 
 ## Frontend Rules

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams, useLoaderData } from "react-router-dom";
 import { format } from "date-fns";
-import { Download, Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Layers, AlertCircle, Plus, Paperclip, MessageSquare, Send, History, MoreHorizontal, UploadCloud, X, CheckCircle2 } from "lucide-react";
+import { Edit3, Loader2, Trash2, Table2, FileDigit, ChevronDown, Paperclip, MessageSquare, Send, History, MoreHorizontal, UploadCloud, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
   ProcessDataTable,
@@ -16,7 +16,6 @@ import {
 import { ExperimentChart } from "../components/ExperimentChart";
 import { Button } from "../components/Button";
 import { ButtonGroup } from "../components/ButtonGroup";
-import { Dropdown } from "../components/Dropdown";
 import { Modal } from "../components/Modal";
 import { Drawer } from "../components/Drawer";
 import { VersionDiffViewer } from "../components/VersionDiffViewer";
@@ -60,8 +59,6 @@ export function ExperimentDetail() {
   const [saving, setSaving] = useState(false);
 
   // Delete confirm state
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   // Invalid procurement internalCodes — used to filter ProcessData rows
   const [invalidInternalCodes, setInvalidInternalCodes] = useState<string[]>([]);
@@ -230,21 +227,6 @@ export function ExperimentDetail() {
     }
   };
 
-  const handleDeleteExperiment = async () => {
-    if (!experiment) return;
-    setDeleting(true);
-    try {
-      await api.delete(`/api/v1/experiments/${experiment.id}`);
-      setDeleteConfirmOpen(false);
-      // Navigate back to the project experiments list
-      navigate(experiment.projectId ? `/projects/${experiment.projectId}?tab=experiments` : "/projects");
-    } catch (err: any) {
-      alert(err?.message ?? "Delete failed");
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   const [completingStep, setCompletingStep] = useState(false);
   const [stepCompleted, setStepCompleted] = useState(false);
 
@@ -268,11 +250,13 @@ export function ExperimentDetail() {
       await api.put(`/api/v1/workflow/instances/${experiment.projectId}/transition`);
       toast.success(t("step_completed_success", "当前工步已提交"));
       setStepCompleted(true);
+      navigate(`/projects/${experiment.projectId}`);
     } catch (err: any) {
       const msg = err?.message ?? '';
       // If step is already completed, treat as success
       if (msg.includes('already completed') || msg.includes('already')) {
         setStepCompleted(true);
+        navigate(`/projects/${experiment.projectId}`);
         return;
       }
       toast.error(msg || t("submit_failed", "提交失败"));
@@ -446,7 +430,7 @@ export function ExperimentDetail() {
             </span>
           )}
 
-          {/* Import / Export */}
+          {/* Common data action */}
           <ButtonGroup
             items={[
               ...(hasRawData && canWrite && !isReadOnly ? [{
@@ -454,15 +438,35 @@ export function ExperimentDetail() {
                 label: t("import_raw", "导入数据"),
                 icon: <UploadCloud className="w-3.5 h-3.5 text-gray-500" />,
                 onClick: () => setUploadDataOpen(true),
-              }] : []),
+              }] : [])
+            ]}
+          />
+
+          {/* Attachment shortcut and lower-frequency actions */}
+          <ButtonGroup
+            items={[
               {
-                id: "export",
-                label: t("export", "导出"),
-                icon: <Download className="w-3.5 h-3.5 text-gray-500" />,
-                onClick: () => { },
+                id: "attachments",
+                label: t("attachments"),
+                icon: <Paperclip className="w-3.5 h-3.5 text-gray-500" />,
+                title: t("attachments", "附件"),
+                onClick: () => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); },
+                badge: attachments.length > 0 ? <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gray-600" /> : undefined,
+                className: "relative"
+              },
+              {
+                id: "more",
+                label: t("more", "更多"),
+                icon: <MoreHorizontal className="w-3.5 h-3.5 text-gray-500" />,
                 badge: <ChevronDown className="w-3 h-3 opacity-50 ml-0.5" />,
                 dropdownContent: (
-                  <>
+                  <div className="min-w-44 py-1">
+                    {canWrite && !isReadOnly && (
+                      <button onClick={openEditModal} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 hover:text-gray-950 transition-colors text-left">
+                        <Edit3 className="w-3.5 h-3.5 text-gray-400" />
+                        {t("edit_info")}
+                      </button>
+                    )}
                     <button onClick={() => handleExport('summary')} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 hover:text-gray-950 transition-colors text-left">
                       <Table2 className="w-3.5 h-3.5 text-gray-400" />
                       {t("export_summary", "导出汇总 Excel")}
@@ -473,30 +477,17 @@ export function ExperimentDetail() {
                         {t("export_raw", "导出原始工步 Excel")}
                       </button>
                     )}
-                  </>
+                    <div className="my-1 border-t border-gray-100" />
+                    <button onClick={() => { setActiveDrawer("comments"); setCommentsDrawerOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 hover:text-gray-950 transition-colors text-left">
+                      <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
+                      {t("comments", "评论")}
+                    </button>
+                    <button onClick={() => { setActiveDrawer("versions"); setVersionsDrawerOpen(true); }} className="w-full flex items-center gap-2 px-4 py-2 text-xs text-gray-700 hover:bg-gray-100 hover:text-gray-950 transition-colors text-left">
+                      <History className="w-3.5 h-3.5 text-gray-400" />
+                      {t("history", "版本历史")}
+                    </button>
+                  </div>
                 )
-              }
-            ]}
-          />
-
-          {/* Quick drawer & Edit info toggles */}
-          <ButtonGroup
-            items={[
-              ...(canWrite && !isReadOnly ? [{
-                id: "edit",
-                label: t("edit_info"),
-                icon: <Edit3 className="w-3.5 h-3.5 text-gray-500" />,
-                title: t("edit", "编辑信息"),
-                onClick: openEditModal
-              }] : []),
-              {
-                id: "attachments",
-                label: t("attachments"),
-                icon: <Paperclip className="w-3.5 h-3.5 text-gray-500" />,
-                title: t("attachments", "附件"),
-                onClick: () => { setActiveDrawer("attachments"); setAttachmentsDrawerOpen(true); },
-                badge: attachments.length > 0 ? <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-gray-600" /> : undefined,
-                className: "relative"
               }
             ]}
           />
