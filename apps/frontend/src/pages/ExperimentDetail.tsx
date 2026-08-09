@@ -551,6 +551,7 @@ export function ExperimentDetail() {
               <div key={refreshCounter} className="p-4 space-y-4">
                 <ExperimentChart 
                   assayType={assayType || "Unknown"} 
+                  workflowStepName={experiment.workflowStepName ?? undefined}
                   experimentId={experiment.id} 
                   projectId={experiment.projectId} 
                   title={experiment.workflowStepName ? `${t(RECORD_TYPE_TO_I18N_KEY[assayType || ''] || assayType || '')} - ${t(`step_${experiment.workflowStepName}`, experiment.workflowStepName)}` : undefined}

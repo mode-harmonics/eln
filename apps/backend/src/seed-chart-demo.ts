@@ -6,9 +6,14 @@ import {
   DcrTest,
   EnergyEfficiency,
   Experiment,
+  ExperimentDesign,
   FastCharge,
   HtCycle,
+  PickedCell,
+  ProcessData,
   Project,
+  ReagentProcurement,
+  SolutionPreparation,
   StorageSwelling,
   User,
   WorkflowInstance,
@@ -30,6 +35,91 @@ const cells = groups.flatMap((group) =>
     offset: (index - 2.5) * 0.002,
   })),
 );
+
+async function ensureSupportingData(project: Project, owner: User): Promise<void> {
+  const experimentRepo = AppDataSource.getRepository(Experiment);
+  const ensureExperiment = async (stepName: string, assayType: string, title: string) => {
+    let experiment = await experimentRepo.findOne({ where: { projectId: project.id, workflowStepName: stepName } as any });
+    if (!experiment) experiment = await experimentRepo.save(experimentRepo.create({
+      id: randomUUID(), projectId: project.id, title, status: 'Draft', metadata: { assayType, workflowStepName: stepName }, workflowStepName: stepName, versionNo: 1, createdBy: owner.id,
+    }));
+    return experiment;
+  };
+
+  const designRepo = AppDataSource.getRepository(ExperimentDesign);
+  let designs = await designRepo.find({ where: { projectId: project.id }, order: { rowIndex: 'ASC' } });
+  if (!designs.length) {
+    designs = await designRepo.save(groups.map((group, index) => designRepo.create({
+      id: randomUUID(), projectId: project.id, rowIndex: index + 1, group: group.name,
+      moleculeName: ['EC/EMC 基准电解液', '高功率添加剂体系', '长寿命添加剂体系'][index],
+      chineseName: ['基准液', '高功率液', '长寿命液'][index], molecularStructure: null,
+      cas: ['96-49-1', '616-38-6', '21324-40-3'][index],
+      designPrinciple: ['基准对照组', '改善快充与低温阻抗', '改善高温循环与存储性能'][index],
+      internalCode: `DEMO-${group.name}-001`, isRedundancy: false, cellCount: 6, redundancyCount: 0,
+    })));
+  }
+
+  const procurementRepo = AppDataSource.getRepository(ReagentProcurement);
+  if (!await procurementRepo.count({ where: { projectId: project.id } })) {
+    await procurementRepo.save(designs.map((design, index) => procurementRepo.create({
+      id: randomUUID(), projectId: project.id, experimentDesignId: design.id, moleculeName: design.moleculeName,
+      supplier: ['Sigma-Aldrich', 'Aladdin', 'Macklin'][index], batchNo: `DEMO-LOT-${design.group}-2026`,
+      purity: '≥99.9%', quantity: '500.000000', isValid: true, remark: '图表验收项目模拟采购数据',
+    })));
+  }
+
+  const solutionExperiment = await ensureExperiment('solution_preparation', 'SolutionPreparation', '配液－A/B/C 三组配方');
+  const solutionRepo = AppDataSource.getRepository(SolutionPreparation);
+  if (!await solutionRepo.count({ where: { experimentId: solutionExperiment.id } })) {
+    const materials = [
+      ['EC', '电池级 ≥99.99%', 30], ['EMC', '电池级 ≥99.99%', 60], ['LiPF6', '电池级 ≥99.9%', 10], ['添加剂', '电池级', 1.5],
+    ] as const;
+    await solutionRepo.save(groups.flatMap((group, groupIndex) => materials.map(([name, specification, amount]) => solutionRepo.create({
+      id: randomUUID(), experimentId: solutionExperiment.id, groupName: group.name, materialName: name,
+      specification, formulaAmount: (amount + groupIndex * 0.2).toFixed(6), actualAmount: (amount + groupIndex * 0.2 + 0.03).toFixed(6),
+    }))));
+  }
+
+  const designByGroup = new Map(designs.map((design) => [design.group, design]));
+  for (const [stepName, title] of [['drying_injection', '干燥/注液'], ['formation', '化成'], ['second_sealing', '二封'], ['capacity_grading', '定容']] as const) {
+    const experiment = await ensureExperiment(stepName, 'ProcessData', `${title}－A/B/C 三组制程数据`);
+    const processRepo = AppDataSource.getRepository(ProcessData);
+    if (await processRepo.count({ where: { experimentId: experiment.id } })) continue;
+    await processRepo.save(cells.map((cell, index) => {
+      const qd = 24.6 * cell.factor + cell.offset;
+      const m0 = 48 + index * 0.01; const m1 = m0 + 1.15; const m2 = m1 - 0.08; const m3 = m2 + 0.04; const m4 = m3 - 0.03;
+      const fq1 = 3.1 * cell.factor; const fq2 = 0.45 * cell.factor; const fq = fq1 + fq2; const gqc1 = 21.8 * cell.factor; const qcFirst = fq + gqc1;
+      return processRepo.create({ id: randomUUID(), experimentId: experiment.id, cellId: cell.cellName, experimentDesignId: designByGroup.get(cell.group)?.id ?? null, groupName: cell.group,
+        m0: m0.toFixed(6), m1: m1.toFixed(6), m2: m2.toFixed(6), m3: m3.toFixed(6), m4: m4.toFixed(6), mIn: (m1 - m0).toFixed(6), mLoss: (m1 - m2).toFixed(6), mHold: (m4 - m0).toFixed(6),
+        v0: '12.200000', v1: (12.2 + (cell.group === 'C' ? 0.15 : 0.08)).toFixed(6), fu0: '3.450000', fr0: '0.820000', fq1: fq1.toFixed(6), fq2: fq2.toFixed(6), fq: fq.toFixed(6), fu1: '3.720000', fr1: '0.880000', fu2: '3.690000', fr2: '0.920000', ku: '0.030000',
+        gu0: '3.500000', gr0: '0.850000', gqc1: gqc1.toFixed(6), gqd1: qd.toFixed(6), gqc2: '0.550000', gu1: '3.680000', gr1: (0.9 / cell.factor).toFixed(6), qdFirst: qd.toFixed(6), fvg: ((cell.group === 'C' ? 0.15 : 0.08) / qd).toFixed(6), qcFirst: qcFirst.toFixed(6), ceFirst: (qd / qcFirst * 100).toFixed(6) });
+    }));
+  }
+
+  const pickedRepo = AppDataSource.getRepository(PickedCell);
+  if (!await pickedRepo.count({ where: { projectId: project.id } })) {
+    const testTypes = ['CalendarLife', 'StorageSwelling', 'EnergyEfficiency', 'DcrTest', 'FastCharge', 'HtCycle'];
+    await pickedRepo.save(cells.map((cell, index) => pickedRepo.create({ id: randomUUID(), projectId: project.id, cellId: cell.cellName, pickedBy: 'manual', testType: testTypes[index % testTypes.length] })));
+  }
+
+  // The project page may have auto-created empty step experiments while this
+  // repair script was running. Keep the populated record and remove only empty
+  // duplicates inside this dedicated demo project.
+  for (const stepName of ['solution_preparation', 'drying_injection', 'formation', 'second_sealing', 'capacity_grading']) {
+    const duplicates = await experimentRepo.find({ where: { projectId: project.id, workflowStepName: stepName } as any, order: { createdAt: 'ASC' } });
+    if (duplicates.length < 2) continue;
+    const scored = await Promise.all(duplicates.map(async (experiment) => ({
+      experiment,
+      count: stepName === 'solution_preparation'
+        ? await solutionRepo.count({ where: { experimentId: experiment.id } })
+        : await AppDataSource.getRepository(ProcessData).count({ where: { experimentId: experiment.id } }),
+    })));
+    scored.sort((a, b) => b.count - a.count);
+    for (const duplicate of scored.slice(1)) {
+      if (duplicate.count === 0) await experimentRepo.delete({ id: duplicate.experiment.id });
+    }
+  }
+}
 
 async function ensureTestingWorkflow(project: Project, owner: User): Promise<string> {
   const instanceRepo = AppDataSource.getRepository(WorkflowInstance);
@@ -76,6 +166,7 @@ async function main() {
   if (existing) {
     const owner = await AppDataSource.getRepository(User).findOne({ where: { id: existing.createdBy } });
     if (!owner) throw new Error('The demo project owner no longer exists.');
+    await ensureSupportingData(existing, owner);
     const workflowInstanceId = await ensureTestingWorkflow(existing, owner);
     const experiments = await experimentRepo.find({ where: { projectId: existing.id } });
     console.log(JSON.stringify({ projectId: existing.id, projectName: existing.name, workflowInstanceId, repaired: true, experiments: experiments.map((e) => ({ id: e.id, title: e.title })) }, null, 2));
@@ -180,6 +271,7 @@ async function main() {
   }
   await AppDataSource.getRepository(HtCycle).save(cycleRows);
 
+  await ensureSupportingData(project, owner);
   const workflowInstanceId = await ensureTestingWorkflow(project, owner);
 
   console.log(JSON.stringify({ projectId: project.id, projectName: project.name, workflowInstanceId, experiments: [...experimentByType.values()].map((e) => ({ id: e.id, title: e.title })), rows: { calendar: calendarRows.length, swelling: swellingRows.length, efficiency: cells.length, dcr: cells.length, fastCharge: cells.length, htCycle: cycleRows.length } }, null, 2));

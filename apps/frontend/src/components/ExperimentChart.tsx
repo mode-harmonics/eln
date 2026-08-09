@@ -20,6 +20,7 @@ import { RECORD_TYPE_TO_API_TYPE, RECORD_TYPE_TO_I18N_KEY } from "../utils/recor
 
 interface ExperimentChartProps {
   assayType: string;
+  workflowStepName?: string;
   experimentId?: string;
   projectId?: string;
   title?: string;
@@ -405,6 +406,54 @@ function StorageSwellingChart({ data }: { data: any[] }) {
   </div>;
 }
 
+const PROCESS_STEP_CHARTS: Record<string, Array<{ title: string; unit: string; metrics: Array<{ field: string; label: string }> }>> = {
+  drying_injection: [
+    { title: '注液与失液量对比', unit: 'g', metrics: [{ field: 'mIn', label: '注液量' }, { field: 'mLoss', label: '失液量' }] },
+    { title: '注液阶段质量对比', unit: 'g', metrics: [{ field: 'm0', label: '注液前' }, { field: 'm1', label: '预充后' }, { field: 'm2', label: '二封后' }] },
+  ],
+  formation: [
+    { title: '化成容量对比', unit: 'Ah', metrics: [{ field: 'fq1', label: '充电容量' }, { field: 'fq2', label: '放电容量' }, { field: 'fq', label: '总容量' }] },
+    { title: '化成与老化电压对比', unit: 'V', metrics: [{ field: 'fu0', label: '化成前' }, { field: 'fu1', label: '老化前' }, { field: 'fu2', label: '老化后' }] },
+  ],
+  second_sealing: [
+    { title: '二封前后质量对比', unit: 'g', metrics: [{ field: 'm3', label: '二封前' }, { field: 'm4', label: '二封后' }] },
+    { title: '保液量对比', unit: 'g', metrics: [{ field: 'mHold', label: '保液量' }] },
+  ],
+  capacity_grading: [
+    { title: '定容充放电容量对比', unit: 'Ah', metrics: [{ field: 'gqc1', label: '首次充电' }, { field: 'gqd1', label: '首次放电' }, { field: 'gqc2', label: '二次充电' }] },
+    { title: '首圈库仑效率', unit: '%', metrics: [{ field: 'ceFirst', label: '首圈效率' }] },
+  ],
+};
+
+function ProcessStepCharts({ data, stepName }: { data: any[]; stepName: string }) {
+  const specs = PROCESS_STEP_CHARTS[stepName];
+  const { groupMap, groups } = useGroupColorMap(data);
+  const firstLegend = useLegendToggle(groups);
+  const secondLegend = useLegendToggle(groups);
+  const charts = useMemo(() => specs.map((spec) => spec.metrics.map((metric) => {
+    const point: any = { metric: metric.label };
+    groups.forEach((group) => {
+      const values = data.filter((row) => getGroupName(row) === group).map((row) => validNumber(row[metric.field])).filter((value): value is number => value !== null);
+      point[group] = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+    });
+    return point;
+  })), [data, groups, specs]);
+  const legends = [firstLegend, secondLegend];
+  return <div className="grid h-full grid-cols-1 grid-rows-2 gap-4 md:grid-cols-2 md:grid-rows-1">
+    {specs.map((spec, index) => {
+      const legend = legends[index];
+      return <ChartPanel key={spec.title} title={spec.title}>
+        <ResponsiveContainer width="100%" height="90%"><BarChart data={charts[index]} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+          <CartesianGrid {...GRID_STYLE} /><XAxis dataKey="metric" axisLine={false} tickLine={false} tick={AXIS_STYLE} /><YAxis axisLine={false} tickLine={false} tick={AXIS_STYLE} domain={[0, 'auto']} />
+          <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: any) => [`${n(value).toFixed(3)} ${spec.unit}`, '']} />
+          {groups.map((group) => <Bar key={group} hide={legend.hidden.has(group)} dataKey={group} name={`组 ${group}`} fill={groupMap.get(group)} radius={[3, 3, 0, 0]} maxBarSize={34} />)}
+        </BarChart></ResponsiveContainer>
+        <GroupLegend groups={groups} groupMap={groupMap} hidden={legend.hidden} onToggle={legend.toggle} />
+      </ChartPanel>;
+    })}
+  </div>;
+}
+
 /* ── 4. 4CDCR：DCR图 (柱形图) ──────────────────────────────── */
 
 function DcrGroupChart({ data }: { data: any[] }) {
@@ -570,7 +619,7 @@ function FastChargeChart({ data }: { data: any[] }) {
 
 /* ── Main Component ──────────────────────────────────────────── */
 
-export function ExperimentChart({ assayType, experimentId, projectId, title, staticData }: ExperimentChartProps) {
+export function ExperimentChart({ assayType, workflowStepName, experimentId, projectId, title, staticData }: ExperimentChartProps) {
   const [data, setData] = useState<any[]>([]);
 
   useEffect(() => {
@@ -601,7 +650,9 @@ export function ExperimentChart({ assayType, experimentId, projectId, title, sta
     const visible = data.filter((r: any) => !r.scrapped);
     if (!visible.length) return <EmptyChart />;
     switch (assayType) {
-      case 'ProcessData': return <ProcessBoxPlotChart data={visible} />;
+      case 'ProcessData': return workflowStepName && PROCESS_STEP_CHARTS[workflowStepName]
+        ? <ProcessStepCharts data={visible} stepName={workflowStepName} />
+        : <ProcessBoxPlotChart data={visible} />;
       case 'CalendarLife': return <CalendarLifeCharts data={visible} />;
       case 'StorageSwelling': return <StorageSwellingChart data={visible} />;
       case 'EnergyEfficiency': return <EfficiencyGroupChart data={visible} />;
@@ -614,7 +665,8 @@ export function ExperimentChart({ assayType, experimentId, projectId, title, sta
 
   const { t } = useTranslation();
   const displayName = title || t(RECORD_TYPE_TO_I18N_KEY[assayType] || assayType);
-  const hasTwoCharts = ['CalendarLife', 'StorageSwelling', 'EnergyEfficiency', 'DcrTest', 'FastCharge', 'HtCycle'].includes(assayType);
+  const hasTwoCharts = ['CalendarLife', 'StorageSwelling', 'EnergyEfficiency', 'DcrTest', 'FastCharge', 'HtCycle'].includes(assayType)
+    || (assayType === 'ProcessData' && !!workflowStepName && !!PROCESS_STEP_CHARTS[workflowStepName]);
 
   return (
     <div className={`bg-white rounded-xl p-5 w-full border border-gray-100 shadow-[0_2px_10px_rgba(0,0,0,0.03)] mb-5 ${hasTwoCharts ? 'h-[36rem] md:h-80' : 'h-80'}`}>
