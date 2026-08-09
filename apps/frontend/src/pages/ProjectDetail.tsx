@@ -149,7 +149,9 @@ export function ProjectDetail() {
   const isArchived = project.status === "Archived";
 
   const userActiveSteps = wf.steps.filter(
-    (s) => s.status === "in_progress" && s.assignedUserId === currentUserId && !s.isParallelGroup,
+    (s) => s.status === "in_progress"
+      && s.assignedUserIds?.includes(currentUserId || "")
+      && !s.isParallelGroup,
   );
   const currentStep = userActiveSteps[0] || null;
   const focusedStep = currentStep || (isCreator
@@ -217,6 +219,7 @@ export function ProjectDetail() {
                 pickedCellsCount={pickedCells.length}
                 experiments={experiments}
                 stepMeta={stepMeta}
+                workflowStatus={wf.instance?.status}
               />
             </div>
           </div>

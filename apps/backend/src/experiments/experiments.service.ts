@@ -207,7 +207,7 @@ export class ExperimentsService {
 
     // User is assigned, or has canViewOtherSteps, or is in visibleToUserIds
     const canAccess =
-      assignment.assignedUserId === userId ||
+      assignment.assignedUserIds?.includes(userId) ||
       (assignment.visibleToUserIds && assignment.visibleToUserIds.includes(userId));
     // Only check for the step being specifically assigned; canViewOtherSteps is handled at the workflow level
 

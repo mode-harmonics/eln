@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
@@ -34,7 +34,9 @@ export function Popconfirm({
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
+  const [popupSize, setPopupSize] = useState({ width: 320, height: 96 });
   const { t } = useTranslation();
 
   const finalConfirmText = confirmText || t("confirm", "确定");
@@ -72,6 +74,12 @@ export function Popconfirm({
     };
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open || !popupRef.current) return;
+    const rect = popupRef.current.getBoundingClientRect();
+    setPopupSize({ width: rect.width, height: rect.height });
+  }, [open, title, finalConfirmText, finalCancelText]);
+
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -101,26 +109,27 @@ export function Popconfirm({
 
   const style: React.CSSProperties = {
     position: "fixed",
-    zIndex: 300,
+    zIndex: 1000,
+    maxWidth: "calc(100vw - 24px)",
   };
 
   if (triggerRect) {
+    const margin = 12;
+    const gap = 8;
+    const clampX = (left: number) => Math.max(margin, Math.min(left, window.innerWidth - popupSize.width - margin));
+    const clampY = (top: number) => Math.max(margin, Math.min(top, window.innerHeight - popupSize.height - margin));
     if (placement === "top") {
-      style.top = `${triggerRect.top}px`;
-      style.left = `${triggerRect.left + triggerRect.width / 2}px`;
-      style.transform = "translate(-50%, -100%) translateY(-8px)";
+      style.top = clampY(triggerRect.top - popupSize.height - gap);
+      style.left = clampX(triggerRect.left + triggerRect.width / 2 - popupSize.width / 2);
     } else if (placement === "bottom") {
-      style.top = `${triggerRect.bottom}px`;
-      style.left = `${triggerRect.left + triggerRect.width / 2}px`;
-      style.transform = "translate(-50%, 0) translateY(8px)";
+      style.top = clampY(triggerRect.bottom + gap);
+      style.left = clampX(triggerRect.left + triggerRect.width / 2 - popupSize.width / 2);
     } else if (placement === "left") {
-      style.top = `${triggerRect.top + triggerRect.height / 2}px`;
-      style.left = `${triggerRect.left}px`;
-      style.transform = "translate(-100%, -50%) translateX(-8px)";
+      style.top = clampY(triggerRect.top + triggerRect.height / 2 - popupSize.height / 2);
+      style.left = clampX(triggerRect.left - popupSize.width - gap);
     } else if (placement === "right") {
-      style.top = `${triggerRect.top + triggerRect.height / 2}px`;
-      style.left = `${triggerRect.right}px`;
-      style.transform = "translate(0, -50%) translateX(8px)";
+      style.top = clampY(triggerRect.top + triggerRect.height / 2 - popupSize.height / 2);
+      style.left = clampX(triggerRect.right + gap);
     }
   }
 
@@ -135,10 +144,11 @@ export function Popconfirm({
       {open && createPortal(
         <div
           id="popconfirm-portal"
+          ref={popupRef}
           style={style}
-          className="bg-white rounded-md shadow-sm border border-gray-100 p-3.5 min-w-[200px]"
+          className="w-max min-w-[200px] max-w-[min(360px,calc(100vw-24px))] rounded-md border border-gray-100 bg-white p-3.5 shadow-sm"
         >
-          <div className="text-[12px] font-semibold text-gray-700 mb-2.5 whitespace-nowrap text-left">
+          <div className="mb-2.5 whitespace-normal break-words text-left text-[12px] font-semibold leading-5 text-gray-700">
             {title}
           </div>
           <div className="flex justify-end gap-1.5">

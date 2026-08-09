@@ -56,7 +56,8 @@ export interface WorkflowStepAssignmentDto {
   workflowInstanceId: string;
   stepName: string;
   stepIndex: number;
-  assignedUserId: string | null;
+  assignedUserIds: string[] | null;
+  assignedUserNames?: string[];
   assignedUser?: { fullName: string; email: string } | null;
   status: StepStatus | string;
   canViewOtherSteps: boolean;
@@ -81,7 +82,7 @@ export interface CreateWorkflowInstanceDto {
   templateId?: string;
   assignments: Array<{
     stepName: string;
-    assignedUserId: string;
+    assignedUserIds: string[];
     canViewOtherSteps?: boolean;
     canViewInternalCode?: boolean;
     visibleToUserIds?: string[];

@@ -19,7 +19,8 @@ export interface WfStep {
   stepName: string;
   stepIndex: number;
   status: "pending" | "in_progress" | "completed" | "skipped";
-  assignedUserId: string | null;
+  assignedUserIds: string[] | null;
+  assignedUserNames?: string[];
   isParallelGroup: boolean;
   parentStepName: string | null;
 }

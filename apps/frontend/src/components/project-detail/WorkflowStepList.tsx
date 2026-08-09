@@ -8,6 +8,10 @@ import { cn } from "../../lib/utils";
 import { BuiltInStep, resolveStepRoute } from "@eln/shared";
 import type { WfData, WfStep, StepMetaMap } from "../../hooks/useProjectWorkflow";
 import type { Experiment } from "../../types";
+
+const assigneeNames = (step: WfStep) => step.assignedUserNames?.length
+  ? step.assignedUserNames.join("、")
+  : (step.assignedUserIds ?? []).map((id) => `用户 #${id.slice(0, 6)}`).join("、");
 import { bs } from "../../hooks/useProjectWorkflow";
 
 interface WorkflowStepListProps {
@@ -93,8 +97,8 @@ export function WorkflowStepList({
                       <StatusBadge status={step.status} />
                     </div>
                     <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
-                      {step.assignedUserId ? (
-                        <><User className="h-3 w-3" /><span className="truncate">{t("assignee", "执行人")}: {(step as any).assignedUserName || `用户 #${step.assignedUserId.slice(0, 6)}`}</span></>
+                      {step.assignedUserIds?.length ? (
+                        <><User className="h-3 w-3" /><span className="truncate">{t("assignee", "执行人")}: {assigneeNames(step)}</span></>
                       ) : isPending ? (
                         <><LockKeyhole className="h-3 w-3" /><span>{t("step_pending", "等待前置步骤完成")}</span></>
                       ) : null}
@@ -135,7 +139,7 @@ export function WorkflowStepList({
                               <span className="text-gray-400 font-normal mr-1.5">{index + 1}.{childIndex + 1}</span>
                               {t(childMeta.label, childMeta.label)}
                             </p>
-                            {child.assignedUserId && <p className="mt-0.5 truncate text-[11px] text-gray-400">{t("assignee", "执行人")}: {(child as any).assignedUserName || `用户 #${child.assignedUserId.slice(0, 6)}`}</p>}
+                            {!!child.assignedUserIds?.length && <p className="mt-0.5 truncate text-[11px] text-gray-400">{t("assignee", "执行人")}: {assigneeNames(child)}</p>}
                           </div>
                           <StatusBadge status={child.status} />
                           {childCanOpen && <ChevronRight className="h-3.5 w-3.5 text-gray-300 group-hover:text-gray-700" />}

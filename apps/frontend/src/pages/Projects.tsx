@@ -167,11 +167,11 @@ export function Projects() {
         description: newProjectDesc,
       });
 
-      // 2. Create workflow instance with assignments (flatten multi-user selections)
+      // 2. Create workflow instance with one multi-user assignment per step
       if (selectedTemplateSteps.length > 0) {
         const assignments: Array<{
           stepName: string;
-          assignedUserId: string;
+          assignedUserIds: string[];
           canViewOtherSteps: boolean;
           canViewInternalCode: boolean;
           visibleToUserIds: string[];
@@ -182,43 +182,37 @@ export function Projects() {
             // Parent group assignment (defaults to first sub-step's assignee if no explicit selection on parent)
             const parentUserIds = stepAssignments[step.name] || stepAssignments[step.children[0].name];
             if (parentUserIds?.length) {
-              for (const userId of parentUserIds) {
-                assignments.push({
-                  stepName: step.name,
-                  assignedUserId: userId,
-                  canViewOtherSteps: true,
-                  canViewInternalCode: true,
-                  visibleToUserIds: stepVisibleTo[step.name] || [],
-                });
-              }
+              assignments.push({
+                stepName: step.name,
+                assignedUserIds: parentUserIds,
+                canViewOtherSteps: true,
+                canViewInternalCode: true,
+                visibleToUserIds: stepVisibleTo[step.name] || [],
+              });
             }
             // Sub-step assignments
             for (const child of step.children) {
               const userIds = stepAssignments[child.name];
               if (userIds?.length) {
-                for (const userId of userIds) {
-                  assignments.push({
-                    stepName: child.name,
-                    assignedUserId: userId,
-                    canViewOtherSteps: false,
-                    canViewInternalCode: false,
-                    visibleToUserIds: stepVisibleTo[child.name] || [],
-                  });
-                }
+                assignments.push({
+                  stepName: child.name,
+                  assignedUserIds: userIds,
+                  canViewOtherSteps: false,
+                  canViewInternalCode: false,
+                  visibleToUserIds: stepVisibleTo[child.name] || [],
+                });
               }
             }
           } else {
             const userIds = stepAssignments[step.name];
             if (userIds?.length) {
-              for (const userId of userIds) {
-                assignments.push({
-                  stepName: step.name,
-                  assignedUserId: userId,
-                  canViewOtherSteps: true,
-                  canViewInternalCode: true,
-                  visibleToUserIds: stepVisibleTo[step.name] || [],
-                });
-              }
+              assignments.push({
+                stepName: step.name,
+                assignedUserIds: userIds,
+                canViewOtherSteps: true,
+                canViewInternalCode: true,
+                visibleToUserIds: stepVisibleTo[step.name] || [],
+              });
             }
           }
         }

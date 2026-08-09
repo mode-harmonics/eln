@@ -186,7 +186,7 @@ export class WorkflowService {
     templateId?: string;
     assignments: Array<{
       stepName: string;
-      assignedUserId: string;
+      assignedUserIds: string[];
       canViewOtherSteps?: boolean;
       canViewInternalCode?: boolean;
       visibleToUserIds?: string[];
@@ -218,7 +218,10 @@ export class WorkflowService {
     const order = topologicalSort(nodes, edges);
 
     // Build assignment map + builtInStep reverse lookup
-    const assignMap = new Map(dto.assignments.map((a) => [a.stepName, a]));
+    const assignMap = new Map<string, (typeof dto.assignments)[number]>();
+    for (const assignment of dto.assignments) {
+      assignMap.set(assignment.stepName, assignment);
+    }
     const bsToName = new Map<string, string>();
     for (const n of nodes) bsToName.set(n.builtInStep || n.id, n.id);
 
@@ -227,14 +230,8 @@ export class WorkflowService {
     const bsName = bsToName.get(BuiltInStep.BatterySelection);
     if (expDesignName && bsName) {
       const expDesign = assignMap.get(expDesignName);
-      if (expDesign && !assignMap.has(bsName)) {
-        assignMap.set(bsName, {
-          stepName: bsName,
-          assignedUserId: expDesign.assignedUserId,
-          canViewOtherSteps: expDesign.canViewOtherSteps,
-          canViewInternalCode: expDesign.canViewInternalCode,
-          visibleToUserIds: expDesign.visibleToUserIds,
-        });
+      if (expDesign?.assignedUserIds.length && !assignMap.has(bsName)) {
+        assignMap.set(bsName, { ...expDesign, stepName: bsName });
       }
     }
 
@@ -287,11 +284,11 @@ export class WorkflowService {
     await this.assignmentRepo.save(records);
 
     // Notify first assignee
-    if (records[0]?.assignedUserId) {
+    for (const assignedUserId of records[0]?.assignedUserIds ?? []) {
       const firstNode = nodes.find((n) => n.id === order[0]);
       const label = STEP_NAME_MAP[order[0]] || firstNode?.label || order[0];
       await this.notificationsService.createNotification(
-        records[0].assignedUserId,
+        assignedUserId,
         'WORKFLOW_STEP_ASSIGNED',
         { projectId: dto.projectId, stepName: order[0], stepLabel: label, action: 'start' },
       );
@@ -300,10 +297,10 @@ export class WorkflowService {
     // Notify children activated as part of a leading group
     for (const childName of firstToActivate) {
       const child = records.find((r) => r.stepName === childName);
-      if (child?.status === StepStatus.InProgress && child.assignedUserId) {
+      if (child?.status === StepStatus.InProgress) for (const assignedUserId of child.assignedUserIds ?? []) {
         const label = STEP_NAME_MAP[child.stepName] || child.stepName;
         await this.notificationsService.createNotification(
-          child.assignedUserId,
+          assignedUserId,
           'WORKFLOW_STEP_ASSIGNED',
           { projectId: dto.projectId, stepName: child.stepName, stepLabel: label, isParallel: firstGroupIsParallel },
         );
@@ -322,18 +319,19 @@ export class WorkflowService {
     instanceId: string,
     stepIndex: number,
     stepName: string,
-    assign: { assignedUserId: string; canViewOtherSteps?: boolean; canViewInternalCode?: boolean; visibleToUserIds?: string[] } | undefined,
+    assignment: { assignedUserIds: string[]; canViewOtherSteps?: boolean; canViewInternalCode?: boolean; visibleToUserIds?: string[] } | undefined,
   ): WorkflowStepAssignment {
+    const assigneeIds = [...new Set(assignment?.assignedUserIds ?? [])];
     return this.assignmentRepo.create({
       id: uuid(),
       workflowInstanceId: instanceId,
       stepName,
       stepIndex,
-      assignedUserId: assign?.assignedUserId ?? null,
+      assignedUserIds: assigneeIds.length ? assigneeIds : null,
       status: StepStatus.Pending,
-      canViewOtherSteps: assign?.canViewOtherSteps ?? false,
-      canViewInternalCode: assign?.canViewInternalCode ?? false,
-      visibleToUserIds: assign?.visibleToUserIds ?? null,
+      canViewOtherSteps: assignment?.canViewOtherSteps ?? false,
+      canViewInternalCode: assignment?.canViewInternalCode ?? false,
+      visibleToUserIds: assignment?.visibleToUserIds ?? null,
       completedAt: null,
       completedBy: null,
     });
@@ -364,6 +362,10 @@ export class WorkflowService {
     }));
   }
 
+  private isAssignee(step: WorkflowStepAssignment, userId: string): boolean {
+    return step.assignedUserIds?.includes(userId) ?? false;
+  }
+
   // ════════════════════════════════════════════════════════════════
   //  QUERIES
   // ════════════════════════════════════════════════════════════════
@@ -390,14 +392,14 @@ export class WorkflowService {
       if (!isCreator) {
         // Get user's assignments
         const userAssignmentNames = new Set(
-          steps.filter((s) => s.assignedUserId === userId).map((s) => s.stepName),
+          steps.filter((s) => this.isAssignee(s, userId)).map((s) => s.stepName),
         );
         // Get user's visible steps
         const visibleByPerm = steps.filter(
           (s) => s.visibleToUserIds && s.visibleToUserIds.includes(userId),
         ).map((s) => s.stepName);
         const canSeeAll = steps.some(
-          (s) => s.assignedUserId === userId && s.canViewOtherSteps,
+          (s) => this.isAssignee(s, userId) && s.canViewOtherSteps,
         );
 
         if (canSeeAll) {
@@ -429,10 +431,10 @@ export class WorkflowService {
   private async enrichSteps(steps: WorkflowStepAssignment[]): Promise<any[]> {
     const userIds = new Set<string>();
     for (const s of steps) {
-      if (s.assignedUserId) userIds.add(s.assignedUserId);
+      for (const id of s.assignedUserIds ?? []) userIds.add(id);
       if (s.completedBy) userIds.add(s.completedBy);
     }
-    if (userIds.size === 0) return steps.map((s) => ({ ...s, assignedUserName: null, completedByName: null }));
+    if (userIds.size === 0) return steps.map((s) => ({ ...s, assignedUserNames: [], completedByName: null }));
 
     const users = await this.usersRepo.find({
       where: { id: In([...userIds]) },
@@ -441,7 +443,7 @@ export class WorkflowService {
 
     return steps.map((s) => ({
       ...s,
-      assignedUserName: s.assignedUserId ? (nameMap.get(s.assignedUserId) ?? null) : null,
+      assignedUserNames: (s.assignedUserIds ?? []).map((id) => nameMap.get(id) ?? id),
       completedByName: s.completedBy ? (nameMap.get(s.completedBy) ?? null) : null,
     }));
   }
@@ -501,7 +503,7 @@ export class WorkflowService {
 
     // Find the user's active leaf step
     let currentStep = steps.find(
-      (s) => s.status === StepStatus.InProgress && s.assignedUserId === userId && !s.isParallelGroup,
+      (s) => s.status === StepStatus.InProgress && this.isAssignee(s, userId) && !s.isParallelGroup,
     );
 
     // If no active step for user, allow project creator to force-complete
@@ -531,10 +533,10 @@ export class WorkflowService {
           await this.assignmentRepo.save(toActivate);
 
           for (const c of toActivate) {
-            if (c.assignedUserId) {
+            for (const assignedUserId of c.assignedUserIds ?? []) {
               const stepLabel = STEP_NAME_MAP[c.stepName] || c.stepName;
               await this.notificationsService.createNotification(
-                c.assignedUserId,
+                assignedUserId,
                 'WORKFLOW_STEP_ASSIGNED',
                 { projectId, stepName: c.stepName, stepLabel, isParallel },
               );
@@ -543,7 +545,7 @@ export class WorkflowService {
 
           // Re-find the current step after activation
           currentStep = steps.find(
-            (s) => s.status === StepStatus.InProgress && s.assignedUserId === userId && !s.isParallelGroup,
+            (s) => s.status === StepStatus.InProgress && this.isAssignee(s, userId) && !s.isParallelGroup,
           );
           if (!currentStep && project && project.createdBy === userId) {
             currentStep = steps.find(
@@ -609,9 +611,9 @@ export class WorkflowService {
           this.logger.log(
             `Serial group "${parentName}": activated next child "${nextChild.stepName}"`,
           );
-          if (nextChild.assignedUserId) {
+          for (const assignedUserId of nextChild.assignedUserIds ?? []) {
             await this.notificationsService.createNotification(
-              nextChild.assignedUserId,
+              assignedUserId,
               'WORKFLOW_STEP_ASSIGNED',
               { projectId, stepName: nextChild.stepName },
             );
@@ -708,10 +710,10 @@ export class WorkflowService {
       }
 
       for (const c of toActivate) {
-        if (c.assignedUserId) {
+        for (const assignedUserId of c.assignedUserIds ?? []) {
           const stepLabel = STEP_NAME_MAP[c.stepName] || c.stepName;
           await this.notificationsService.createNotification(
-            c.assignedUserId,
+            assignedUserId,
             'WORKFLOW_STEP_ASSIGNED',
             { projectId: instance.projectId, stepName: c.stepName, stepLabel, isParallel },
           );
@@ -724,10 +726,10 @@ export class WorkflowService {
       // Auto-create experiment for this step
       await this.experimentsService.ensureWorkflowExperiment(instance.projectId, next.stepName);
 
-      if (next.assignedUserId) {
+      for (const assignedUserId of next.assignedUserIds ?? []) {
         const stepLabel = STEP_NAME_MAP[next.stepName] || next.stepName;
         await this.notificationsService.createNotification(
-          next.assignedUserId,
+          assignedUserId,
           'WORKFLOW_STEP_ASSIGNED',
           { projectId: instance.projectId, stepName: next.stepName, stepLabel },
         );
@@ -797,7 +799,7 @@ export class WorkflowService {
     projectId: string,
     stepName: string,
     dto: Partial<{
-      assignedUserId: string;
+      assignedUserIds: string[];
       canViewOtherSteps: boolean;
       canViewInternalCode: boolean;
     }>,
@@ -829,12 +831,13 @@ export class WorkflowService {
     }>
   > {
     const assignments = await this.assignmentRepo.find({
-      where: { assignedUserId: userId, status: In([StepStatus.InProgress, StepStatus.Pending]) },
+      where: { status: In([StepStatus.InProgress, StepStatus.Pending]) },
       order: { stepIndex: 'ASC' },
     });
-    if (!assignments.length) return [];
+    const userAssignments = assignments.filter((assignment) => this.isAssignee(assignment, userId));
+    if (!userAssignments.length) return [];
 
-    const instanceIds = [...new Set(assignments.map((a) => a.workflowInstanceId))];
+    const instanceIds = [...new Set(userAssignments.map((a) => a.workflowInstanceId))];
     const instances = await this.instanceRepo.findByIds(instanceIds);
     const projects = await this.projectRepo.findByIds(
       [...new Set(instances.map((i) => i.projectId))],
@@ -847,7 +850,7 @@ export class WorkflowService {
       metaByInstance.set(inst.id, await this.getGraphMeta(inst));
     }
 
-    return assignments
+    return userAssignments
       .filter((a) => {
         const meta = metaByInstance.get(a.workflowInstanceId);
         return !meta?.isGroup[a.stepName];
@@ -889,8 +892,8 @@ export class WorkflowService {
 
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     const isCreator = project?.createdBy === userId;
-    const userAssignment = steps.find((s) => s.assignedUserId === userId);
-    const visibleSteps = steps.filter((s) => s.assignedUserId === userId || (s.visibleToUserIds && s.visibleToUserIds.includes(userId)));
+    const userAssignment = steps.find((s) => this.isAssignee(s, userId));
+    const visibleSteps = steps.filter((s) => this.isAssignee(s, userId) || (s.visibleToUserIds && s.visibleToUserIds.includes(userId)));
 
     if (isCreator || userAssignment?.canViewOtherSteps) {
       return {

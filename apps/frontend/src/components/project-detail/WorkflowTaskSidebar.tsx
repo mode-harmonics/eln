@@ -2,7 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
-  CheckCircle2, Circle, FileText, Layers, ChevronRight, User, AlertCircle, LockKeyhole
+  CheckCircle2, Circle, FileText, Layers, ChevronRight, User, AlertCircle, LockKeyhole, Clock3
 } from "lucide-react";
 import { Button } from "../Button";
 import { BuiltInStep, isExperimentDesignStep, resolveStepRoute } from "@eln/shared";
@@ -17,6 +17,7 @@ interface WorkflowTaskSidebarProps {
   pickedCellsCount: number;
   experiments: Experiment[];
   stepMeta: StepMetaMap;
+  workflowStatus?: string | null;
 }
 
 export function WorkflowTaskSidebar({
@@ -26,6 +27,7 @@ export function WorkflowTaskSidebar({
   pickedCellsCount,
   experiments,
   stepMeta,
+  workflowStatus,
 }: WorkflowTaskSidebarProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -58,10 +60,10 @@ export function WorkflowTaskSidebar({
               <p className="leading-5">完成当前阶段的数据录入与校验后，可在对应实验页面提交并推进流程。</p>
             </div>
 
-            {focusedStep.assignedUserId && (
+            {!!focusedStep.assignedUserIds?.length && (
               <div className="flex items-center gap-2 pt-1 text-xs text-gray-500">
                 <User className="h-3.5 w-3.5" />
-                <span>{t("assignee", "执行人")}: {(focusedStep as any).assignedUserName || `用户 #${focusedStep.assignedUserId.slice(0, 6)}`}</span>
+                <span>{t("assignee", "执行人")}: {focusedStep.assignedUserNames?.length ? focusedStep.assignedUserNames.join("、") : focusedStep.assignedUserIds.map((id) => `用户 #${id.slice(0, 6)}`).join("、")}</span>
               </div>
             )}
 
@@ -117,11 +119,17 @@ export function WorkflowTaskSidebar({
             })()}
           </div>
         </div>
-      ) : (
+      ) : workflowStatus?.toLowerCase() === "completed" ? (
         <div className="rounded-lg bg-gray-50 p-6 text-center">
           <CheckCircle2 className="mx-auto mb-3 h-9 w-9 text-emerald-500" />
           <h3 className="text-sm font-medium text-gray-900">{t("workflow_completed", "暂无待办任务")}</h3>
           <p className="mt-1 text-xs leading-5 text-gray-500">{t("workflow_completed_desc", "所有步骤已完成或尚未启动")}</p>
+        </div>
+      ) : (
+        <div className="rounded-lg bg-gray-50 p-6 text-center">
+          <Clock3 className="mx-auto mb-3 h-9 w-9 text-gray-400" />
+          <h3 className="text-sm font-medium text-gray-900">{t("no_assigned_task", "暂无进行中的任务")}</h3>
+          <p className="mt-1 text-xs leading-5 text-gray-500">{t("no_assigned_task_desc", "当前没有分配给你的进行中步骤，项目工作流仍在继续。")}</p>
         </div>
       )}
     </aside>

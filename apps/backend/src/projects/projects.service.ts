@@ -135,7 +135,7 @@ export class ProjectsService {
       .createQueryBuilder(WorkflowInstance, 'wi')
       .select('wi.projectId')
       .innerJoin(WorkflowStepAssignment, 'wsa', 'wsa.workflowInstanceId = wi.id')
-      .where('wsa.assignedUserId = :userId');
+      .where('wsa.assignedUserIds @> :assignedUserIds');
 
     // Sub-query: workflow instances where user is in visibleToUserIds of any step
     // (raw SQL because TypeORM chokes on JSONB @> operator inside .where())
@@ -148,7 +148,12 @@ export class ProjectsService {
     );
     const wfVisibleIds = (wfVisibleRowResult as { projectId: string }[]).map((r) => r.projectId);
 
-    const params: Record<string, unknown> = { userId };
+    // Parameters from embedded sub-query SQL are not propagated by getQuery(),
+    // so bind them on the parent query explicitly.
+    const params: Record<string, unknown> = {
+      userId,
+      assignedUserIds: JSON.stringify([userId]),
+    };
     let visibleClause = '';
     if (wfVisibleIds.length > 0) {
       visibleClause = ` OR project.id IN (:...wfVisibleIds)`;

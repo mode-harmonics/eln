@@ -29,8 +29,8 @@ export class WorkflowStepAssignment {
   stepIndex!: number;
 
   @Index()
-  @Column({ name: 'assignedUserId', type: 'uuid', nullable: true, comment: '分配执行人ID' })
-  assignedUserId!: string | null;
+  @Column({ name: 'assignedUserIds', type: 'jsonb', nullable: true, comment: '执行人ID列表' })
+  assignedUserIds!: string[] | null;
 
   @Index()
   @Column({ type: 'varchar', length: 32, default: 'pending', comment: '步骤状态(pending/in_progress/completed/skipped)' })

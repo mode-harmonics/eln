@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayNotEmpty,
   IsBoolean,
   IsInt,
   IsOptional,
@@ -92,8 +93,10 @@ export class WorkflowAssignmentInputDto {
   @IsString()
   stepName!: string;
 
-  @IsString()
-  assignedUserId!: string;
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  assignedUserIds!: string[];
 
   @IsOptional()
   @IsBoolean()
@@ -125,8 +128,9 @@ export class CreateWorkflowInstanceDto implements SharedCreateWorkflowInstanceDt
 
 export class UpdateStepAssignmentDto {
   @IsOptional()
-  @IsString()
-  assignedUserId?: string;
+  @IsArray()
+  @IsString({ each: true })
+  assignedUserIds?: string[];
 
   @IsOptional()
   @IsBoolean()

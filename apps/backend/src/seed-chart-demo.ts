@@ -147,7 +147,7 @@ async function ensureTestingWorkflow(project: Project, owner: User): Promise<str
       const isCompleted = index < testingIndex;
       return manager.getRepository(WorkflowStepAssignment).create({
         id: randomUUID(), workflowInstanceId: instance.id, stepName: node.id, stepIndex: index,
-        assignedUserId: owner.id, status: isCompleted ? 'completed' : (node.id === 'testing' || isTestingChild ? 'in_progress' : 'pending'),
+        assignedUserIds: [owner.id], status: isCompleted ? 'completed' : (node.id === 'testing' || isTestingChild ? 'in_progress' : 'pending'),
         canViewOtherSteps: true, canViewInternalCode: true, visibleToUserIds: [owner.id],
         completedAt: isCompleted ? now : null, completedBy: isCompleted ? owner.id : null,
       });
