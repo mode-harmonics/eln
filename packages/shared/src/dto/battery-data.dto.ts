@@ -140,6 +140,7 @@ export interface HtCycleDto {
   cycle: number;
   cellName: string;
   ironDissolution: string | null;
+  ironDissolutionStage: 'initial' | 'final' | null;
   dischargeCapacity: string | null;
   capacityRetention: string | null;
   createdAt: string;

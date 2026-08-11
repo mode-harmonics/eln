@@ -10,6 +10,7 @@ import { CalendarLife } from '../entities/calendar-life.entity';
 import { RawStepData } from '../entities/raw-step-data.entity';
 import { PickedCell } from '../entities/picked-cell.entity';
 import { ScrappedCell } from '../entities/scrapped-cell.entity';
+import { ScrappedSolutionGroup } from '../entities/scrapped-solution-group.entity';
 import { DcrTest } from '../entities/dcr-test.entity';
 import { EnergyEfficiency } from '../entities/energy-efficiency.entity';
 import { FastCharge } from '../entities/fast-charge.entity';
@@ -304,6 +305,16 @@ export class DataService {
     private readonly projectsService: ProjectsService,
     private readonly workflowService: WorkflowService,
   ) { }
+
+  private validateHtCycleIronDissolution(row: HtCycle): void {
+    const stage = row.ironDissolutionStage;
+    if (stage != null && stage !== 'initial' && stage !== 'final') {
+      throw new BadRequestException('Iron dissolution stage must be initial or final.');
+    }
+    if (row.ironDissolution != null && !stage) {
+      throw new BadRequestException('Iron dissolution stage is required when iron dissolution has a value.');
+    }
+  }
 
   /**
    * Retrieves all rows of a specified table (EntityClass) that belong to
@@ -1145,6 +1156,51 @@ export class DataService {
     return { success: true };
   }
 
+  async getScrappedSolutionGroups(experimentId: string): Promise<ScrappedSolutionGroup[]> {
+    return this.dataSource.getRepository(ScrappedSolutionGroup).find({
+      where: { experimentId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async scrapSolutionGroup(
+    experimentId: string,
+    groupName: string,
+    userId: string,
+    reason?: string,
+  ): Promise<ScrappedSolutionGroup> {
+    const normalizedGroupName = groupName?.trim();
+    if (!normalizedGroupName) throw new BadRequestException('groupName is required.');
+
+    const groupExists = await this.dataSource.getRepository(SolutionPreparation).exist({
+      where: { experimentId, groupName: normalizedGroupName },
+    });
+    if (!groupExists) {
+      throw new BadRequestException(`Solution group ${normalizedGroupName} does not exist in this experiment.`);
+    }
+
+    const repo = this.dataSource.getRepository(ScrappedSolutionGroup);
+    const existing = await repo.findOne({ where: { experimentId, groupName: normalizedGroupName } });
+    if (existing) return existing;
+
+    return repo.save(repo.create({
+      id: uuid(),
+      experimentId,
+      groupName: normalizedGroupName,
+      reason: reason?.trim() || null,
+      scrappedBy: userId,
+    }));
+  }
+
+  async restoreSolutionGroup(experimentId: string, groupName: string): Promise<{ success: boolean }> {
+    const normalizedGroupName = groupName?.trim();
+    if (!normalizedGroupName) throw new BadRequestException('groupName is required.');
+    const repo = this.dataSource.getRepository(ScrappedSolutionGroup);
+    const existing = await repo.findOne({ where: { experimentId, groupName: normalizedGroupName } });
+    if (existing) await repo.remove(existing);
+    return { success: true };
+  }
+
   /**
    * Sync picked cells to all 6 non-ProcessData tables.
    * - Auto-creates each target experiment if it doesn't exist yet.
@@ -1353,6 +1409,10 @@ export class DataService {
       if (allowedFields.includes(key)) {
         (row as Record<string, unknown>)[key] = value;
       }
+    }
+
+    if (type === 'htcycle' || type === 'htCycle') {
+      this.validateHtCycleIronDissolution(row as HtCycle);
     }
 
     if (type === 'process') {
@@ -1573,6 +1633,10 @@ export class DataService {
     const isCalendar = type === 'calendar' || type === 'calendarLife';
     const isSwelling = type === 'swelling' || type === 'storageSwelling';
     const isHtCycle = type === 'htcycle' || type === 'htCycle';
+
+    if (isHtCycle) {
+      for (const row of loadedRows) this.validateHtCycleIronDissolution(row as HtCycle);
+    }
 
     // Map the URL type param to the assayType string used by getProjectRows
     const assayTypeMap: Record<string, string> = {
@@ -1954,7 +2018,7 @@ export class DataService {
     const DCR_FIELDS = ['cellName', 'q0', 'du0', 'du1', 'di', 'ddcr', 'cu0', 'cu1', 'ci', 'cdcr', 'dRcProduct', 'cRcProduct'];
     // Frontend: cellName + computedFastChargeTime use rowSpan across steps; FC_COLS = stepNo..stepTime
     const FC_FIELDS = ['cellName', 'c0', 'providedFastChargeTime', 'stepNo', 'cutOffVoltage', 'current', 'rate', 'stepCapacity', 'stepSoc', 'cumulativeSoc', 'stepTime', 'computedFastChargeTime'];
-    const HT_FIELDS = ['cellName', 'ironDissolution', 'cycle', 'dischargeCapacity', 'capacityRetention'];
+    const HT_FIELDS = ['cellName', 'ironDissolution', 'ironDissolutionStage', 'cycle', 'dischargeCapacity', 'capacityRetention'];
 
     const sheetDefs: {
       key: string; name: string; fields: string[];

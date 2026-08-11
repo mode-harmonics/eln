@@ -47,6 +47,8 @@ interface ColDef {
   tooltip?: string;
   sourceType?: SourceType;
   editable?: boolean;
+  editor?: 'text' | 'select';
+  options?: Array<{ value: string; label: string }>;
   /** Render cell value using a custom function instead of `row[field]` */
   render?: (val: unknown, row: Record<string, unknown>) => React.ReactNode;
 }
@@ -94,7 +96,17 @@ function renderCells(
     const cellValue = isEditing && editForm ? editForm[c.field] ?? '' : String(row[c.field] ?? '');
     return (
       <td key={c.field} className={cn("px-3 py-2 whitespace-nowrap text-[13px]", colors.cell, isEditing && 'cursor-text', cellClassName)}>
-        {isEditing ? (
+        {isEditing && c.editor === 'select' ? (
+          <select
+            value={cellValue}
+            onChange={(e) => (batchChange || onEdit)!(c.field, e.target.value)}
+            className="-my-1 w-full min-w-24 rounded border border-gray-300 bg-white px-1.5 py-1 text-[13px] outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <option value=""></option>
+            {(c.options ?? []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        ) : isEditing ? (
           <input
             type="text"
             value={cellValue}
@@ -113,7 +125,7 @@ function renderCells(
 }
 
 /** Hook for inline editing state. */
-function useInlineEdit(type: string) {
+function useInlineEdit(type: string, validate?: (row: Record<string, string>) => string | null) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -138,6 +150,11 @@ function useInlineEdit(type: string) {
   };
 
   const handleSave = async (rowId: string, onRefreshed?: () => void) => {
+    const validationError = validate?.(editForm);
+    if (validationError) {
+      alert(validationError);
+      return;
+    }
     setSaving(true);
     try {
       const body: Record<string, unknown> = {};
@@ -159,7 +176,7 @@ function useInlineEdit(type: string) {
 }
 
 /** Hook for batch editing state — mirrors all data rows and saves changed ones. */
-function useBatchEdit(type: string, data: any[], refresh: () => void) {
+function useBatchEdit(type: string, data: any[], refresh: () => void, validate?: (row: Record<string, unknown>) => string | null) {
   const [batchEditing, setBatchEditing] = useState(false);
   const [batchDraft, setBatchDraft] = useState<any[]>([]);
   const [batchSaving, setBatchSaving] = useState(false);
@@ -183,6 +200,13 @@ function useBatchEdit(type: string, data: any[], refresh: () => void) {
   };
 
   const saveBatchEdit = async () => {
+    for (const draft of batchDraft) {
+      const validationError = validate?.(draft);
+      if (validationError) {
+        alert(validationError);
+        return;
+      }
+    }
     setBatchSaving(true);
     try {
       const skipKeys = new Set(['id', 'experimentId', 'createdAt', 'updatedAt']);
@@ -945,7 +969,8 @@ const HT_COLS: ColDef[] = [
   { field: 'cycle', i18nKey: 'col_cycle', tooltip: '循环圈数', editable: true, sourceType: 'manual' },
   { field: 'dischargeCapacity', i18nKey: 'col_capacity', tooltip: '放电容量 (Ah)', editable: true, sourceType: 'manual' },
   { field: 'capacityRetention', i18nKey: 'col_retention', sourceType: 'computed', tooltip: '容量保持率 (%)', render: (v) => v != null ? `${typeof v === 'number' ? v.toFixed(4) : v}%` : '-' },
-  { field: 'ironDissolution', i18nKey: 'col_iron_ppm', sourceType: 'device', tooltip: '铁溶出量 (ppm)', render: (v) => v != null ? `${v} ppm` : '-' },
+  { field: 'ironDissolution', i18nKey: 'col_iron_ppm', editable: true, sourceType: 'manual', tooltip: '铁溶出量 (ppm)', render: (v) => v != null ? `${v} ppm` : '-' },
+  { field: 'ironDissolutionStage', i18nKey: 'col_iron_stage', editable: true, editor: 'select', sourceType: 'manual', options: [{ value: 'initial', label: '初始' }, { value: 'final', label: '结束' }], render: (v) => v === 'initial' ? '初始' : v === 'final' ? '结束' : '-' },
 ];
 export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit, projectId }: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
@@ -953,8 +978,11 @@ export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit
   const data = staticData || fetchData;
   const loading = staticData ? false : fetchLoading;
   const error = staticData ? null : fetchErr;
-  const { editingId, editForm, saving, startEditing, cancelEditing, handleChange, handleSave } = useInlineEdit('htcycle');
-  const { batchEditing, batchDraft, batchSaving, enterBatchEdit, cancelBatchEdit, handleBatchChange, saveBatchEdit } = useBatchEdit('htcycle', data, refresh);
+  const validateIronDissolution = (row: Record<string, unknown>) => row.ironDissolution != null && row.ironDissolution !== '' && !row.ironDissolutionStage
+    ? t('iron_stage_required', '填写铁溶出量时必须选择测量阶段')
+    : null;
+  const { editingId, editForm, saving, startEditing, cancelEditing, handleChange, handleSave } = useInlineEdit('htcycle', validateIronDissolution);
+  const { batchEditing, batchDraft, batchSaving, enterBatchEdit, cancelBatchEdit, handleBatchChange, saveBatchEdit } = useBatchEdit('htcycle', data, refresh, validateIronDissolution);
   const sorted = [...data].sort((a: any, b: any) => (a.cellName ?? '').localeCompare(b.cellName ?? '') || (a.cycle - b.cycle));
   const htColors = buildColorMap(HT_COLS);
   const htFirst = HT_COLS[0];
@@ -1031,15 +1059,89 @@ export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit
 }
 
 // ─── SolutionPreparation (配液) ─────────────────────────────────────────────
-const SLN_COLS: ColDef[] = [
-  { field: 'groupName', i18nKey: 'col_formula' },
-  { field: 'materialName', i18nKey: 'col_material_name', editable: true, sourceType: 'manual' },
-  { field: 'specification', i18nKey: 'col_specification', editable: true, sourceType: 'manual' },
-  { field: 'formulaAmount', i18nKey: 'col_formula_amount', editable: true, sourceType: 'manual' },
-  { field: 'actualAmount', i18nKey: 'col_actual_amount', editable: true, sourceType: 'manual' },
-];
-
 export function SolutionPreparationTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
-  return <SimpleTable cols={SLN_COLS} type="solution" experimentId={props.experimentId} staticData={props.staticData} t={t} readOnly={props.readOnly} showBatchEdit={props.showBatchEdit} projectId={props.projectId} />;
+  const { data: fetchedRows, loading, error, refresh } = useTableData<any>('solution', props.experimentId || '');
+  const rows = props.staticData ?? fetchedRows;
+  const [scrappedGroups, setScrappedGroups] = useState<Set<string>>(new Set());
+  const [statusRefresh, setStatusRefresh] = useState(0);
+
+  useEffect(() => {
+    if (!props.experimentId || props.staticData) {
+      setScrappedGroups(new Set());
+      return;
+    }
+    let active = true;
+    api.get<Array<{ groupName: string }>>(`/api/v1/data/scrapped-solution-groups/${props.experimentId}`)
+      .then((records) => { if (active) setScrappedGroups(new Set(records.map((record) => record.groupName))); })
+      .catch(() => { if (active) setScrappedGroups(new Set()); });
+    return () => { active = false; };
+  }, [props.experimentId, props.staticData, statusRefresh]);
+
+  const groups = new Map<string, any[]>();
+  for (const row of rows) {
+    const groupName = String(row.groupName || '-');
+    const groupRows = groups.get(groupName) ?? [];
+    groupRows.push(row);
+    groups.set(groupName, groupRows);
+  }
+
+  const changeScrapStatus = async (groupName: string, restore: boolean) => {
+    if (!props.experimentId) return;
+    const endpoint = `/api/v1/data/scrapped-solution-groups/${props.experimentId}${restore ? '/restore' : ''}`;
+    await api.post(endpoint, { groupName });
+    setStatusRefresh((value) => value + 1);
+    refresh();
+  };
+
+  return (
+    <TableShell loading={props.staticData ? false : loading} error={props.staticData ? null : error}>
+      <div className="overflow-x-auto overflow-y-auto max-h-150">
+        <table className="min-w-full divide-y divide-gray-200 border-collapse">
+          <thead className="sticky top-0 z-20 bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">{t('solution_group', '组别')}</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">{t('solution_formula_info', '配方信息')}</th>
+              <th className="w-28 px-4 py-3 text-center text-xs font-semibold text-gray-700">{t('actions', '操作')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 bg-white">
+            {[...groups.entries()].map(([groupName, groupRows]) => {
+              const scrapped = scrappedGroups.has(groupName);
+              return (
+                <tr key={groupName} className={scrapped ? 'bg-red-50/50' : 'hover:bg-gray-50/70'}>
+                  <td className={cn('px-4 py-3 align-top text-sm font-medium', scrapped ? 'text-gray-400 line-through' : 'text-gray-900')}>{groupName}</td>
+                  <td className="px-4 py-3">
+                    <div className="space-y-2">
+                      {groupRows.map((row) => (
+                        <div key={row.id} className={cn('grid gap-x-4 gap-y-1 text-xs sm:grid-cols-4', scrapped && 'text-gray-400')}>
+                          <span className="font-medium">{row.materialName || '-'}</span>
+                          <span>{t('col_specification', '规格/纯度')}: {row.specification || '-'}</span>
+                          <span>{t('col_formula_amount', '配方添加量')}: {row.formulaAmount ?? '-'}</span>
+                          <span>{t('col_actual_amount', '实际添加量')}: {row.actualAmount ?? '-'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {props.staticData || props.readOnly ? <span className="text-gray-300">-</span> : (
+                      <Popconfirm
+                        title={scrapped ? t('confirm_restore_solution_group', '确认撤销该组报废？') : t('confirm_scrap_solution_group', '确认报废该配液组？')}
+                        onConfirm={() => void changeScrapStatus(groupName, scrapped)}
+                      >
+                        <Button variant="text" size="sm" className={scrapped ? 'text-amber-600!' : 'text-red-500!'}>
+                          {scrapped ? <RotateCcw className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
+                          {scrapped ? t('restore_scrap', '撤销报废') : t('scrap', '报废')}
+                        </Button>
+                      </Popconfirm>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </TableShell>
+  );
 }

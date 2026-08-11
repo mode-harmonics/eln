@@ -229,6 +229,36 @@ export class DataController {
     return this.dataService.restoreCell(projectId, body.cellId);
   }
 
+  @Get('scrapped-solution-groups/:experimentId')
+  @RequirePermission('experiments:read')
+  @ApiOperation({ summary: 'Get scrapped solution-preparation groups for an experiment.' })
+  async getScrappedSolutionGroups(@Param('experimentId') experimentId: string) {
+    return this.dataService.getScrappedSolutionGroups(experimentId);
+  }
+
+  @Post('scrapped-solution-groups/:experimentId')
+  @RequirePermission('experiments:write')
+  @ApiOperation({ summary: 'Scrap a whole solution-preparation group.' })
+  async scrapSolutionGroup(
+    @Param('experimentId') experimentId: string,
+    @Body() body: { groupName: string; reason?: string },
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!body?.groupName) throw new BadRequestException('groupName is required.');
+    return this.dataService.scrapSolutionGroup(experimentId, body.groupName, user.id, body.reason);
+  }
+
+  @Post('scrapped-solution-groups/:experimentId/restore')
+  @RequirePermission('experiments:write')
+  @ApiOperation({ summary: 'Restore a scrapped solution-preparation group.' })
+  async restoreSolutionGroup(
+    @Param('experimentId') experimentId: string,
+    @Body() body: { groupName: string },
+  ) {
+    if (!body?.groupName) throw new BadRequestException('groupName is required.');
+    return this.dataService.restoreSolutionGroup(experimentId, body.groupName);
+  }
+
   @Post('sync-cells/:projectId')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Sync picked cells to all 6 target business tables (project-scoped, destructive).' })

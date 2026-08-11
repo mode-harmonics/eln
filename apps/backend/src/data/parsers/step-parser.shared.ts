@@ -98,8 +98,8 @@ export function readStepSheet(sheet: Worksheet, experimentId: string, filename?:
   return { steps, byCell, cols };
 }
 
-/** Compute DCR in mΩ: |restVoltage - pulseVoltage| / |current| × 1000 */
-export function computeDcr_mOhm(
+/** Compute DCR in Ω: |restVoltage - pulseVoltage| / |current|. */
+export function computeDcrOhm(
   restVoltage: string | null,
   pulseVoltage: string | null,
   current: string | null,
@@ -107,7 +107,7 @@ export function computeDcr_mOhm(
   if (restVoltage == null || pulseVoltage == null || current == null) return null;
   const rv = Number(restVoltage), pv = Number(pulseVoltage), ci = Number(current);
   if (ci === 0) return null;
-  return (Math.abs(rv - pv) / Math.abs(ci)) * 1000;
+  return Math.abs(rv - pv) / Math.abs(ci);
 }
 
 /** Detect whether a sheet looks like a machine step sheet. */

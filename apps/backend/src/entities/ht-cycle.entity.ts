@@ -1,4 +1,4 @@
-import { Column, CreateDateColumn, UpdateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
+import { Check, Column, CreateDateColumn, UpdateDateColumn, Entity, Index, PrimaryColumn } from 'typeorm';
 
 /**
  * htCycle — 高温循环数据表
@@ -13,6 +13,7 @@ import { Column, CreateDateColumn, UpdateDateColumn, Entity, Index, PrimaryColum
  *   Skipped when the source sheet already contains an explicit _ret column.
  */
 @Entity('htCycle', { comment: '高温循环数据表' })
+@Check('CK_htCycle_ironDissolutionStage', `"ironDissolutionStage" IS NULL OR "ironDissolutionStage" IN ('initial', 'final')`)
 export class HtCycle {
   @PrimaryColumn({ type: 'uuid', comment: '主键ID' })
   id!: string;
@@ -37,6 +38,9 @@ export class HtCycle {
 
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '铁溶出量' })
   ironDissolution!: string | null;
+
+  @Column({ type: 'varchar', length: 16, nullable: true, comment: '铁溶出量测量阶段(initial/final)' })
+  ironDissolutionStage!: 'initial' | 'final' | null;
 
   @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, comment: '放电容量' })
   dischargeCapacity!: string | null;

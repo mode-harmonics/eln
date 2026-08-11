@@ -123,6 +123,7 @@ export const FAST_CHARGE_COLUMNS: Record<string, string> = {
 export const HT_CYCLE_COLUMNS: Record<string, string> = {
   cellName: '电池编号',
   ironDissolution: '铁溶出量',
+  ironDissolutionStage: '铁溶出阶段',
   cycle: '循环圈数',
   dischargeCapacity: '放电容量',
   capacityRetention: '容量保持率',

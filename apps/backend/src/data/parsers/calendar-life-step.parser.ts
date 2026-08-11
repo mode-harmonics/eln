@@ -3,7 +3,15 @@ import { v4 as uuid } from 'uuid';
 import { CalendarLife } from '../../entities/calendar-life.entity';
 import { RawStepData } from '../../entities/raw-step-data.entity';
 import { DataParser } from './parser.interface';
-import { computeDcr_mOhm, isStepSheet, readStepSheet } from './step-parser.shared';
+import { computeDcrOhm, isStepSheet, readStepSheet } from './step-parser.shared';
+
+export function parseCalendarLifeFilename(filename?: string): { cellName: string; dayCount: number } | null {
+  const stem = filename?.replace(/\.[^.]+$/, '') ?? '';
+  const match = stem.match(/^(.*)-(\d+)$/);
+  return match && match[1]
+    ? { cellName: match[1], dayCount: Number(match[2]) }
+    : null;
+}
 
 /** Internal: raw parsed values for one DCR pulse cycle. */
 interface DcrCycle {
@@ -40,6 +48,7 @@ export class CalendarLifeStepParser implements DataParser<CalendarLife> {
   parse(sheet: Worksheet, experimentId: string, filename?: string, attachmentId?: string): CalendarLife[] {
     const { steps, byCell } = readStepSheet(sheet, experimentId, filename, attachmentId);
     this.rawSteps = steps;
+    const filenameMetadata = parseCalendarLifeFilename(filename);
 
     const result: CalendarLife[] = [];
 
@@ -73,17 +82,17 @@ export class CalendarLifeStepParser implements DataParser<CalendarLife> {
 
       for (let i = 0; i < cycles.length; i++) {
         const c = cycles[i];
-        const dayCount = i * 7;
+        const dayCount = filenameMetadata?.dayCount ?? i * 7;
 
-        const ddrcVal = computeDcr_mOhm(c.ddrcRestV, c.ddrcPulseV, c.ddrcCurrent);
-        const cdcrVal = computeDcr_mOhm(c.cdcrRestV, c.cdcrPulseV, c.cdcrCurrent);
+        const ddrcVal = computeDcrOhm(c.ddrcRestV, c.ddrcPulseV, c.ddrcCurrent);
+        const cdcrVal = computeDcrOhm(c.cdcrRestV, c.cdcrPulseV, c.cdcrCurrent);
         const dqVal   = c.capacityQ;
 
         const row: Partial<CalendarLife> = {
           id: uuid(),
           experimentId,
           attachmentId: attachmentId || null,
-          cellName,
+          cellName: filenameMetadata?.cellName ?? cellName,
           dayCount,
           q:    i === 0 ? Q0d : null,
           dq:   dqVal,
@@ -104,9 +113,9 @@ export class CalendarLifeStepParser implements DataParser<CalendarLife> {
         } else {
           const Q0n = Q0d != null ? Number(Q0d) : null;
           if (dqVal != null && Q0n) row.qRetention = ((Number(dqVal) / Q0n) * 100).toFixed(6);
-          const ddcr0 = computeDcr_mOhm(baseline.ddrcRestV, baseline.ddrcPulseV, baseline.ddrcCurrent);
+          const ddcr0 = computeDcrOhm(baseline.ddrcRestV, baseline.ddrcPulseV, baseline.ddrcCurrent);
           if (ddrcVal != null && ddcr0) row.ddcrGrowth = ((ddrcVal / ddcr0 - 1) * 100).toFixed(6);
-          const cdcr0 = computeDcr_mOhm(baseline.cdcrRestV, baseline.cdcrPulseV, baseline.cdcrCurrent);
+          const cdcr0 = computeDcrOhm(baseline.cdcrRestV, baseline.cdcrPulseV, baseline.cdcrCurrent);
           if (cdcrVal != null && cdcr0) row.cdcrGrowth = ((cdcrVal / cdcr0 - 1) * 100).toFixed(6);
         }
 

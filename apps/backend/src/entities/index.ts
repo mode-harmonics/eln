@@ -25,6 +25,7 @@ export * from './picked-cell.entity';
 
 // Scrapped cells (电池报废记录)
 export * from './scrapped-cell.entity';
+export * from './scrapped-solution-group.entity';
 
 // Workflow entities
 export * from './workflow-template.entity';
