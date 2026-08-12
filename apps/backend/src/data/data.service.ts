@@ -17,6 +17,7 @@ import { FastCharge } from '../entities/fast-charge.entity';
 import { HtCycle } from '../entities/ht-cycle.entity';
 import { ProcessData } from '../entities/process-data.entity';
 import { SolutionPreparation } from '../entities/solution-preparation.entity';
+import { SolutionPreparationGroup } from '../entities/solution-preparation-group.entity';
 import { StorageSwelling } from '../entities/storage-swelling.entity';
 import { Experiment } from '../entities/experiment.entity';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
@@ -1161,6 +1162,48 @@ export class DataService {
       where: { experimentId },
       order: { createdAt: 'DESC' },
     });
+  }
+
+  async getSolutionPreparationGroups(
+    experimentId: string,
+  ): Promise<Array<{ groupName: string; formulaInfo: string; scrapped: boolean }>> {
+    const [details, metadata, scraps] = await Promise.all([
+      this.dataSource.getRepository(SolutionPreparation).find({
+        where: { experimentId },
+        select: { groupName: true },
+        order: { groupName: 'ASC' },
+      }),
+      this.dataSource.getRepository(SolutionPreparationGroup).find({ where: { experimentId } }),
+      this.dataSource.getRepository(ScrappedSolutionGroup).find({ where: { experimentId } }),
+    ]);
+    const formulaByGroup = new Map(metadata.map((row) => [row.groupName, row.formulaInfo ?? '']));
+    const scrappedGroups = new Set(scraps.map((row) => row.groupName));
+    return [...new Set(details.map((row) => row.groupName))].map((groupName) => ({
+      groupName,
+      formulaInfo: formulaByGroup.get(groupName) ?? '',
+      scrapped: scrappedGroups.has(groupName),
+    }));
+  }
+
+  async updateSolutionPreparationGroup(
+    experimentId: string,
+    groupName: string,
+    formulaInfo: string,
+  ): Promise<{ groupName: string; formulaInfo: string }> {
+    const normalizedGroupName = groupName?.trim();
+    if (!normalizedGroupName) throw new BadRequestException('groupName is required.');
+    if (typeof formulaInfo !== 'string') throw new BadRequestException('formulaInfo must be a string.');
+    const exists = await this.dataSource.getRepository(SolutionPreparation).exist({
+      where: { experimentId, groupName: normalizedGroupName },
+    });
+    if (!exists) throw new NotFoundException(`Solution group ${normalizedGroupName} does not exist in this experiment.`);
+
+    const repo = this.dataSource.getRepository(SolutionPreparationGroup);
+    const existing = await repo.findOne({ where: { experimentId, groupName: normalizedGroupName } });
+    const saved = await repo.save(existing
+      ? { ...existing, formulaInfo }
+      : repo.create({ id: uuid(), experimentId, groupName: normalizedGroupName, formulaInfo }));
+    return { groupName: saved.groupName, formulaInfo: saved.formulaInfo ?? '' };
   }
 
   async scrapSolutionGroup(

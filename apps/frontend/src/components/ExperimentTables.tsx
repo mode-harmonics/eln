@@ -8,6 +8,7 @@ import { Modal } from "./Modal";
 import { Tooltip, TooltipTh } from "./Tooltip";
 import { Popconfirm } from "./Popconfirm";
 import { toast } from "./Toast";
+import type { SolutionPreparationGroupDto } from "@eln/shared";
 
 /** Shared hook: fetch /api/v1/data/:type/:expId and return { data, loading, error, refresh } */
 function useTableData<T>(type: string, experimentId: string) {
@@ -690,9 +691,9 @@ function SimpleTable({ cols, cellNameField, type, experimentId, t, keyFn, static
 // ─── CalendarLife ───────────────────────────────────────────────────────────
 const CAL_COLS: ColDef[] = [
   { field: 'cellName', i18nKey: 'col_cell_name' },
-  { field: 'dayCount', i18nKey: 'col_day', tooltip: '测试天数 (天)', editable: true },
-  { field: 'dq', i18nKey: 'col_dq_loss', tooltip: '首次放电容量 (dq, Ah)', editable: true },
-  { field: 'q', i18nKey: 'col_q_cap', tooltip: '定容容量 (q, Ah)', editable: true },
+  { field: 'dayCount', i18nKey: 'col_day', tooltip: '测试天数 (天)', editable: true, sourceType: 'device' },
+  { field: 'dq', i18nKey: 'col_dq_loss', tooltip: '首次放电容量 (dq, Ah)', editable: true, sourceType: 'device' },
+  { field: 'q', i18nKey: 'col_q_cap', tooltip: '定容容量 (q, Ah)', editable: true, sourceType: 'device' },
   { field: 'qRetention', i18nKey: 'col_comp_qRetention', tooltip: '容量保持率 = (dq / q_0d) * 100 (%)' },
   { field: 'qRecovery', i18nKey: 'col_comp_qRecovery', tooltip: '容量恢复率 = (q / q_0d) * 100 (%)' },
   { field: 'ddcr', i18nKey: 'col_ddcr', tooltip: '放电直流内阻 (ddcr, Ω)', editable: true },
@@ -1061,37 +1062,81 @@ export function HtCycleTable({ experimentId, staticData, readOnly, showBatchEdit
 // ─── SolutionPreparation (配液) ─────────────────────────────────────────────
 export function SolutionPreparationTable(props: { experimentId?: string; staticData?: any[]; readOnly?: boolean; showBatchEdit?: boolean; projectId?: string }) {
   const { t } = useTranslation();
-  const { data: fetchedRows, loading, error, refresh } = useTableData<any>('solution', props.experimentId || '');
-  const rows = props.staticData ?? fetchedRows;
-  const [scrappedGroups, setScrappedGroups] = useState<Set<string>>(new Set());
-  const [statusRefresh, setStatusRefresh] = useState(0);
+  const [liveGroups, setLiveGroups] = useState<SolutionPreparationGroupDto[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [editingGroup, setEditingGroup] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!props.experimentId || props.staticData) {
-      setScrappedGroups(new Set());
+      setLiveGroups([]);
+      setError(null);
+      setLoading(false);
       return;
     }
     let active = true;
-    api.get<Array<{ groupName: string }>>(`/api/v1/data/scrapped-solution-groups/${props.experimentId}`)
-      .then((records) => { if (active) setScrappedGroups(new Set(records.map((record) => record.groupName))); })
-      .catch(() => { if (active) setScrappedGroups(new Set()); });
+    setLoading(true);
+    setError(null);
+    api.get<SolutionPreparationGroupDto[]>(`/api/v1/data/solution-preparation-groups/${props.experimentId}`)
+      .then((records) => { if (active) setLiveGroups(records); })
+      .catch((err) => { if (active) setError(err?.message ?? t('load_failed', '加载失败')); })
+      .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [props.experimentId, props.staticData, statusRefresh]);
+  }, [props.experimentId, props.staticData, refreshKey, t]);
 
-  const groups = new Map<string, any[]>();
-  for (const row of rows) {
-    const groupName = String(row.groupName || '-');
-    const groupRows = groups.get(groupName) ?? [];
-    groupRows.push(row);
-    groups.set(groupName, groupRows);
-  }
+  const staticGroups = props.staticData
+    ? [...new Map(props.staticData.map((row) => {
+      const groupName = String(row.groupName || '-');
+      return [groupName, {
+        groupName,
+        formulaInfo: typeof row.formulaInfo === 'string' ? row.formulaInfo : '',
+        scrapped: Boolean(row.scrapped),
+      } satisfies SolutionPreparationGroupDto];
+    })).values()]
+    : [];
+  const groups = props.staticData ? staticGroups : liveGroups;
 
   const changeScrapStatus = async (groupName: string, restore: boolean) => {
     if (!props.experimentId) return;
-    const endpoint = `/api/v1/data/scrapped-solution-groups/${props.experimentId}${restore ? '/restore' : ''}`;
-    await api.post(endpoint, { groupName });
-    setStatusRefresh((value) => value + 1);
-    refresh();
+    try {
+      const endpoint = `/api/v1/data/scrapped-solution-groups/${props.experimentId}${restore ? '/restore' : ''}`;
+      await api.post(endpoint, { groupName });
+      toast.success(restore ? t('restore_solution_group_success', '已撤销报废') : t('scrap_solution_group_success', '配液组已报废'));
+      setRefreshKey((value) => value + 1);
+    } catch (err: any) {
+      toast.error(err?.message ?? t('operation_failed', '操作失败'));
+    }
+  };
+
+  const startEditing = (group: SolutionPreparationGroupDto) => {
+    setEditingGroup(group.groupName);
+    setEditValue(group.formulaInfo);
+  };
+
+  const cancelEditing = () => {
+    setEditingGroup(null);
+    setEditValue('');
+  };
+
+  const saveFormulaInfo = async () => {
+    if (!props.experimentId || !editingGroup) return;
+    setSaving(true);
+    try {
+      await api.patch(`/api/v1/data/solution-preparation-groups/${props.experimentId}`, {
+        groupName: editingGroup,
+        formulaInfo: editValue,
+      });
+      toast.success(t('save_success', '保存成功'));
+      cancelEditing();
+      setRefreshKey((value) => value + 1);
+    } catch (err: any) {
+      toast.error(err?.message ?? t('save_failed', '保存失败'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -1106,34 +1151,67 @@ export function SolutionPreparationTable(props: { experimentId?: string; staticD
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 bg-white">
-            {[...groups.entries()].map(([groupName, groupRows]) => {
-              const scrapped = scrappedGroups.has(groupName);
+            {groups.map((group) => {
+              const { groupName, formulaInfo, scrapped } = group;
+              const editing = editingGroup === groupName;
               return (
                 <tr key={groupName} className={scrapped ? 'bg-red-50/50' : 'hover:bg-gray-50/70'}>
                   <td className={cn('px-4 py-3 align-top text-sm font-medium', scrapped ? 'text-gray-400 line-through' : 'text-gray-900')}>{groupName}</td>
                   <td className="px-4 py-3">
-                    <div className="space-y-2">
-                      {groupRows.map((row) => (
-                        <div key={row.id} className={cn('grid gap-x-4 gap-y-1 text-xs sm:grid-cols-4', scrapped && 'text-gray-400')}>
-                          <span className="font-medium">{row.materialName || '-'}</span>
-                          <span>{t('col_specification', '规格/纯度')}: {row.specification || '-'}</span>
-                          <span>{t('col_formula_amount', '配方添加量')}: {row.formulaAmount ?? '-'}</span>
-                          <span>{t('col_actual_amount', '实际添加量')}: {row.actualAmount ?? '-'}</span>
-                        </div>
-                      ))}
-                    </div>
+                    {editing ? (
+                      <input
+                        type="text"
+                        value={editValue}
+                        onChange={(event) => setEditValue(event.target.value)}
+                        disabled={saving}
+                        autoFocus
+                        className="w-full min-w-96 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100 disabled:opacity-60"
+                      />
+                    ) : (
+                      <span className={cn('text-sm', scrapped ? 'text-gray-400' : 'text-gray-700')}>{formulaInfo || '-'}</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {props.staticData || props.readOnly ? <span className="text-gray-300">-</span> : (
-                      <Popconfirm
-                        title={scrapped ? t('confirm_restore_solution_group', '确认撤销该组报废？') : t('confirm_scrap_solution_group', '确认报废该配液组？')}
-                        onConfirm={() => void changeScrapStatus(groupName, scrapped)}
-                      >
-                        <Button variant="text" size="sm" className={scrapped ? 'text-amber-600!' : 'text-red-500!'}>
-                          {scrapped ? <RotateCcw className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
-                          {scrapped ? t('restore_scrap', '撤销报废') : t('scrap', '报废')}
-                        </Button>
-                      </Popconfirm>
+                      <div className="flex items-center justify-center gap-1">
+                        {editing ? (
+                          <>
+                            <Tooltip content={t('save', '保存')}>
+                              <button onClick={() => void saveFormulaInfo()} disabled={saving} className="p-1.5 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors disabled:opacity-40">
+                                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                              </button>
+                            </Tooltip>
+                            <Tooltip content={t('cancel', '取消')}>
+                              <button onClick={cancelEditing} disabled={saving} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors disabled:opacity-40">
+                                <X className="h-4 w-4" />
+                              </button>
+                            </Tooltip>
+                          </>
+                        ) : scrapped ? (
+                          <Tooltip content={t('restore_scrap', '撤销报废')}>
+                            <Popconfirm title={t('confirm_restore_solution_group', '确认撤销该组报废？')} onConfirm={() => void changeScrapStatus(groupName, true)} placement="left">
+                              <button className="p-1.5 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-md transition-colors cursor-pointer">
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </button>
+                            </Popconfirm>
+                          </Tooltip>
+                        ) : (
+                          <>
+                            <Tooltip content={t('edit_row', '编辑')}>
+                              <button onClick={() => startEditing(group)} className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors">
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                            </Tooltip>
+                            <Tooltip content={t('scrap', '报废')}>
+                              <Popconfirm title={t('confirm_scrap_solution_group', '确认报废该配液组？')} onConfirm={() => void changeScrapStatus(groupName, false)} placement="left">
+                                <button className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors">
+                                  <Ban className="h-3.5 w-3.5" />
+                                </button>
+                              </Popconfirm>
+                            </Tooltip>
+                          </>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>

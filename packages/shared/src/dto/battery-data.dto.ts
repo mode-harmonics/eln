@@ -15,6 +15,12 @@ export interface SolutionPreparationDto {
   createdAt: string;
 }
 
+export interface SolutionPreparationGroupDto {
+  groupName: string;
+  formulaInfo: string;
+  scrapped: boolean;
+}
+
 export interface ProcessDataDto {
   id: string;
   experimentId: string;

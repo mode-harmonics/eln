@@ -262,9 +262,9 @@ export function CellPickerPage() {
         <div className="flex flex-col items-center justify-center py-24 text-gray-400"><Layers className="h-10 w-10 mb-3 opacity-30" /><p className="text-sm">暂无可挑选的电池</p></div>
       ) : (
         <div className="overflow-auto max-h-[calc(100vh-380px)] rounded-surface border border-border bg-white">
-          <table className="min-w-max border-collapse">
+          <table className="min-w-max border-separate border-spacing-0">
             <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-              <th className={cn(thClass, "sticky left-0 z-20 min-w-[130px]")}>{t("cell_id")}</th>
+              <th className={cn(thClass, "sticky left-0 z-40 min-w-[130px] bg-gray-50 shadow-[2px_0_6px_rgba(0,0,0,0.06)]")}>{t("cell_id")}</th>
               {dataCols.map((c) => (
                 c.tooltip ? (
                   <TooltipTh key={c.field} content={c.tooltip} label={c.label} className={cn(thClass, PD_COLOR[c.field] ?? "", "min-w-[90px]")} />
@@ -280,7 +280,7 @@ export function CellPickerPage() {
                 const isSel = !!assignedType;
                 return (
                   <tr key={cell.cellId || cell.id} className={cn(isSel && "bg-blue-50/40")}>
-                    <td className={cn("sticky left-0 z-20 bg-white px-3 py-2 whitespace-nowrap text-[13px] font-semibold border-r border-gray-100 shadow-[2px_0_6px_rgba(0,0,0,0.06)]",
+                    <td className={cn("sticky left-0 z-30 bg-white px-3 py-2 whitespace-nowrap text-[13px] font-semibold border-r border-gray-100 shadow-[2px_0_6px_rgba(0,0,0,0.06)]",
                       isSel ? "text-action-muted" : "text-gray-900"
                     )}>
                       {cell.cellId}
