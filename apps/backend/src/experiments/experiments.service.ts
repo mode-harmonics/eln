@@ -60,11 +60,11 @@ export class ExperimentsService {
    * rows for ProcessData / SolutionPreparation from the experiment design.
    * (Owned by this module so WorkflowService stays free of data-entity logic.)
    */
-  async ensureWorkflowExperiment(projectId: string, stepName: string, manager?: EntityManager): Promise<void> {
-    if (!manager) return this.dataSource.transaction((tx) => this.ensureWorkflowExperiment(projectId, stepName, tx));
+  async ensureWorkflowExperiment(projectId: string, stepName: string, manager?: EntityManager, builtInStep = stepName): Promise<void> {
+    if (!manager) return this.dataSource.transaction((tx) => this.ensureWorkflowExperiment(projectId, stepName, tx, builtInStep));
     const project = await manager.findOne(Project, { where: { id: projectId }, lock: { mode: 'pessimistic_write' } });
     if (!project) throw new NotFoundException('Project not found.');
-    const assayType = STEP_ASSAY_MAP[stepName];
+    const assayType = STEP_ASSAY_MAP[builtInStep];
     if (!assayType) return;
 
     // Check if an experiment already exists for this step
@@ -74,7 +74,7 @@ export class ExperimentsService {
     if (existing) return;
 
 
-    const stepLabel = STEP_NAME_MAP[stepName] ?? stepName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    const stepLabel = STEP_NAME_MAP[builtInStep] ?? stepName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
     const exp = manager.getRepository(Experiment).create({
       id: uuid(),
       projectId,

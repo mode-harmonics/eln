@@ -60,7 +60,8 @@ export function CellPickerPage() {
   const [saving, setSaving] = useState(false);
   const operationLock = useRef(false);
   const [pendingAutoSync, setPendingAutoSync] = useState(false);
-  const [readonly, setReadonly] = useState(false);
+  const [stepStatus, setStepStatus] = useState<string | null>(null);
+  const readonly = stepStatus !== "in_progress";
   const [activeGroup, setActiveGroup] = useState<string>(t("all"));
   const loadData = useCallback(async () => {
     if (!projectId) return;
@@ -77,7 +78,7 @@ export function CellPickerPage() {
       const initSelected: Record<string, string> = {};
       (picked || []).forEach((p: any) => { if (p.testType) initSelected[p.cellId] = p.testType; });
       const bsStep = wf?.steps?.find((s: any) => (s.builtInStep ?? s.stepName) === BuiltInStep.BatterySelection);
-      setReadonly(bsStep?.status === "completed");
+      setStepStatus(bsStep?.status ?? "missing");
 
       setCells(deduped);
       setSelected(initSelected);
@@ -165,7 +166,7 @@ export function CellPickerPage() {
           <div className="flex flex-wrap items-center gap-2">
             {!readonly && <Button variant="secondary" size="sm" onClick={handleAutoPick} loading={autoPicking} disabled={loading || !!loadError || autoPicking || saving || cells.length === 0}><Sparkles className="w-3.5 h-3.5 mr-1" />{autoPicking ? t("auto_assigning") : (pendingAutoSync ? t("retry_cell_sync") : t("auto_assign_default"))}</Button>}
             {!readonly && <Button size="sm" onClick={handleSave} loading={saving} disabled={loading || !!loadError || saving || autoPicking || pendingAutoSync || displayAssignedCount === 0}><Check className="w-3.5 h-3.5 mr-1" />{t("confirm_assign")}</Button>}
-            {readonly && <span className="text-sm text-amber-600 font-medium">{t("pick_completed_readonly")}</span>}
+            {stepStatus === "completed" && <span className="text-sm text-amber-600 font-medium">{t("pick_completed_readonly")}</span>}
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">

@@ -23,6 +23,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "../components/Toast";
 import { api, ApiError } from "../lib/api";
+import { completeWorkflowStep } from "../lib/workflow";
 import { cn } from "../lib/utils";
 
 import type { Experiment } from "../types";
@@ -66,23 +67,6 @@ export function ExperimentDetail() {
   // Built-in step lookup map (stepName → builtInStep)
   const [bsMap, setBsMap] = useState<Record<string, string>>({});
   function bsFn(name: string) { return bsMap[name] ?? name; }
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch("/api/v1/workflow/default-steps", { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } })
-      .then((r) => r.json().catch(() => ({})))
-      .then((json) => {
-        const steps: Array<{ name: string; builtInStep: string | null; children?: any[] }> = json?.data?.steps ?? json?.steps ?? [];
-        const m: Record<string, string> = {};
-        for (const s of steps) {
-          m[s.name] = s.builtInStep ?? s.name;
-          if (s.children) {
-            for (const c of s.children) m[c.name] = c.builtInStep ?? c.name;
-          }
-        }
-        setBsMap(m);
-      })
-      .catch(() => {});
-  }, []);
 
   const openEditModal = () => {
     if (!experiment) return;
@@ -228,38 +212,40 @@ export function ExperimentDetail() {
   };
 
   const [completingStep, setCompletingStep] = useState(false);
-  const [stepCompleted, setStepCompleted] = useState(false);
+  const [stepStatus, setStepStatus] = useState<string | null>(null);
+  const [stepError, setStepError] = useState<string | null>(null);
+  const [stepRetry, setStepRetry] = useState(0);
+  const stepCompleted = stepStatus === "completed";
 
-  // On mount, check if the workflow step is already completed
   useEffect(() => {
     if (!experiment?.projectId || !experiment?.workflowStepName) return;
-    api.get<any>(`/api/v1/workflow/instances/${experiment.projectId}`)
+    let cancelled = false;
+    setStepStatus(null);
+    setStepError(null);
+    api.get<{ steps: Array<{ stepName: string; builtInStep?: string | null; status: string }> }>(`/api/v1/workflow/instances/${experiment.projectId}`)
       .then((wf) => {
-        if (wf?.steps?.length) {
-          const match = wf.steps.find((s: any) => s.stepName === experiment.workflowStepName);
-          if (match?.status === 'completed') setStepCompleted(true);
-        }
+        if (cancelled) return;
+        const steps = wf?.steps ?? [];
+        setBsMap(Object.fromEntries(steps.map((s) => [s.stepName, s.builtInStep ?? s.stepName])));
+        setStepStatus(steps.find((s) => s.stepName === experiment.workflowStepName)?.status ?? "missing");
       })
-      .catch(() => { /* no workflow yet */ });
-  }, [experiment?.projectId, experiment?.workflowStepName]);
+      .catch((err: unknown) => {
+        if (!cancelled) setStepError(err instanceof Error ? err.message : t("loading_failed"));
+      });
+    return () => { cancelled = true; };
+  }, [experiment?.projectId, experiment?.workflowStepName, stepRetry, t]);
 
   const handleCompleteStep = async () => {
-    if (!experiment?.projectId) return;
+    if (!experiment?.projectId || !experiment.workflowStepName || stepStatus !== "in_progress") return;
     setCompletingStep(true);
     try {
-      await api.put(`/api/v1/workflow/instances/${experiment.projectId}/transition`, { expectedStepName: experiment.workflowStepName });
+      await completeWorkflowStep(experiment.projectId, experiment.workflowStepName);
       toast.success(t("step_completed_success", "当前工步已提交"));
-      setStepCompleted(true);
+      setStepStatus("completed");
       navigate(`/projects/${experiment.projectId}`);
     } catch (err: any) {
-      const msg = err?.message ?? '';
-      // If step is already completed, treat as success
-      if (msg.includes('already completed') || msg.includes('already')) {
-        setStepCompleted(true);
-        navigate(`/projects/${experiment.projectId}`);
-        return;
-      }
-      toast.error(msg || t("submit_failed", "提交失败"));
+      toast.error(err?.message || t("submit_failed", "提交失败"));
+      setStepRetry((value) => value + 1);
     } finally {
       setCompletingStep(false);
     }
@@ -277,7 +263,7 @@ export function ExperimentDetail() {
     return <div className="p-10 text-sm text-red-500">{error ?? t("experiment_not_found")}</div>;
   }
 
-  const isReadOnly = stepCompleted || experiment.status !== "Draft";
+  const isReadOnly = experiment.status !== "Draft" || (!!experiment.workflowStepName && stepStatus !== "in_progress");
   const assayType = experiment.metadata?.assayType;
   const permissionType = assayType ? ASSAY_TYPE_TO_PERMISSION[assayType] : null;
   const hasReadPermission =
@@ -411,7 +397,7 @@ export function ExperimentDetail() {
             <span>v{experiment.versionNo}</span>
           </div>}
         actions={<div className="flex items-center gap-2">
-          {experiment.projectId && canWrite && !isReadOnly && (
+          {experiment.projectId && experiment.workflowStepName && canWrite && !isReadOnly && (
             <Popconfirm
               title={t("complete_step_confirm", "确认提交当前工步？提交后将推进工作流至下一环节。")}
               onConfirm={handleCompleteStep}
@@ -429,6 +415,7 @@ export function ExperimentDetail() {
               {t("step_already_completed", "工步已提交")}
             </span>
           )}
+          {stepError && <span role="alert" className="text-xs text-red-600">{stepError} <button type="button" className="underline" onClick={() => setStepRetry((value) => value + 1)}>{t("retry")}</button></span>}
 
           {/* Common data action */}
           <ButtonGroup

@@ -241,10 +241,6 @@ export function Layout() {
               <Upload className="w-4 h-4 shrink-0 stroke-[2] text-gray-400 group-hover:text-gray-600" />
               临时文件
             </button>
-            <div className="px-3 space-y-3 border-t border-gray-200/60 pt-4">
-              <a href="#" className="block text-[11px] text-gray-400 hover:text-gray-600 transition-colors">Terms and conditions</a>
-              <a href="#" className="block text-[11px] text-gray-400 hover:text-gray-600 transition-colors">Privacy policy</a>
-            </div>
           </div>
         </div>
       </div>
@@ -253,7 +249,7 @@ export function Layout() {
       <div className="flex flex-1 flex-col overflow-hidden bg-white">
         {/* Mobile Header */}
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4 lg:hidden">
-          <Button variant="text" onClick={() => setSidebarOpen(true)}>
+          <Button variant="text" onClick={() => setSidebarOpen(true)} aria-label={t("open_navigation")}>
             <Menu className="h-6 w-6" />
           </Button>
           <Logo iconOnly />

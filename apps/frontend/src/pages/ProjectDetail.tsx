@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useSearchParams, useRouteLoaderData } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useRouteLoaderData } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { cn, isCellInvalid } from "../lib/utils";
 import { Tabs } from "../components/Tabs";
@@ -24,6 +24,7 @@ export function ProjectDetail() {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get("tab") as "workflow" | "summary" | "raw_data") || "workflow";
 
@@ -37,6 +38,7 @@ export function ProjectDetail() {
   const {
     wf,
     wfLoading,
+    wfError,
     experiments,
     stepMeta,
     stepMetaError,
@@ -152,7 +154,6 @@ export function ProjectDetail() {
   }, [projectId, activeTab, refetchTrigger]);
 
   if (error || !project) return <div className="p-10 text-red-500">{error ?? t("project_not_found")}</div>;
-  if (stepMetaError) return <div className="p-10 text-red-500">{t("load_steps_failed", "无法加载流程步骤定义，请确保后端已配置默认流程模板")}</div>;
 
   const isCreator = project?.createdBy === currentUserId;
   const isArchived = project.status === "Archived";
@@ -209,28 +210,28 @@ export function ProjectDetail() {
         {/* Workflow Tab */}
         {activeTab === "workflow" && (
           <div className="space-y-5">
-            <WorkflowProgressCard steps={wf.steps} />
-
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-              <WorkflowStepList
-                wf={wf}
-                wfLoading={wfLoading}
-                projectId={projectId!}
-                isArchived={isArchived}
-                experiments={experiments}
-                stepMeta={stepMeta}
-              />
-
-              <WorkflowTaskSidebar
-                focusedStep={focusedStep}
-                projectId={projectId!}
-                isArchived={isArchived}
-                pickedCellsCount={pickedCells.length}
-                experiments={experiments}
-                stepMeta={stepMeta}
-                workflowStatus={wf.instance?.status}
-              />
-            </div>
+            {wfError ? (
+              <div role="alert" className="space-y-3 rounded-lg border border-red-200 p-5 text-sm text-red-700">
+                <p>{t("workflow_load_failed")}: {wfError}</p>
+                <Button size="sm" variant="secondary" onClick={() => setRefetchTrigger((n) => n + 1)}>{t("retry")}</Button>
+              </div>
+            ) : !wfLoading && !wf.instance ? (
+              <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-6 text-sm text-gray-700">
+                <p>{t("no_workflow")}</p>
+                {isCreator && hasPermission("projects:write") && !isArchived && (
+                  <Button size="sm" variant="secondary" onClick={() => navigate(`/projects?setup=${projectId}`)}>{t("setup_workflow")}</Button>
+                )}
+              </div>
+            ) : (
+              <>
+                {stepMetaError && <p role="alert" className="rounded-md bg-amber-50 p-3 text-sm text-amber-800">{t("load_steps_failed")}</p>}
+                <WorkflowProgressCard steps={wf.steps} />
+                <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <WorkflowStepList wf={wf} wfLoading={wfLoading} projectId={projectId!} isArchived={isArchived} experiments={experiments} stepMeta={stepMeta} />
+                  <WorkflowTaskSidebar focusedStep={focusedStep} projectId={projectId!} isArchived={isArchived} pickedCellsCount={pickedCells.length} experiments={experiments} stepMeta={stepMeta} workflowStatus={wf.instance?.status} />
+                </div>
+              </>
+            )}
           </div>
         )}
 

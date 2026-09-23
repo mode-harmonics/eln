@@ -98,6 +98,7 @@ export function useProjectWorkflow(projectId?: string) {
   const { t } = useTranslation();
   const [wf, setWf] = useState<WfData>({ instance: null, steps: [] });
   const [wfLoading, setWfLoading] = useState(true);
+  const [wfError, setWfError] = useState<string | null>(null);
   const [transitioning, setTransitioning] = useState(false);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const [experiments, setExperiments] = useState<Experiment[]>([]);
@@ -127,9 +128,10 @@ export function useProjectWorkflow(projectId?: string) {
   const fetchWf = useCallback(async () => {
     if (!projectId) return;
     setWfLoading(true);
+    setWfError(null);
     try {
       const [wfData, permData, exps, designData] = await Promise.all([
-        api.get<WfData>(`/api/v1/workflow/instances/${projectId}`).catch(() => ({ instance: null, steps: [] })),
+        api.get<WfData>(`/api/v1/workflow/instances/${projectId}`),
         api.get<any>(`/api/v1/workflow/instances/${projectId}/permissions`).catch(() => ({ visibleStepNames: [], canViewInternalCode: false, currentStepName: null })),
         api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`).catch(() => []),
         api.get<any[]>(`/api/v1/projects/${projectId}/design`).catch(() => []),
@@ -145,14 +147,15 @@ export function useProjectWorkflow(projectId?: string) {
         const existingStepNames = new Set(expsArr.map((e: any) => e.workflowStepName));
         const stepsNeedingExps = wfData.steps.filter(
           (s) => s.status !== 'pending' && !s.parentStepName && !existingStepNames.has(s.stepName)
-            && !BS_NO_AUTO_EXP.includes(bs(currentMeta, s.stepName)),
+            && !BS_NO_AUTO_EXP.includes(bs(currentMeta, s.stepName))
+            && !!STEP_ASSAY_MAP[bs(currentMeta, s.stepName)],
         );
         if (stepsNeedingExps.length > 0) {
           await Promise.allSettled(
             stepsNeedingExps.map((step) =>
               api.post(`/api/v1/projects/${projectId}/experiments`, {
                 title: `${currentMeta[step.stepName]?.label || step.stepName} - ${new Date().toISOString().split('T')[0]}`,
-                assayType: (STEP_ASSAY_MAP as Record<string, string>)[step.stepName] || step.stepName,
+                assayType: STEP_ASSAY_MAP[bs(currentMeta, step.stepName)],
                 workflowStepName: step.stepName,
               }).catch(() => { }),
             ),
@@ -165,7 +168,9 @@ export function useProjectWorkflow(projectId?: string) {
       } else {
         setExperiments(expsArr);
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      setWfError(err instanceof ApiError ? err.message : t("load_failed"));
+    }
     finally { setWfLoading(false); }
   }, [projectId]);
 
@@ -190,6 +195,7 @@ export function useProjectWorkflow(projectId?: string) {
     wf,
     setWf,
     wfLoading,
+    wfError,
     perms,
     experiments,
     setExperiments,

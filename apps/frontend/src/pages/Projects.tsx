@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
 import { Search, Loader2, Edit3, Trash2, Plus, FileText } from "lucide-react";
@@ -57,8 +57,10 @@ interface Template {
 }
 
 export function Projects() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const setupProjectId = searchParams.get("setup");
   const { hasPermission } = usePermissions();
   const currentUserId = localStorage.getItem("currentUserId");
   const canManageProject = (project: Project) => hasPermission("projects:write") && project.createdBy === currentUserId;
@@ -91,24 +93,88 @@ export function Projects() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [defaultSteps, setDefaultSteps] = useState<WorkflowStepNodeDto[] | null>(null);
   const [defaultStepsError, setDefaultStepsError] = useState(false);
+  const [usersError, setUsersError] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [stepAssignments, setStepAssignments] = useState<Record<string, string[]>>({});
   const [stepVisibleTo, setStepVisibleTo] = useState<Record<string, string[]>>({});
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
 
   const [users, setUsers] = useState<any[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [optionsReload, setOptionsReload] = useState(0);
+
+  const startWorkflowSetup = (project: Project) => {
+    setPendingProject(project);
+    setNewProjectName(project.name);
+    setNewProjectDesc(project.description || "");
+    setStepAssignments({});
+    setStepVisibleTo({});
+    setSelectedTemplateId(null);
+    setAssignmentError(null);
+    setCreateStep(2);
+    setIsModalOpen(true);
+  };
+
+  const closeCreateModal = () => {
+    if (creatingRef.current) return;
+    setIsModalOpen(false);
+    setPendingProject(null);
+    setNewProjectName("");
+    setNewProjectDesc("");
+    setStepAssignments({});
+    setStepVisibleTo({});
+    setSelectedTemplateId(null);
+    setAssignmentError(null);
+    setCreateStep(1);
+  };
+
+  useEffect(() => {
+    if (!setupProjectId) return;
+    let cancelled = false;
+    Promise.all([
+      api.get<Project>(`/api/v1/projects/${setupProjectId}`),
+      api.get<{ id: string }>("/api/v1/users/me"),
+    ]).then(([project, user]) => {
+      if (cancelled) return;
+      if (project.createdBy !== user.id) {
+        toast.error(t("workflow_setup_owner_only"));
+      } else if (project.workflowStatus) {
+        navigate(`/projects/${project.id}`);
+      } else {
+        startWorkflowSetup(project);
+      }
+    }).catch((err) => {
+      if (!cancelled) toast.error(err instanceof ApiError ? err.message : t("load_failed"));
+    }).finally(() => {
+      if (!cancelled) setSearchParams((previous) => {
+        const next = new URLSearchParams(previous);
+        next.delete("setup");
+        return next;
+      }, { replace: true });
+    });
+    return () => { cancelled = true; };
+  }, [setupProjectId]);
 
   // Fetch templates, default-steps & users for workflow assignment
   useEffect(() => {
     if (!isModalOpen) { setCreateStep(pendingProject ? 2 : 1); setAssignmentError(null); return; }
     setDefaultStepsError(false);
+    setUsersError(false);
+    setDefaultSteps(null);
+    setTemplates([]);
+    setUsers([]);
+    setUsersLoaded(false);
+    let cancelled = false;
     api.get<{ steps: WorkflowStepNodeDto[] }>("/api/v1/workflow/default-steps")
-      .then((d) => setDefaultSteps(d?.steps ?? []))
-      .catch(() => setDefaultStepsError(true));
+      .then((d) => { if (!cancelled) setDefaultSteps(d?.steps ?? []); })
+      .catch(() => { if (!cancelled) setDefaultStepsError(true); });
     // Template list for the selector (user can override with custom)
-    api.get<Template[]>("/api/v1/workflow/templates").then((d) => setTemplates(Array.isArray(d) ? d : [])).catch(() => { });
-    api.get<any[]>("/api/v1/users/assignable").then((d) => setUsers(Array.isArray(d) ? d : [])).catch(() => { });
-  }, [isModalOpen]);
+    api.get<Template[]>("/api/v1/workflow/templates").then((d) => { if (!cancelled) setTemplates(Array.isArray(d) ? d : []); }).catch(() => { });
+    api.get<any[]>("/api/v1/users/assignable").then((d) => {
+      if (!cancelled) { setUsers(Array.isArray(d) ? d : []); setUsersLoaded(true); }
+    }).catch(() => { if (!cancelled) { setUsersError(true); setUsersLoaded(true); } });
+    return () => { cancelled = true; };
+  }, [isModalOpen, optionsReload]);
 
   // Resolve selected template steps — MUST come from backend default-steps
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || templates.find((t) => t.isDefault);
@@ -119,6 +185,7 @@ export function Projects() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
     const queryParams = new URLSearchParams();
     queryParams.append("page", page.toString());
     queryParams.append("limit", limit.toString());
@@ -145,6 +212,10 @@ export function Projects() {
   const handleCreateProject = async () => {
     if (createStep !== 2 || creatingRef.current) return;
     if (!newProjectName.trim()) return;
+    if (selectedTemplateSteps.length === 0) {
+      setAssignmentError(t("workflow_steps_required"));
+      return;
+    }
 
     // Validate all steps (or sub-steps) have at least one assignee
     const missing: string[] = [];
@@ -290,7 +361,10 @@ export function Projects() {
   }
 
   if (error) {
-    return <div className="p-8 text-center text-sm text-red-500">{error}</div>;
+    return <div role="alert" className="space-y-3 p-8 text-center text-sm text-red-600">
+      <p>{error}</p>
+      <Button size="sm" variant="secondary" onClick={() => setRefetchTrigger((n) => n + 1)}>{t("retry")}</Button>
+    </div>;
   }
 
   return (
@@ -317,7 +391,7 @@ export function Projects() {
         />
 
         <TableWrapper>
-          <Table className="min-w-[760px]">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>{t("project_name")}</TableHead>
@@ -332,23 +406,20 @@ export function Projects() {
               {projects.map((project) => (
                 <TableRow key={project.id} className="cursor-pointer" onClick={() => navigate(`/projects/${project.id}`)}>
                   <TableCell>
-                    <div className="text-[13px] font-medium text-gray-900 group-hover:text-action-muted">{project.name}</div>
+                    <Link to={`/projects/${project.id}`} onClick={(e) => e.stopPropagation()} className="block max-w-sm truncate text-[13px] font-medium text-gray-900 hover:text-action-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">{project.name}</Link>
                     <div className="text-[13px] text-gray-500 truncate max-w-sm mt-1">{project.description || '\u00A0'}</div>
                   </TableCell>
-                  <TableCell>{project.creator?.fullName || project.createdBy}</TableCell>
+                  <TableCell><span className="block max-w-40 truncate" title={project.creator?.fullName || project.createdBy}>{project.creator?.fullName || project.createdBy}</span></TableCell>
                   <TableCell>
                     {projectStatusBadge(project, t)}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2.5 min-w-[140px]">
-                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-gray-100 flex-none" role="progressbar" aria-valuenow={project.progress?.percentage || 0} aria-valuemin={0} aria-valuemax={100}>
-                        <div
-                          className="h-full rounded-full bg-action transition-all duration-300"
-                          style={{ width: `${project.progress?.percentage || 0}%` }}
-                        />
-                      </div>
+                    <div className={cn("flex items-center gap-2.5", project.workflowStatus && "min-w-[140px]")}>
+                      {project.workflowStatus && <div className="h-1.5 w-20 overflow-hidden rounded-full bg-gray-100 flex-none" role="progressbar" aria-valuenow={project.progress?.percentage || 0} aria-valuemin={0} aria-valuemax={100}>
+                        <div className="h-full rounded-full bg-action transition-all duration-300" style={{ width: `${project.progress?.percentage || 0}%` }} />
+                      </div>}
                       <span className="text-xs font-semibold tabular-nums text-gray-700">
-                        {project.progress?.percentage || 0}%
+                        {project.workflowStatus ? `${project.progress?.percentage || 0}%` : "—"}
                       </span>
                       {project.progress && project.progress.total > 0 && (
                         <span className="text-[11px] text-gray-400">
@@ -357,10 +428,11 @@ export function Projects() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>{format(new Date(project.createdAt), "yyyy年M月d日")}</TableCell>
+                  <TableCell>{format(new Date(project.createdAt), i18n.language.startsWith("zh") ? "yyyy年M月d日" : "MMM d, yyyy")}</TableCell>
                   {hasPermission("projects:write") && (
                     <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                       {canManageProject(project) && <div className="flex items-center justify-end gap-3">
+                        {!project.workflowStatus && project.status !== "Archived" && <Button size="sm" variant="secondary" onClick={(e) => { e.stopPropagation(); startWorkflowSetup(project); }}>{t("setup_workflow")}</Button>}
                         <Button variant="text" aria-label={`${t("edit")} ${project.name}`} title={t("edit")} onClick={(e) => { e.stopPropagation(); if (!canManageProject(project)) return; setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action"><Edit3 className="w-4 h-4" /></Button>
                         <Popconfirm
                           title={t("delete_project_confirm", { name: project.name })}
@@ -378,13 +450,12 @@ export function Projects() {
               ))}
               {projects.length === 0 && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={6} className="py-24">
+                  <TableCell colSpan={hasPermission("projects:write") ? 6 : 5} className="py-24">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                         <FileText className="w-5 h-5 text-gray-500" />
                       </div>
                       <h3 className="text-[15px] font-semibold text-gray-900 mb-1">{t("no_projects")}</h3>
-                      <p className="text-[13px] text-gray-500">Projects will appear here once created.</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -409,16 +480,16 @@ export function Projects() {
         </div>
       )}
 
-      <Modal open={isModalOpen} onClose={() => { if (!creatingRef.current) setIsModalOpen(false); }} title={t("create_new_project")}
+      <Modal open={isModalOpen} onClose={closeCreateModal} title={pendingProject ? t("setup_workflow") : t("create_new_project")}
         maxWidth="2xl"
         footer={
           <>
-            <Button size="sm" variant="secondary" disabled={creating} onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" variant="secondary" disabled={creating} onClick={closeCreateModal}>{t("cancel")}</Button>
             {createStep === 2 && !pendingProject && (
               <Button size="sm" type="button" variant="secondary" onClick={() => { setCreateStep(1); setAssignmentError(null); }}>{t("previous")}</Button>
             )}
             {createStep === 2 ? (
-              <Button size="sm" type="button" loading={creating} onClick={handleCreateProject}>{pendingProject ? t("retry") : t("create_project")}</Button>
+              <Button size="sm" type="button" loading={creating} disabled={selectedTemplateSteps.length === 0 || !usersLoaded || users.length === 0} onClick={handleCreateProject}>{pendingProject ? t("setup_workflow") : t("create_project")}</Button>
             ) : (
               <Button size="sm" type="button" onClick={() => {
                 if (!newProjectName.trim()) return;
@@ -478,6 +549,10 @@ export function Projects() {
             {assignmentError && (
               <p className="text-xs text-red-500 bg-red-50 rounded-md px-3 py-2">{assignmentError}</p>
             )}
+            {usersError && <p role="alert" className="text-xs text-red-700 bg-red-50 rounded-md px-3 py-2">{t("workflow_users_load_failed")}</p>}
+            {(usersError || (defaultStepsError && selectedTemplateSteps.length === 0)) && <Button size="sm" variant="secondary" onClick={() => setOptionsReload((n) => n + 1)}>{t("retry")}</Button>}
+            {!usersLoaded && <p role="status" className="text-xs text-gray-500">{t("loading_assignable_users")}</p>}
+            {usersLoaded && !usersError && users.length === 0 && <p role="status" className="text-xs text-amber-800 bg-amber-50 rounded-md px-3 py-2">{t("workflow_no_assignable_users")}</p>}
             <TableWrapper className="max-h-[400px] overflow-y-auto">
               <Table className="min-w-[760px]">
                 <TableHeader className="sticky top-0 z-10">
@@ -492,11 +567,9 @@ export function Projects() {
                   {selectedTemplateSteps.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-8">
-                        {defaultStepsError && !selectedTemplate ? (
-                          <span className="text-red-500 text-sm">{t("load_steps_failed", "无法加载流程步骤，请检查后端是否已配置默认流程模板")}</span>
-                        ) : (
-                          <span className="text-gray-400">{t("select_template_hint")}</span>
-                        )}
+                        <span className={defaultStepsError ? "text-red-600 text-sm" : "text-gray-500 text-sm"} role="status">
+                          {defaultStepsError ? t("load_steps_failed") : defaultSteps === null ? t("loading_steps") : t("workflow_steps_required")}
+                        </span>
                       </TableCell>
                     </TableRow>
                   ) : (

@@ -323,6 +323,15 @@ export class WorkflowService {
 
     await this.assignmentRepo.save(records);
 
+    // The first active data step needs a detail route immediately after
+    // creation, including when a custom node uses a built-in assay type.
+    for (const record of records.filter((step) => step.status === StepStatus.InProgress && !meta.isGroup[step.stepName])) {
+      const builtInStep = nodes.find((node) => node.id === record.stepName)?.builtInStep ?? record.stepName;
+      if (STEP_ASSAY_MAP[builtInStep]) {
+        await this.experimentsService.ensureWorkflowExperiment(dto.projectId, record.stepName, this.manager, builtInStep);
+      }
+    }
+
     // Notify first assignee
     for (const assignedUserId of records[0]?.assignedUserIds ?? []) {
       const firstNode = nodes.find((n) => n.id === order[0]);
@@ -735,18 +744,18 @@ export class WorkflowService {
       const isParallel = next.groupType === 'parallel';
 
       // For the testing parallel group, only activate sub-steps that have picked cells assigned
-      if (isParallel && next.stepName === BuiltInStep.Testing) {
+      if (isParallel && (next.builtInStep ?? next.stepName) === BuiltInStep.Testing) {
         // Query which test types actually have assigned picked cells
         const pickedCells = await this.dataSource.getRepository(PickedCell).find({
           where: { projectId: instance.projectId } as any,
         });
 
         // Only filter if picked cells exist — if none, activate all steps
-        if (pickedCells.length > 0) {
+        if (pickedCells.some((cell) => cell.testType)) {
           const activeTestTypes = new Set(pickedCells.map((pc) => pc.testType).filter(Boolean));
 
           for (const c of children) {
-            const assayType = STEP_ASSAY_MAP[c.stepName];
+            const assayType = STEP_ASSAY_MAP[c.builtInStep ?? c.stepName];
             if (assayType && !activeTestTypes.has(assayType)) {
               // No cells assigned to this test — skip this sub-step entirely
               c.status = StepStatus.Skipped;
@@ -760,12 +769,20 @@ export class WorkflowService {
       }
 
       const toActivate = isParallel ? children : children.slice(0, 1);
+      if (toActivate.length === 0) {
+        // Every child was filtered out (for example, no selected cell uses a
+        // test type in this template). A group with no active child must not
+        // leave the workflow permanently in progress.
+        next.status = StepStatus.Completed;
+        await this.assignmentRepo.save(next);
+        return this.advance(instance, steps, project);
+      }
       for (const c of toActivate) c.status = StepStatus.InProgress;
       await this.assignmentRepo.save(toActivate);
 
       // Auto-create experiments for activated children
       for (const c of toActivate) {
-        await this.experimentsService.ensureWorkflowExperiment(instance.projectId, c.stepName, this.manager);
+        await this.experimentsService.ensureWorkflowExperiment(instance.projectId, c.stepName, this.manager, c.builtInStep ?? c.stepName);
       }
 
       for (const c of toActivate) {
@@ -783,7 +800,7 @@ export class WorkflowService {
       await this.assignmentRepo.save(next);
 
       // Auto-create experiment for this step
-      await this.experimentsService.ensureWorkflowExperiment(instance.projectId, next.stepName, this.manager);
+      await this.experimentsService.ensureWorkflowExperiment(instance.projectId, next.stepName, this.manager, next.builtInStep ?? next.stepName);
 
       for (const assignedUserId of next.assignedUserIds ?? []) {
         const stepLabel = STEP_NAME_MAP[next.stepName] || next.stepName;
