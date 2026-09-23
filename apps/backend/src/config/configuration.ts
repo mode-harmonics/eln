@@ -32,7 +32,7 @@ const configFactory = () => ({
     url: process.env.DATABASE_URL,
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '5432', 10),
-    username: process.env.DB_USER || 'eln',
+    username: process.env.DB_USER || process.env.DB_USERNAME || 'eln',
     password: process.env.DB_PASSWORD || 'eln',
     database: process.env.DB_NAME || 'eln',
     ssl: (process.env.DB_SSL || 'false').toLowerCase() === 'true',

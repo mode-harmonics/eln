@@ -1,3 +1,5 @@
+import { AccessService } from '../access/access.service';
+import { ResourceAccess } from '../access/resource-access.guard';
 import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequestUser } from '../common/decorators/current-user.decorator';
@@ -13,7 +15,7 @@ import { ProjectsService } from './projects.service';
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('projects')
 export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(private readonly projectsService: ProjectsService, private readonly access: AccessService) {}
 
   @Get()
   @RequirePermission('experiments:read')
@@ -26,17 +28,20 @@ export class ProjectsController {
   ) {
     const pageNum = page ? parseInt(page as any, 10) : undefined;
     const limitNum = limit ? parseInt(limit as any, 10) : undefined;
-    return this.projectsService.findVisibleToUser(user.id, pageNum, limitNum, search);
+    const scope = await this.access.visibleScope(user);
+    return this.projectsService.findVisibleToUser(user.id, pageNum, limitNum, search, scope.projectIds);
   }
 
   @Get(':id')
+  @ResourceAccess('project')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get a single project by ID.' })
   async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
-    return this.projectsService.findOne(id, user.id);
+    return this.projectsService.findOne(id);
   }
 
   @Get(':id/experiments')
+  @ResourceAccess('project')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'List all experiments belonging to this project.' })
   async findExperiments(
@@ -48,10 +53,12 @@ export class ProjectsController {
   ) {
     const pageNum = page ? parseInt(page as any, 10) : undefined;
     const limitNum = limit ? parseInt(limit as any, 10) : undefined;
-    return this.projectsService.findExperiments(id, pageNum, limitNum, search, user.permissionList);
+    const scope = await this.access.visibleScope(user);
+    return this.projectsService.findExperiments(id, pageNum, limitNum, search, user.permissionList, scope.experimentIds);
   }
 
   @Get(':id/stats')
+  @ResourceAccess('project')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get quick stats for a project (e.g. hasPickedCells).' })
   async getStats(@Param('id') id: string) {
@@ -59,6 +66,7 @@ export class ProjectsController {
   }
 
   @Post(':id/experiments')
+  @ResourceAccess('project', 'id', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Create a new experiment (record) under this project.' })
   async createExperiment(
@@ -66,6 +74,7 @@ export class ProjectsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: CreateExperimentDto,
   ) {
+    if (dto.workflowStepName) await this.access.assertStep(id, dto.workflowStepName, user, 'write');
     return this.projectsService.createExperiment(id, user.id, dto);
   }
 
@@ -77,6 +86,7 @@ export class ProjectsController {
   }
 
   @Put(':id')
+  @ResourceAccess('project', 'id', 'owner')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Update a project by ID.' })
   async update(@Param('id') id: string, @Body() dto: UpdateProjectDto) {
@@ -84,6 +94,7 @@ export class ProjectsController {
   }
 
   @Delete(':id')
+  @ResourceAccess('project', 'id', 'owner')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Delete a project by ID.' })
   async remove(@Param('id') id: string) {
@@ -91,6 +102,7 @@ export class ProjectsController {
   }
 
   @Put(':id/members')
+  @ResourceAccess('project', 'id', 'owner')
   @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Bulk upsert experimentCollaborators across all experiments in this project.',

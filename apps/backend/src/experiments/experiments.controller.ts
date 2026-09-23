@@ -1,3 +1,5 @@
+import { ResourceAccess } from '../access/resource-access.guard';
+import { AddCollaboratorDto, AddExperimentCommentDto } from './dto/collaborator-comment.dto';
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards, UseInterceptors, UploadedFile, Res, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { createReadStream } from 'fs';
@@ -18,13 +20,15 @@ export class ExperimentsController {
   constructor(private readonly experimentsService: ExperimentsService) {}
 
   @Get(':id')
+  @ResourceAccess('experiment')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get experiment detail including attachments and collaborators.' })
   async findOne(@Param('id') id: string, @CurrentUser() user: RequestUser) {
-    return this.experimentsService.findDetail(id, user.id, user.permissionList);
+    return this.experimentsService.findDetail(id);
   }
 
   @Put(':id')
+  @ResourceAccess('experiment', 'id', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Auto-save edit with optimistic-lock check on versionNo.' })
   async update(
@@ -36,6 +40,7 @@ export class ExperimentsController {
   }
 
   @Delete(':id')
+  @ResourceAccess('experiment', 'id', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Delete an experiment and all associated data (attachments, collaborators, version history).' })
   async remove(@Param('id') id: string) {
@@ -43,6 +48,7 @@ export class ExperimentsController {
   }
 
   @Post(':id/submit')
+  @ResourceAccess('experiment', 'id', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Submit for review: Draft -> In Review, and lock.' })
   async submit(
@@ -54,6 +60,7 @@ export class ExperimentsController {
   }
 
   @Post(':id/approve')
+  @ResourceAccess('experiment', 'id', 'review')
   @RequirePermission('experiments:approve')
   @ApiOperation({ summary: 'Approve an experiment.' })
   async approve(
@@ -65,6 +72,7 @@ export class ExperimentsController {
   }
 
   @Post(':id/reject')
+  @ResourceAccess('experiment', 'id', 'review')
   @RequirePermission('experiments:approve')
   @ApiOperation({ summary: 'Reject an experiment.' })
   async reject(
@@ -76,6 +84,7 @@ export class ExperimentsController {
   }
 
   @Post(':id/archive')
+  @ResourceAccess('experiment', 'id', 'write')
   @RequirePermission('experiments:archive')
   @ApiOperation({ summary: 'Archive an experiment.' })
   async archive(
@@ -86,6 +95,7 @@ export class ExperimentsController {
   }
 
   @Get(':id/collaborators')
+  @ResourceAccess('experiment')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get collaborators for an experiment.' })
   async getCollaborators(@Param('id') id: string) {
@@ -93,16 +103,18 @@ export class ExperimentsController {
   }
 
   @Post(':id/collaborators')
+  @ResourceAccess('experiment', 'id', 'owner')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Add a collaborator to an experiment.' })
   async addCollaborator(
     @Param('id') id: string,
-    @Body() body: { userId: string; role: string },
+    @Body() body: AddCollaboratorDto,
   ) {
     return this.experimentsService.addCollaborator(id, body.userId, body.role);
   }
 
   @Delete(':id/collaborators/:userId')
+  @ResourceAccess('experiment', 'id', 'owner')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Remove a collaborator from an experiment.' })
   async removeCollaborator(
@@ -115,6 +127,7 @@ export class ExperimentsController {
   // --- Version History ---
 
   @Get(':id/versions')
+  @ResourceAccess('experiment')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get version history for an experiment.' })
   async getVersions(@Param('id') id: string) {
@@ -124,6 +137,7 @@ export class ExperimentsController {
   // --- Attachments ---
 
   @Get(':id/attachments')
+  @ResourceAccess('experiment')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get attachments for an experiment.' })
   async getAttachments(@Param('id') id: string) {
@@ -132,6 +146,7 @@ export class ExperimentsController {
   }
 
   @Post(':id/attachments')
+  @ResourceAccess('experiment', 'id', 'write')
   @RequirePermission('experiments:write')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload an attachment to an experiment.' })
@@ -145,6 +160,7 @@ export class ExperimentsController {
   }
 
   @Get(':id/attachments/:attachmentId/download')
+  @ResourceAccess('attachment')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Download an attachment.' })
   async downloadAttachment(
@@ -161,6 +177,7 @@ export class ExperimentsController {
   }
 
   @Delete(':id/attachments/:attachmentId')
+  @ResourceAccess('attachment', 'id', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Delete an attachment.' })
   async deleteAttachment(@Param('attachmentId') attachmentId: string) {
@@ -170,6 +187,7 @@ export class ExperimentsController {
   // --- Comments ---
 
   @Get(':id/comments')
+  @ResourceAccess('experiment')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get comments for an experiment.' })
   async getComments(@Param('id') id: string) {
@@ -177,12 +195,13 @@ export class ExperimentsController {
   }
 
   @Post(':id/comments')
+  @ResourceAccess('experiment', 'id', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Add a comment to an experiment.' })
   async addComment(
     @Param('id') id: string,
     @CurrentUser() user: RequestUser,
-    @Body() body: { content: string },
+    @Body() body: AddExperimentCommentDto,
   ) {
     if (!body.content?.trim()) {
       throw new BadRequestException('Comment content cannot be empty.');

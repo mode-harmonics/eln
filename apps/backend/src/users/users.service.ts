@@ -114,7 +114,7 @@ export class UsersService {
     return { items, total };
   }
 
-  async create(dto: { username: string; email?: string; fullName: string; roleId?: string; password?: string }): Promise<User> {
+  async create(dto: { username: string; email?: string; fullName: string; roleId?: string; password?: string }): Promise<Omit<User, 'passwordHash'>> {
     if (/[\u4e00-\u9fa5]/.test(dto.username) || !/^[a-zA-Z0-9_.-]+$/.test(dto.username)) {
       throw new BadRequestException('用户名不能包含中文或特殊字符，只能包含英文字母、数字、下划线、连字符或点。');
     }
@@ -144,10 +144,11 @@ export class UsersService {
       isActive: true,
     });
 
-    return this.usersRepo.save(user);
+    const { passwordHash: _passwordHash, ...result } = await this.usersRepo.save(user);
+    return result;
   }
 
-  async update(id: string, dto: { username?: string; email?: string; fullName?: string; roleId?: string; isActive?: boolean }): Promise<User> {
+  async update(id: string, dto: { username?: string; email?: string; fullName?: string; roleId?: string; isActive?: boolean }): Promise<Omit<User, 'passwordHash'>> {
     const user = await this.usersRepo.findOne({ where: { id } });
     if (!user) {
       throw new NotFoundException('User not found.');
@@ -165,7 +166,7 @@ export class UsersService {
     }
 
     if (dto.email !== undefined) {
-      const normalizedEmail = dto.email.trim() || null;
+      const normalizedEmail = dto.email?.trim() || null;
       if (normalizedEmail && normalizedEmail !== user.email) {
         const existing = await this.usersRepo.findOne({ where: { email: normalizedEmail } });
         if (existing) {
@@ -179,7 +180,8 @@ export class UsersService {
     if (dto.roleId !== undefined) user.roleId = dto.roleId;
     if (dto.isActive !== undefined) user.isActive = dto.isActive;
 
-    return this.usersRepo.save(user);
+    const { passwordHash: _passwordHash, ...result } = await this.usersRepo.save(user);
+    return result;
   }
 
   async remove(id: string): Promise<void> {
@@ -191,7 +193,10 @@ export class UsersService {
   }
 
   async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<{ success: boolean }> {
-    const user = await this.usersRepo.findOne({ where: { id: userId } });
+    const user = await this.usersRepo.createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.id = :userId', { userId })
+      .getOne();
     if (!user) {
       throw new NotFoundException('User not found.');
     }

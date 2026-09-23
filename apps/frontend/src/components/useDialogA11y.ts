@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
 const focusableSelector = [
   "a[href]",
@@ -9,7 +9,7 @@ const focusableSelector = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-export function useDialogA11y(open: boolean, onClose: () => void) {
+export function useDialogA11y(open: boolean, onClose: () => void, returnFocusRef?: RefObject<HTMLElement | null>) {
   const dialogRef = useRef<HTMLDivElement>(null);
   // Keep a stable ref to onClose so the focus/keyboard effect doesn't
   // re-run (and steal focus) whenever the parent re-renders with a new
@@ -20,8 +20,11 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
   useEffect(() => {
     if (!open) return;
 
-    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousFocus = returnFocusRef?.current ?? document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
+    const appRoot = document.getElementById("root");
+    const previousInert = appRoot?.inert ?? false;
+    if (appRoot && !appRoot.contains(dialogRef.current)) appRoot.inert = true;
     document.body.style.overflow = "hidden";
 
     // Set initial focus once when the dialog opens. Skip the close button
@@ -31,7 +34,7 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
       if (!dialogRef.current) return;
       const allFocusable = Array.from(
         dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector),
-      ).filter((el) => !el.hasAttribute("hidden"));
+      ).filter((el) => !el.hasAttribute("hidden") && el.getClientRects().length > 0);
 
       // The close button is the very first focusable element in the DOM order.
       // Prefer the second one (first real form field) when it exists so that
@@ -45,6 +48,8 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
     });
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs.length && dialogs[dialogs.length - 1] !== dialogRef.current) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onCloseRef.current();
@@ -54,7 +59,7 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
 
       const focusable = Array.from(
         dialogRef.current.querySelectorAll<HTMLElement>(focusableSelector),
-      ).filter((element) => !element.hasAttribute("hidden"));
+      ).filter((element) => !element.hasAttribute("hidden") && element.getClientRects().length > 0);
       if (focusable.length === 0) {
         event.preventDefault();
         dialogRef.current.focus();
@@ -77,10 +82,11 @@ export function useDialogA11y(open: boolean, onClose: () => void) {
       cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = previousOverflow;
+      if (appRoot) appRoot.inert = previousInert;
       previousFocus?.focus();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]); // intentionally omit onClose — use onCloseRef instead
 
   return dialogRef;
-}
+}

@@ -1,13 +1,15 @@
 import {
   Injectable,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
 import { WorkflowService } from '../workflow/workflow.service';
 
 import { ExperimentDesign } from '../entities/experiment-design.entity';
+import { Project } from '../entities/project.entity';
 import { UpdateProcurementDto } from './dto/update-procurement.dto';
 import { UpdateProcurementItemDto } from './dto/batch-update-procurement.dto';
 
@@ -21,6 +23,7 @@ type ProcurementWithDesign = ReagentProcurement & {
 
 @Injectable()
 export class ReagentProcurementService {
+  private manager?: EntityManager;
   constructor(
     @InjectRepository(ReagentProcurement)
     private readonly procurementRepo: Repository<ReagentProcurement>,
@@ -28,6 +31,20 @@ export class ReagentProcurementService {
     private readonly designRepo: Repository<ExperimentDesign>,
     private readonly workflowService: WorkflowService,
   ) {}
+
+  private transactional<T>(work: (service: ReagentProcurementService) => Promise<T>): Promise<T> {
+    return this.procurementRepo.manager.transaction(async (manager) => {
+      const service = new ReagentProcurementService(manager.getRepository(ReagentProcurement), manager.getRepository(ExperimentDesign), this.workflowService);
+      service.manager = manager;
+      return work(service);
+    });
+  }
+
+  private async assertEditable(projectId: string): Promise<void> {
+    const project = await this.manager!.getRepository(Project).findOne({ where: { id: projectId }, lock: { mode: 'pessimistic_write' } });
+    if (!project) throw new NotFoundException('Project not found');
+    await this.workflowService.assertStepNotCompleted(projectId, 'procurement', this.manager);
+  }
 
   async findByProject(projectId: string): Promise<ProcurementWithDesign[]> {
     const records = await this.procurementRepo.find({
@@ -100,7 +117,8 @@ export class ReagentProcurementService {
     id: string,
     dto: UpdateProcurementDto,
   ): Promise<ReagentProcurement> {
-    await this.workflowService.assertStepNotCompleted(projectId, 'procurement');
+    if (!this.manager) return this.transactional((service) => service.update(projectId, id, dto));
+    await this.assertEditable(projectId);
 
     const record = await this.procurementRepo.findOne({
       where: { id, projectId },
@@ -120,10 +138,11 @@ export class ReagentProcurementService {
     items: UpdateProcurementItemDto[],
   ): Promise<ReagentProcurement[]> {
     if (!items || items.length === 0) return [];
-
-    await this.workflowService.assertStepNotCompleted(projectId, 'procurement');
+    if (!this.manager) return this.transactional((service) => service.updateBatch(projectId, items));
+    await this.assertEditable(projectId);
 
     const ids = items.map((i) => i.id);
+    if (new Set(ids).size !== ids.length) throw new BadRequestException('Duplicate procurement ids');
     const records = await this.procurementRepo.find({
       where: { id: In(ids), projectId },
     });

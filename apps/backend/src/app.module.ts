@@ -18,6 +18,8 @@ import { TempFilesModule } from './temp-files/temp-files.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { ExperimentDesignModule } from './experiment-design/experiment-design.module';
 import { ReagentProcurementModule } from './reagent-procurement/reagent-procurement.module';
+import { AccessModule } from './access/access.module';
+import { HttpBoundaryModule } from './common/http-boundary.module';
 
 @Module({
   imports: [
@@ -29,6 +31,8 @@ import { ReagentProcurementModule } from './reagent-procurement/reagent-procurem
       validationOptions: { allowUnknown: true, abortEarly: false },
     }),
     TypeOrmModule.forRootAsync({ useClass: TypeOrmConfigService }),
+    AccessModule,
+    HttpBoundaryModule,
     AuthModule,
     UsersModule,
     RolesModule,

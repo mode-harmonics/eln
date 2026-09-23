@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, useRouteLoaderData } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Plus, Trash2, Save, Edit3, Check, X, Loader2,
@@ -20,6 +20,8 @@ import { PageLoader } from "../components/PageLoader";
 import { api, ApiError } from "../lib/api";
 import { PageHeader } from "../components/PageHeader";
 import { SegmentedControl } from "../components/SegmentedControl";
+import { BuiltInStep } from "@eln/shared";
+import { completeWorkflowStep, findWorkflowStep } from "../lib/workflow";
 
 // ─── Types ──────────────────────────────────────────────────────
 
@@ -87,19 +89,35 @@ function EMPTY_GROUP(existing: DesignRow[] = []): DesignRow {
 export function ExperimentDesign() {
   const { t } = useTranslation();
   const { hasPermission } = usePermissions();
-  const canEditDesign = hasPermission("experiment_design:write");
-  const canEditProcurement = hasPermission("procurement:write");
+  const [canWriteDesignStep, setCanWriteDesignStep] = useState(false);
+  const canWrite = hasPermission("experiments:write");
+  const canEditDesign = canWrite && canWriteDesignStep;
+  const [canWriteProcurementStep, setCanWriteProcurementStep] = useState(false);
+  const canEditProcurement = canWrite && canWriteProcurementStep;
   const { projectId } = useParams<{ projectId: string }>();
+  const project = useRouteLoaderData("project") as { createdBy: string } | null;
+  const currentUserId = localStorage.getItem("currentUserId");
+  const isOwner = project?.createdBy === currentUserId;
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const step = (searchParams.get("tab") as "design" | "procurement") || "design";
 
   const [loading, setLoading] = useState(true);
+  const [designAvailable, setDesignAvailable] = useState(false);
+  const [procurementAvailable, setProcurementAvailable] = useState(false);
+  const [designForbidden, setDesignForbidden] = useState(false);
+  const [procurementForbidden, setProcurementForbidden] = useState(false);
+  const [designError, setDesignError] = useState<string | null>(null);
+  const [procurementError, setProcurementError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const activeStep = step === "design" && designForbidden && procurementAvailable ? "procurement" : step;
+  const panelError = loadError ?? (activeStep === "design" ? designError : procurementError);
 
   // Design state
   const [groups, setGroups] = useState<DesignRow[]>([]);
   const [designSubmitted, setDesignSubmitted] = useState(false);
   const [savingDesign, setSavingDesign] = useState(false);
+  const [designTransitionPending, setDesignTransitionPending] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<DesignRow | null>(null);
   const [batchEditing, setBatchEditing] = useState(false);
@@ -115,47 +133,54 @@ export function ExperimentDesign() {
   const [procBatchDraft, setProcBatchDraft] = useState<ProcurementRow[]>([]);
   const [procBatchSaving, setProcBatchSaving] = useState(false);
 
-  // ── Fetch design data ──
+  // The two panels have independent step ACLs; a denied design must not block procurement.
   const fetchData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
+    setLoadError(null);
+    setDesignError(null);
+    setProcurementError(null);
     try {
-      const designData = await api.get<DesignRow[]>(`/api/v1/projects/${projectId}/design`);
-      if (Array.isArray(designData) && designData.length > 0) {
-        setGroups(designData.map((r) => ({
-          ...r,
-          redundancyCount: r.redundancyCount ?? 0,
-        })));
-        setDesignSubmitted(true);
+      const [designResult, procurementResult, workflowResult] = await Promise.allSettled([
+        api.get<DesignRow[]>(`/api/v1/projects/${projectId}/design`),
+        api.get<ProcurementRow[]>(`/api/v1/projects/${projectId}/procurement`),
+        api.get<any>(`/api/v1/workflow/instances/${projectId}`),
+      ]);
+      const designAllowed = designResult.status === "fulfilled";
+      const procurementAllowed = procurementResult.status === "fulfilled";
+      setDesignAvailable(designAllowed);
+      setProcurementAvailable(procurementAllowed);
+      setDesignForbidden(designResult.status === "rejected" && designResult.reason instanceof ApiError && designResult.reason.status === 403);
+      setProcurementForbidden(procurementResult.status === "rejected" && procurementResult.reason instanceof ApiError && procurementResult.reason.status === 403);
+      if (designResult.status === "fulfilled") {
+        const data = designResult.value;
+        setGroups(data.length ? data.map((row) => ({ ...row, redundancyCount: row.redundancyCount ?? 0 })) : [EMPTY_GROUP()]);
+        setDesignSubmitted(data.length > 0);
       } else {
-        setGroups([EMPTY_GROUP()]);
+        setGroups([]);
+        setDesignError(designResult.reason instanceof Error ? designResult.reason.message : "加载失败");
       }
-
-      // Determine if procurement is submitted
-      let procSubmittedFlag = false;
-      try {
-        const wf = await api.get<any>(`/api/v1/workflow/instances/${projectId}`);
-        const procStep = wf?.steps?.find((s: any) => s.stepName === "procurement");
-        if (wf?.instance?.status === 'Completed' || procStep?.status === 'completed') {
-          procSubmittedFlag = true;
-        }
-      } catch { /* no workflow yet */ }
-
-      // Fetch procurement data if design exists
-      if (Array.isArray(designData) && designData.length > 0) {
-        const procData = await api.get<ProcurementRow[]>(`/api/v1/projects/${projectId}/procurement`);
-        if (Array.isArray(procData)) {
-          setProcRecords(procData);
-          setProcSubmitted(procSubmittedFlag);
-        }
+      if (procurementResult.status === "fulfilled") setProcRecords(procurementResult.value);
+      else {
+        setProcRecords([]);
+        setProcurementError(procurementResult.reason instanceof Error ? procurementResult.reason.message : "加载失败");
       }
-    } catch {
-      // ignore
+      if (workflowResult.status === "rejected") throw workflowResult.reason;
+      const wf = workflowResult.value;
+      const designStep = findWorkflowStep<any>(wf?.steps ?? [], BuiltInStep.Design);
+      const procStep = wf?.steps?.find((s: any) => (s.builtInStep ?? s.stepName) === BuiltInStep.Procurement);
+      setCanWriteDesignStep(designAllowed && (isOwner || designStep?.assignedUserIds?.includes(currentUserId)));
+      setCanWriteProcurementStep(procurementAllowed && (isOwner || procStep?.assignedUserIds?.includes(currentUserId)));
+      setDesignTransitionPending(designAllowed && designResult.value.length > 0 && designStep?.status === "in_progress");
+      setProcSubmitted(wf?.instance?.status === "Completed" || procStep?.status === "completed");
+    } catch (error) {
+      setCanWriteDesignStep(false);
+      setCanWriteProcurementStep(false);
+      setLoadError(error instanceof Error ? error.message : "加载失败");
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
-
+  }, [projectId, isOwner, currentUserId]);
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // ── Derived totals ──
@@ -176,7 +201,7 @@ export function ExperimentDesign() {
 
     setSavingDesign(true);
     try {
-      await api.post(`/api/v1/projects/${projectId}/design`, {
+      if (!designSubmitted) await api.post(`/api/v1/projects/${projectId}/design`, {
         groups: groups.map((r) => ({
           group: r.group,
           moleculeName: r.moleculeName,
@@ -189,13 +214,10 @@ export function ExperimentDesign() {
         })),
       });
 
-      // Advance the workflow: mark the design sub-step completed and
-      // activate the procurement sub-step (same as the procurement submit).
-      try {
-        await api.put(`/api/v1/workflow/instances/${projectId}/transition`);
-      } catch (e) {
-        console.warn("Workflow transition after design submit skipped or failed", e);
-      }
+      setDesignSubmitted(true);
+      setDesignTransitionPending(true);
+      await completeWorkflowStep(projectId, BuiltInStep.Design);
+      setDesignTransitionPending(false);
 
       toast.success(t("design_submit_success"));
       setDesignSubmitted(true);
@@ -211,7 +233,7 @@ export function ExperimentDesign() {
 
   // ── Design: inline edit ──
   const startEditing = (index: number) => {
-    if (designSubmitted) return;
+    if (designSubmitted || !canEditDesign) return;
     setEditingIndex(index);
     setEditForm({ ...groups[index] });
   };
@@ -245,11 +267,11 @@ export function ExperimentDesign() {
 
   // ── Group management ──
   const handleAddGroup = () => {
-    if (designSubmitted) return;
+    if (designSubmitted || !canEditDesign) return;
     setGroups((prev) => [...prev, EMPTY_GROUP(prev)]);
   };
   const handleDeleteGroup = (index: number) => {
-    if (designSubmitted) return;
+    if (designSubmitted || !canEditDesign) return;
     if (groups.length <= 1) {
       toast.error("至少保留一个分组");
       return;
@@ -299,7 +321,7 @@ export function ExperimentDesign() {
   const handleSubmitProcurement = async () => {
     setSavingProc(true);
     try {
-      await api.put(`/api/v1/workflow/instances/${projectId}/transition`);
+      await completeWorkflowStep(projectId!, BuiltInStep.Procurement);
       toast.success(t("procurement_submit_success", "Procurement submitted, workflow advanced!"));
       setProcSubmitted(true);
     } catch (err) {
@@ -311,7 +333,7 @@ export function ExperimentDesign() {
 
   // ── Procurement: update field ──
   const updateProcField = async (record: ProcurementRow, field: string, value: any) => {
-    if (procSubmitted || !record.id) return;
+    if (procSubmitted || !canEditProcurement || !record.id) return;
     setProcSavingId(record.id);
     try {
       await api.put(`/api/v1/projects/${projectId}/procurement/${record.id}`, { [field]: value });
@@ -328,7 +350,7 @@ export function ExperimentDesign() {
   };
 
   const toggleValid = async (record: ProcurementRow) => {
-    if (procSubmitted) return;
+    if (procSubmitted || !canEditProcurement) return;
     await updateProcField(record, "isValid", !record.isValid);
   };
 
@@ -411,25 +433,27 @@ export function ExperimentDesign() {
       />
 
       {/* Step Tabs */}
+      {panelError && <div role="alert" className="space-y-2 rounded-md border border-red-200 p-4 text-sm text-red-600"><p>{panelError}</p><Button onClick={fetchData}>{t("retry")}</Button></div>}
       <SegmentedControl
         items={[
           {
             value: "design",
+            disabled: designForbidden,
             label: <span className="inline-flex items-center gap-1.5">1. {t("experiment_design")}{designSubmitted && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}</span>,
           },
           {
             value: "procurement",
             label: <span className="inline-flex items-center gap-1.5">2. {t("reagent_procurement")}{procSubmitted && <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />}</span>,
-            disabled: !designSubmitted,
+            disabled: procurementForbidden,
           },
         ]}
-        value={step}
+        value={activeStep}
         onValueChange={(value) => setSearchParams({ tab: value })}
         className="sm:min-w-[360px]"
       />
 
       {/* ═══════ Step 1: Design ═══════ */}
-      {step === "design" && (
+      {activeStep === "design" && designAvailable && !loadError && (
         <div className="space-y-4">
           {/* Summary bar */}
           <div className="flex flex-col gap-4 rounded-md bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -444,10 +468,11 @@ export function ExperimentDesign() {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {designSubmitted ? (
+              {designTransitionPending && canEditDesign && <Button size="sm" loading={savingDesign} onClick={handleSubmitDesign}>{t("retry_workflow_step")}</Button>}
+              {designSubmitted || !canEditDesign ? (
                 <span className="text-xs text-green-600 flex items-center gap-1">
                   <Lock className="w-3 h-3" />
-                  {t("design_submitted", "Design Submitted")}
+                  {t(designSubmitted ? "design_submitted" : "flow_hint_readonly")}
                 </span>
               ) : batchEditing ? (
                 <>
@@ -541,7 +566,7 @@ export function ExperimentDesign() {
                               editValue={editForm?.group ?? ""}
                               onEdit={(v) => handleChange("group", v)}
                               onClick={() => startEditing(i)}
-                              locked={designSubmitted}
+                              locked={designSubmitted || !canEditDesign}
                             />
                           )}
                         </TableCell>
@@ -558,7 +583,7 @@ export function ExperimentDesign() {
                               editValue={editForm?.moleculeName ?? ""}
                               onEdit={(v) => handleChange("moleculeName", v)}
                               onClick={() => startEditing(i)}
-                              locked={designSubmitted}
+                              locked={designSubmitted || !canEditDesign}
                             />
                           )}
                         </TableCell>
@@ -575,7 +600,7 @@ export function ExperimentDesign() {
                               editValue={editForm?.chineseName ?? ""}
                               onEdit={(v) => handleChange("chineseName", v)}
                               onClick={() => startEditing(i)}
-                              locked={designSubmitted}
+                              locked={designSubmitted || !canEditDesign}
                             />
                           )}
                         </TableCell>
@@ -592,7 +617,7 @@ export function ExperimentDesign() {
                               editValue={editForm?.cas ?? ""}
                               onEdit={(v) => handleChange("cas", v)}
                               onClick={() => startEditing(i)}
-                              locked={designSubmitted}
+                              locked={designSubmitted || !canEditDesign}
                             />
                           )}
                         </TableCell>
@@ -609,7 +634,7 @@ export function ExperimentDesign() {
                               editValue={editForm?.designPrinciple ?? ""}
                               onEdit={(v) => handleChange("designPrinciple", v)}
                               onClick={() => startEditing(i)}
-                              locked={designSubmitted}
+                              locked={designSubmitted || !canEditDesign}
                               className="line-clamp-1 max-w-[120px]"
                             />
                           )}
@@ -645,7 +670,7 @@ export function ExperimentDesign() {
                           </code>
                         </TableCell>
                         <TableCell className="sticky right-0 z-10 !bg-white">
-                          {designSubmitted ? (
+                          {designSubmitted || !canEditDesign ? (
                             <Lock className="w-3.5 h-3.5 text-gray-300 mx-auto" />
                           ) : editingIndex === i && !batchEditing ? (
                             <div className="flex gap-0.5">
@@ -679,7 +704,7 @@ export function ExperimentDesign() {
       )}
 
       {/* ═══════ Step 2: Procurement ═══════ */}
-      {step === "procurement" && (
+      {activeStep === "procurement" && procurementAvailable && !loadError && (
         <div className="space-y-4">
           <div className="flex flex-col gap-4 rounded-md bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-4 text-[13px] font-medium text-gray-700">
@@ -693,10 +718,10 @@ export function ExperimentDesign() {
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {procSubmitted ? (
+              {procSubmitted || !canEditProcurement ? (
                 <span className="text-xs text-green-600 flex items-center gap-1">
                   <Lock className="w-3 h-3" />
-                  {t("procurement_submitted", "Procurement Submitted")}
+                  {t(procSubmitted ? "procurement_submitted" : "flow_hint_readonly")}
                 </span>
               ) : canEditProcurement ? (
                 procBatchEditing ? (
@@ -723,7 +748,7 @@ export function ExperimentDesign() {
                     >
                       <Button size="sm" loading={savingProc}>
                         <Save className="w-3.5 h-3.5" />
-                        {t("design_submit")}
+                        {t("procurement_submit")}
                       </Button>
                     </Popconfirm>
                   </>
@@ -792,7 +817,7 @@ export function ExperimentDesign() {
                               value={record.supplier || ""}
                               onSave={(v) => updateProcField(record, "supplier", v)}
                               saving={procSavingId === record.id}
-                              locked={procSubmitted}
+                              locked={procSubmitted || !canEditProcurement}
                               editing={procEditId === record.id}
                             />
                           )}
@@ -809,7 +834,7 @@ export function ExperimentDesign() {
                               value={record.batchNo || ""}
                               onSave={(v) => updateProcField(record, "batchNo", v)}
                               saving={procSavingId === record.id}
-                              locked={procSubmitted}
+                              locked={procSubmitted || !canEditProcurement}
                               editing={procEditId === record.id}
                             />
                           )}
@@ -826,7 +851,7 @@ export function ExperimentDesign() {
                               value={record.purity || ""}
                               onSave={(v) => updateProcField(record, "purity", v)}
                               saving={procSavingId === record.id}
-                              locked={procSubmitted}
+                              locked={procSubmitted || !canEditProcurement}
                               editing={procEditId === record.id}
                             />
                           )}
@@ -843,7 +868,7 @@ export function ExperimentDesign() {
                               value={record.quantity || ""}
                               onSave={(v) => updateProcField(record, "quantity", v)}
                               saving={procSavingId === record.id}
-                              locked={procSubmitted}
+                              locked={procSubmitted || !canEditProcurement}
                               editing={procEditId === record.id}
                             />
                           )}
@@ -851,16 +876,18 @@ export function ExperimentDesign() {
                         <TableCell>
                           {procBatchEditing && draft ? (
                             <Switch
+                              aria-label={`${t("procurement_is_valid")} ${t("design_group")} ${record.group}`}
                               checked={draft.isValid}
                               onChange={(v) => handleProcBatchValidChange(i, v)}
                               size="sm"
                             />
                           ) : (
                             <Switch
+                              aria-label={`${t("procurement_is_valid")} ${t("design_group")} ${record.group}`}
                               checked={record.isValid}
                               onChange={() => toggleValid(record)}
                               size="sm"
-                              disabled={procSubmitted}
+                              disabled={procSubmitted || !canEditProcurement}
                             />
                           )}
                         </TableCell>
@@ -876,7 +903,7 @@ export function ExperimentDesign() {
                               value={record.remark || ""}
                               onSave={(v) => updateProcField(record, "remark", v)}
                               saving={procSavingId === record.id}
-                              locked={procSubmitted}
+                              locked={procSubmitted || !canEditProcurement}
                               editing={procEditId === record.id}
                             />
                           )}
@@ -890,11 +917,12 @@ export function ExperimentDesign() {
                             <span className="text-[10px] text-gray-300 text-center block">—</span>
                           ) : (
                             <div className="flex items-center gap-1 justify-center">
-                              {procSubmitted ? (
+                              {procSubmitted || !canEditProcurement ? (
                                 <Lock className="w-3.5 h-3.5 text-gray-300" />
                               ) : procEditId === record.id ? (
                                 <>
                                   <Button
+                                    aria-label={`${t("save")} ${record.group}`}
                                     variant="text"
                                     size="sm"
                                     onClick={() => {
@@ -906,6 +934,7 @@ export function ExperimentDesign() {
                                     <Check className="w-4 h-4" />
                                   </Button>
                                   <Button
+                                    aria-label={`${t("cancel")} ${record.group}`}
                                     variant="text"
                                     size="sm"
                                     onClick={() => setProcEditId(null)}
@@ -916,6 +945,7 @@ export function ExperimentDesign() {
                                 </>
                               ) : (
                                 <Button
+                                  aria-label={`${t("edit")} ${record.group}`}
                                   variant="text"
                                   size="sm"
                                   onClick={() => setProcEditId(record.id)}

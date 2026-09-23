@@ -33,7 +33,7 @@ async function request<T>(
 
   const res = await fetch(path, { ...options, headers });
 
-  if (res.status === 401) {
+  if (res.status === 401 && path !== '/api/v1/auth/login') {
     localStorage.removeItem('token');
     localStorage.removeItem('auth');
     window.location.href = '/login';

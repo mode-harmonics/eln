@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,7 @@ import { usePermissions } from "../hooks/usePermissions";
 import { api, ApiError } from "../lib/api";
 import type { InventoryItem } from "../types";
 import { Popconfirm } from "../components/Popconfirm";
+import { toast } from "../components/Toast";
 
 export function Inventory() {
   const { t } = useTranslation();
@@ -28,6 +29,9 @@ export function Inventory() {
   const [searchInput, setSearchInput] = useState("");
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
+  const requestId = useRef(0);
+  const submitting = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -36,10 +40,13 @@ export function Inventory() {
 
   useEffect(() => {
     fetchInventory();
+    return () => { requestId.current += 1; };
   }, [currentPage, pageSize, searchQuery]);
 
   const fetchInventory = () => {
+    const currentRequest = ++requestId.current;
     setLoading(true);
+    setError(null);
     const queryParams = new URLSearchParams();
     queryParams.append("page", String(currentPage));
     queryParams.append("limit", String(pageSize));
@@ -49,15 +56,19 @@ export function Inventory() {
 
     api.get<{ items: any[]; total: number }>(`/api/v1/inventory?${queryParams.toString()}`)
       .then((res) => {
+        if (currentRequest !== requestId.current) return;
+        const lastPage = Math.max(1, Math.ceil(res.total / pageSize));
+        if (currentPage > lastPage) setCurrentPage(lastPage);
         setItems(res.items);
         setTotalItems(res.total);
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "加载库存失败"))
-      .finally(() => setLoading(false));
+      .catch((err) => { if (currentRequest === requestId.current) setError(err instanceof ApiError ? err.message : t("load_failed")); })
+      .finally(() => { if (currentRequest === requestId.current) setLoading(false); });
   };
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting.current) return;
     const form = e.currentTarget as HTMLFormElement;
     const name = (form.elements.namedItem("name") as HTMLInputElement).value;
     const type = (form.elements.namedItem("type") as HTMLSelectElement).value;
@@ -67,6 +78,8 @@ export function Inventory() {
     const storageLocation = (form.elements.namedItem("storageLocation") as HTMLInputElement).value;
     const status = (form.elements.namedItem("status") as HTMLSelectElement).value;
 
+    submitting.current = true;
+    setSaving(true);
     try {
       await api.post("/api/v1/inventory", {
         name,
@@ -81,13 +94,16 @@ export function Inventory() {
       fetchInventory();
       setIsModalOpen(false);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "添加物品失败");
+      toast.error(err instanceof ApiError ? err.message : t("create_failed"));
+    } finally {
+      submitting.current = false;
+      setSaving(false);
     }
   };
 
   const handleUpdateItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingItem) return;
+    if (!editingItem || submitting.current) return;
     const form = e.currentTarget as HTMLFormElement;
     const name = (form.elements.namedItem("edit-name") as HTMLInputElement).value;
     const type = (form.elements.namedItem("edit-type") as HTMLSelectElement).value;
@@ -97,6 +113,8 @@ export function Inventory() {
     const storageLocation = (form.elements.namedItem("edit-storageLocation") as HTMLInputElement).value;
     const status = (form.elements.namedItem("edit-status") as HTMLSelectElement).value;
 
+    submitting.current = true;
+    setSaving(true);
     try {
       await api.put(`/api/v1/inventory/${editingItem.id}`, {
         name,
@@ -111,7 +129,10 @@ export function Inventory() {
       setIsEditModalOpen(false);
       setEditingItem(null);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "修改物品失败");
+      toast.error(err instanceof ApiError ? err.message : t("update_failed"));
+    } finally {
+      submitting.current = false;
+      setSaving(false);
     }
   };
 
@@ -133,7 +154,7 @@ export function Inventory() {
   }
 
   if (error) {
-    return <div className="p-8 text-center text-sm text-red-500">{error}</div>;
+    return <div role="alert" className="space-y-3 p-8 text-center text-sm text-red-500"><p>{error}</p><Button onClick={fetchInventory}>{t("retry")}</Button></div>;
   }
 
   return (
@@ -147,12 +168,12 @@ export function Inventory() {
           <SearchInput
             value={searchInput}
             onChange={setSearchInput}
-            onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
+            onSubmit={(value) => { setSearchQuery(value); setCurrentPage(1); }}
             placeholder={t("search")}
           />
           <div className="flex items-center gap-4">
             <ViewToggle viewMode={viewMode} setViewMode={setViewMode} className="hidden sm:flex" />
-            {hasPermission("data:write") && (
+            {hasPermission("system:write") && (
               <Button size="sm" onClick={() => setIsModalOpen(true)}>
                 {t("add_item")}
               </Button>
@@ -172,7 +193,7 @@ export function Inventory() {
                   <TableHead>Location</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Used</TableHead>
-                  {hasPermission("data:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">Actions</TableHead>}
+                  {hasPermission("system:write") && <TableHead className="text-right sticky right-0 z-20 bg-white">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -207,7 +228,7 @@ export function Inventory() {
                     <TableCell>
                       {item.lastUsedAt ? format(new Date(item.lastUsedAt), "yyyy年M月d日") : "从未"}
                     </TableCell>
-                    {hasPermission("data:write") && (
+                    {hasPermission("system:write") && (
                       <TableCell className="text-right space-x-3 sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                         <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                           Edit
@@ -216,7 +237,7 @@ export function Inventory() {
                           title="确定要删除该物品吗？"
                           onConfirm={() => handleDeleteItem(item.id)}
                         >
-                          <Button variant="text" className="!text-red-650 hover:!text-red-800">
+                          <Button variant="text" aria-label={`${t("delete")} ${item.name}`} className="!text-red-650 hover:!text-red-800">
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </Popconfirm>
@@ -231,13 +252,13 @@ export function Inventory() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
               <Card key={item.id} className="flex flex-col relative group">
-                {hasPermission("data:write") && (
+                {hasPermission("system:write") && (
                   <Popconfirm
                     title="确定要删除该物品吗？"
                     onConfirm={() => handleDeleteItem(item.id)}
                     placement="left"
                   >
-                    <Button variant="text" className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600 z-10">
+                    <Button variant="text" aria-label={`${t("delete")} ${item.name}`} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 !text-gray-400 hover:!text-red-600 z-10">
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </Popconfirm>
@@ -276,7 +297,7 @@ export function Inventory() {
                   </div>
                 </CardContent>
 
-                {hasPermission("data:write") && (
+                {hasPermission("system:write") && (
                   <CardFooter className="justify-end w-full">
                     <Button variant="text" onClick={() => { setEditingItem(item); setIsEditModalOpen(true); }} className="!text-[#1d74f5] hover:!text-blue-700">
                       Edit Item
@@ -303,11 +324,11 @@ export function Inventory() {
         )}
       </div>
 
-      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add Inventory Item"
+      <Modal open={isModalOpen} onClose={() => { if (!submitting.current) setIsModalOpen(false); }} title="Add Inventory Item"
         footer={
           <>
-            <Button size="sm" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button size="sm" type="submit" form="modal-inventory-form">Add Item</Button>
+            <Button size="sm" variant="secondary" disabled={saving} onClick={() => setIsModalOpen(false)}>Cancel</Button>
+            <Button size="sm" type="submit" form="modal-inventory-form" loading={saving} disabled={saving}>Add Item</Button>
           </>
         }>
         <form id="modal-inventory-form" onSubmit={handleAddItem} className="space-y-5">
@@ -327,7 +348,7 @@ export function Inventory() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="quantity">Quantity</label>
-              <input id="quantity" type="text" required className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" placeholder="e.g. 500g" />
+              <input id="quantity" type="text" required className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:border-[#1d74f5] focus:outline-none focus:ring-1 focus:ring-[#1d74f5] sm:text-sm transition-colors" placeholder="e.g. 500" inputMode="decimal" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -357,11 +378,11 @@ export function Inventory() {
         </form>
       </Modal>
 
-      <Modal open={isEditModalOpen && !!editingItem} onClose={() => setIsEditModalOpen(false)} title="Edit Inventory Item"
+      <Modal open={isEditModalOpen && !!editingItem} onClose={() => { if (!submitting.current) setIsEditModalOpen(false); }} title="Edit Inventory Item"
         footer={
           <>
-            <Button size="sm" variant="secondary" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
-            <Button size="sm" type="submit" form="modal-inventory-edit-form">Save Changes</Button>
+            <Button size="sm" variant="secondary" disabled={saving} onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button size="sm" type="submit" form="modal-inventory-edit-form" loading={saving} disabled={saving}>Save Changes</Button>
           </>
         }>
         <form id="modal-inventory-edit-form" onSubmit={handleUpdateItem} className="space-y-5">

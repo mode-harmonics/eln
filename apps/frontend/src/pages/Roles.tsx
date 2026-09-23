@@ -240,7 +240,7 @@ export function Roles() {
           search={<SearchInput
             value={searchInput}
             onChange={setSearchInput}
-            onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
+            onSubmit={(value) => { setSearchQuery(value); setCurrentPage(1); }}
             placeholder={t("search_roles")}
           />}
           view={<ViewToggle

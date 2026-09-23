@@ -39,8 +39,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         details = r.details;
       }
     } else if (exception instanceof Error) {
-      message = exception.message;
-      this.logger.error(`Unhandled error: ${exception.message}`, exception.stack);
+      // Keep database/driver details out of the public response.
     } else {
       this.logger.error('Unknown exception', exception as object);
     }
@@ -55,7 +54,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     if (status >= 500) {
       this.logger.error(
-        `${request.method} ${request.url} → ${status}`,
+        `${request.method} ${request.path} → ${status}`,
         exception instanceof Error ? exception.stack : undefined,
       );
     }

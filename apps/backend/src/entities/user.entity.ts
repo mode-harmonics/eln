@@ -26,7 +26,7 @@ export class User {
   @Column({ type: 'varchar', length: 128, nullable: true, comment: '邮箱' })
   email!: string | null;
 
-  @Column({ name: 'passwordHash', type: 'varchar', length: 255, comment: '密码哈希' })
+  @Column({ name: 'passwordHash', type: 'varchar', length: 255, select: false, comment: '密码哈希' })
   passwordHash!: string;
 
   @Column({ name: 'fullName', type: 'varchar', length: 64, comment: '姓名' })

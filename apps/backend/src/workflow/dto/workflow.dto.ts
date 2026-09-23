@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsUUID,
   ArrayNotEmpty,
   IsBoolean,
   IsInt,
@@ -95,7 +96,7 @@ export class WorkflowAssignmentInputDto {
 
   @IsArray()
   @ArrayNotEmpty()
-  @IsString({ each: true })
+  @IsUUID(undefined, { each: true })
   assignedUserIds!: string[];
 
   @IsOptional()
@@ -108,16 +109,16 @@ export class WorkflowAssignmentInputDto {
 
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @IsUUID(undefined, { each: true })
   visibleToUserIds?: string[];
 }
 
 export class CreateWorkflowInstanceDto implements SharedCreateWorkflowInstanceDto {
-  @IsString()
+  @IsUUID()
   projectId!: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   templateId?: string;
 
   @IsArray()
@@ -129,7 +130,7 @@ export class CreateWorkflowInstanceDto implements SharedCreateWorkflowInstanceDt
 export class UpdateStepAssignmentDto {
   @IsOptional()
   @IsArray()
-  @IsString({ each: true })
+  @IsUUID(undefined, { each: true })
   assignedUserIds?: string[];
 
   @IsOptional()
@@ -139,4 +140,10 @@ export class UpdateStepAssignmentDto {
   @IsOptional()
   @IsBoolean()
   canViewInternalCode?: boolean;
+}
+
+export class TransitionWorkflowDto {
+  @IsOptional()
+  @IsString()
+  expectedStepName?: string;
 }

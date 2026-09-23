@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../common/guards/permissions.guard';
 import { RequirePermission } from '../common/decorators/permissions.decorator';
 import { UsersService } from './users.service';
+import { ChangePasswordDto, CreateUserDto, UpdateUserDto } from './dto/user.dto';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -37,20 +38,20 @@ export class UsersController {
   @Post()
   @RequirePermission('system:write')
   @ApiOperation({ summary: 'Create a new user.' })
-  async create(@Body() dto: { username: string; email: string; fullName: string; roleId?: string }) {
+  async create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
 
   @Put(':id')
   @RequirePermission('system:write')
   @ApiOperation({ summary: 'Update an existing user.' })
-  async update(@Param('id') id: string, @Body() dto: { username?: string; email?: string; fullName?: string; roleId?: string; isActive?: boolean }) {
+  async update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
   }
 
   @Put('me/password')
   @ApiOperation({ summary: 'Authenticated user changes their own password.' })
-  async changePassword(@CurrentUser() user: RequestUser, @Body() dto: { oldPassword: string; newPassword: string }) {
+  async changePassword(@CurrentUser() user: RequestUser, @Body() dto: ChangePasswordDto) {
     return this.usersService.changePassword(user.id, dto.oldPassword, dto.newPassword);
   }
 

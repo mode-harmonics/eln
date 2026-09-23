@@ -4,6 +4,7 @@ import {
   FileText, Layers, FlaskConical, Beaker, Clock, Thermometer, Zap, Activity
 } from "lucide-react";
 import { api, ApiError } from "../lib/api";
+import { mergeInstanceStepMeta } from "../lib/workflow";
 import {
   BuiltInStep,
   STEP_ASSAY_MAP,
@@ -17,6 +18,7 @@ import type { Experiment } from "../types";
 
 export interface WfStep {
   stepName: string;
+  builtInStep?: string | null;
   stepIndex: number;
   status: "pending" | "in_progress" | "completed" | "skipped";
   assignedUserIds: string[] | null;
@@ -107,7 +109,9 @@ export function useProjectWorkflow(projectId?: string) {
     currentStepName: string | null;
   }>({ canViewInternalCode: false, visibleStepNames: [], currentStepName: null });
 
-  const [stepMeta, setStepMeta] = useState<StepMetaMap>({});
+  const [defaultStepMeta, setStepMeta] = useState<StepMetaMap>({});
+  const stepMeta = React.useMemo(() => mergeInstanceStepMeta(defaultStepMeta, wf.steps,
+    (stepName): StepMetaEntry => ({ label: stepName, icon: <Beaker className="w-4 h-4" /> })), [defaultStepMeta, wf.steps]);
   const [stepMetaError, setStepMetaError] = useState(false);
   const stepMetaRef = React.useRef<StepMetaMap>(stepMeta);
   stepMetaRef.current = stepMeta;
@@ -136,7 +140,8 @@ export function useProjectWorkflow(projectId?: string) {
       const expsArr = Array.isArray(exps) ? exps : [];
 
       if (wfData.instance && wfData.steps.length > 0) {
-        const currentMeta = stepMetaRef.current;
+        const currentMeta = mergeInstanceStepMeta(stepMetaRef.current, wfData.steps,
+          (stepName): StepMetaEntry => ({ label: stepName, icon: <Beaker className="w-4 h-4" /> }));
         const existingStepNames = new Set(expsArr.map((e: any) => e.workflowStepName));
         const stepsNeedingExps = wfData.steps.filter(
           (s) => s.status !== 'pending' && !s.parentStepName && !existingStepNames.has(s.stepName)

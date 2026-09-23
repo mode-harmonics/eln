@@ -6,7 +6,7 @@ import { cn } from "../lib/utils";
 interface SearchInputProps {
   value: string;
   onChange: (value: string) => void;
-  onSubmit?: () => void;
+  onSubmit?: (value: string) => void;
   placeholder?: string;
   ariaLabel?: string;
   className?: string;
@@ -24,7 +24,7 @@ export function SearchInput({
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit?.();
+        onSubmit?.(value);
       }}
       className={cn("relative w-full max-w-lg flex items-center", className)}
     >
@@ -51,7 +51,7 @@ export function SearchInput({
         <button
           type="button"
           aria-label="Clear search"
-          onClick={() => { onChange(""); onSubmit?.(); }}
+          onClick={() => { onChange(""); onSubmit?.(""); }}
           className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-900 transition-colors rounded"
         >
           <X className="h-4 w-4" />

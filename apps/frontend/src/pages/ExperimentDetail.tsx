@@ -210,7 +210,7 @@ export function ExperimentDetail() {
 
   const handleSaveExperiment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!experiment) return;
+    if (!experiment || isReadOnly) return;
     setSaving(true);
     try {
       const updated = await api.put<ExperimentDetail>(`/api/v1/experiments/${experiment.id}`, {
@@ -247,7 +247,7 @@ export function ExperimentDetail() {
     if (!experiment?.projectId) return;
     setCompletingStep(true);
     try {
-      await api.put(`/api/v1/workflow/instances/${experiment.projectId}/transition`);
+      await api.put(`/api/v1/workflow/instances/${experiment.projectId}/transition`, { expectedStepName: experiment.workflowStepName });
       toast.success(t("step_completed_success", "当前工步已提交"));
       setStepCompleted(true);
       navigate(`/projects/${experiment.projectId}`);
@@ -277,7 +277,7 @@ export function ExperimentDetail() {
     return <div className="p-10 text-sm text-red-500">{error ?? t("experiment_not_found")}</div>;
   }
 
-  const isReadOnly = stepCompleted || experiment.status === "Scrapped";
+  const isReadOnly = stepCompleted || experiment.status !== "Draft";
   const assayType = experiment.metadata?.assayType;
   const permissionType = assayType ? ASSAY_TYPE_TO_PERMISSION[assayType] : null;
   const hasReadPermission =
@@ -363,7 +363,7 @@ export function ExperimentDetail() {
   }, [experiment?.projectId, experiment?.metadata?.assayType]);
 
   const renderTable = () => {
-    const tableProps = { projectId: experiment.projectId, readOnly: stepCompleted, showBatchEdit: true };
+    const tableProps = { projectId: experiment.projectId, readOnly: isReadOnly, showBatchEdit: true };
     switch (assayType) {
       case "ProcessData": return <ProcessDataTable key={refreshCounter} experimentId={experiment.id} stepName={experiment.workflowStepName ?? undefined} {...tableProps} invalidInternalCodes={invalidInternalCodes} />;
       case "SolutionPreparation": return <SolutionPreparationTable key={refreshCounter} experimentId={experiment.id} {...tableProps} />;
@@ -423,7 +423,7 @@ export function ExperimentDetail() {
               </Button>
             </Popconfirm>
           )}
-          {isReadOnly && experiment.status !== "Scrapped" && (
+          {stepCompleted && experiment.status !== "Scrapped" && (
             <span className="text-xs text-green-600 bg-green-50 border border-green-200 px-2.5 py-1 rounded-md flex items-center gap-1.5 font-medium shrink-0">
               <CheckCircle2 className="w-3.5 h-3.5" />
               {t("step_already_completed", "工步已提交")}
@@ -640,7 +640,7 @@ export function ExperimentDetail() {
       )}
 
       {/* Edit Modal */}
-      <Modal open={editModalOpen} onClose={() => setEditModalOpen(false)} title={t("edit_experiment")}
+      <Modal open={editModalOpen && !isReadOnly} onClose={() => setEditModalOpen(false)} title={t("edit_experiment")}
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditModalOpen(false)} disabled={saving}>{t("cancel")}</Button>

@@ -34,7 +34,10 @@ export class AuthService {
    * error for all cases to avoid leaking which part failed.
    */
   async validateUser(username: string, password: string): Promise<User> {
-    const user = await this.usersRepo.findOne({ where: { username } });
+    const user = await this.usersRepo.createQueryBuilder('user')
+      .addSelect('user.passwordHash')
+      .where('user.username = :username', { username })
+      .getOne();
 
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid username or password.');

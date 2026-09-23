@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigate, createBrowserRouter, RouterProvider } from "react-router-dom";
+import { Navigate, createBrowserRouter, RouterProvider, useParams } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Projects } from "./pages/Projects";
@@ -16,6 +16,16 @@ import { CellPickerPage } from "./pages/CellPickerPage";
 import { api } from "./lib/api";
 import { Dashboard } from "./pages/Dashboard";
 import type { Project } from "./types";
+
+function ProjectDetailRoute() {
+  const { projectId } = useParams();
+  return <ProjectDetail key={projectId} />;
+}
+
+function ExperimentDetailRoute() {
+  const { experimentId } = useParams();
+  return <ExperimentDetail key={experimentId} />;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuth = localStorage.getItem("auth") === "true";
@@ -64,7 +74,7 @@ const router = createBrowserRouter([
               breadcrumb: (match: any) => match.data?.name ?? match.params.projectId,
             },
             children: [
-              { index: true, element: <ProjectDetail /> },
+              { index: true, element: <ProjectDetailRoute /> },
               {
                 path: "design",
                 element: <ExperimentDesign />,
@@ -81,7 +91,7 @@ const router = createBrowserRouter([
               },
               {
                 path: "experiments/:experimentId",
-                element: <ExperimentDetail />,
+                element: <ExperimentDetailRoute />,
                 loader: async ({ params }) => {
                   try {
                     return await api.get<any>(`/api/v1/experiments/${params.experimentId}`);

@@ -9,7 +9,9 @@ import { SkeletonCard } from "../components/Skeleton";
 import { api } from "../lib/api";
 import { RECORD_TYPE_TO_API_TYPE } from "../utils/recordTypes";
 import { PageHeader } from "../components/PageHeader";
+import { Button } from "../components/Button";
 import { useProjectWorkflow } from "../hooks/useProjectWorkflow";
+import { usePermissions } from "../hooks/usePermissions";
 import { WorkflowProgressCard } from "../components/project-detail/WorkflowProgressCard";
 import { WorkflowStepList } from "../components/project-detail/WorkflowStepList";
 import { WorkflowTaskSidebar } from "../components/project-detail/WorkflowTaskSidebar";
@@ -20,6 +22,7 @@ import type {
 
 export function ProjectDetail() {
   const { t } = useTranslation();
+  const { hasPermission } = usePermissions();
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get("tab") as "workflow" | "summary" | "raw_data") || "workflow";
@@ -51,6 +54,7 @@ export function ProjectDetail() {
   const [htCycle, setHtCycle] = useState<HtCycle[]>([]);
   const [loadedTypes, setLoadedTypes] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [pickedCells, setPickedCells] = useState<string[]>([]);
 
   // Current User ID
@@ -83,9 +87,11 @@ export function ProjectDetail() {
     if (!projectId || (activeTab !== "summary" && activeTab !== "raw_data")) return;
     let cancelled = false;
     setDataLoading(true);
+    setDataError(null);
     setLoadedTypes([]);
     api.get<Experiment[]>(`/api/v1/projects/${projectId}/experiments`).then((allExps) => {
-      if (cancelled || !Array.isArray(allExps)) return;
+      if (cancelled) return;
+      if (!Array.isArray(allExps)) throw new Error(t("load_failed"));
       const expIdsByType: Record<string, string[]> = {};
       for (const exp of allExps) {
         const at = exp.metadata?.assayType as string;
@@ -103,14 +109,15 @@ export function ProjectDetail() {
         FastCharge: setFastCharge,
         HtCycle: setHtCycle,
       };
-      api.get<string[]>(`/api/v1/projects/${projectId}/procurement/invalid-internalcodes`).catch(() => []).then((invalidCodesData) => {
+      return api.get<string[]>(`/api/v1/projects/${projectId}/procurement/invalid-internalcodes`).then((invalidCodesData) => {
+        if (cancelled) return;
         const invalidCodes = Array.isArray(invalidCodesData) ? invalidCodesData : [];
         const tasks = Object.entries(setters).map(([at, setter]) => {
           const apiType = RECORD_TYPE_TO_API_TYPE[at];
           if (!apiType) return null;
           const ids = expIdsByType[at] || [];
           if (!ids.length) { setter([]); setLoadedTypes((p) => [...p, apiType]); return null; }
-          return Promise.all(ids.map((eid: string) => api.get<any[]>(`/api/v1/data/${apiType}/${eid}`).catch(() => []))).then((rs) => {
+          return Promise.all(ids.map((eid: string) => api.get<any[]>(`/api/v1/data/${apiType}/${eid}`))).then((rs) => {
             if (!cancelled) {
               let rows = rs.flat();
               if (at === "ProcessData") {
@@ -136,9 +143,11 @@ export function ProjectDetail() {
             }
           });
         });
-        Promise.all(tasks.filter(Boolean)).finally(() => { if (!cancelled) setDataLoading(false); });
+        return Promise.all(tasks.filter(Boolean));
       });
-    }).catch(() => { });
+    }).catch((err) => {
+      if (!cancelled) setDataError(err instanceof Error ? err.message : t("load_failed"));
+    }).finally(() => { if (!cancelled) setDataLoading(false); });
     return () => { cancelled = true; };
   }, [projectId, activeTab, refetchTrigger]);
 
@@ -226,17 +235,24 @@ export function ProjectDetail() {
         )}
 
         {/* Summary Tab */}
-        {activeTab === "summary" && (dataLoading ? <SkeletonCard rows={5} /> :
+        {(activeTab === "summary" || activeTab === "raw_data") && !dataLoading && dataError && (
+          <div role="alert" className="space-y-3 rounded-lg border border-red-200 p-5 text-sm text-red-600">
+            <p>{dataError}</p>
+            <Button variant="secondary" size="sm" onClick={() => setRefetchTrigger((n) => n + 1)}>{t("retry", "重试")}</Button>
+          </div>
+        )}
+        {activeTab === "summary" && (dataLoading ? <SkeletonCard rows={5} /> : !dataError &&
           <DataSummary loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
             storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
             fastCharge={fastCharge} htCycle={htCycle} />
         )}
 
         {/* Raw Data Tab */}
-        {activeTab === "raw_data" && (dataLoading ? <SkeletonCard rows={5} /> :
+        {activeTab === "raw_data" && (dataLoading ? <SkeletonCard rows={5} /> : !dataError &&
           <ProjectRawData loadedTypes={loadedTypes} processData={processData} calendarLife={calendarLife}
             storageSwelling={storageSwelling} energyEfficiency={energyEfficiency} dcrTest={dcrTest}
             fastCharge={fastCharge} htCycle={htCycle} projectId={projectId!}
+            canImport={isCreator && hasPermission("experiments:write")}
             onImported={() => setRefetchTrigger((n) => n + 1)} />
         )}
       </div>

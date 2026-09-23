@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
@@ -60,6 +60,8 @@ export function Projects() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
+  const currentUserId = localStorage.getItem("currentUserId");
+  const canManageProject = (project: Project) => hasPermission("projects:write") && project.createdBy === currentUserId;
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +69,8 @@ export function Projects() {
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const [pendingProject, setPendingProject] = useState<Project | null>(null);
 
   const [refetchTrigger, setRefetchTrigger] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,7 +100,7 @@ export function Projects() {
 
   // Fetch templates, default-steps & users for workflow assignment
   useEffect(() => {
-    if (!isModalOpen) { setCreateStep(1); setAssignmentError(null); return; }
+    if (!isModalOpen) { setCreateStep(pendingProject ? 2 : 1); setAssignmentError(null); return; }
     setDefaultStepsError(false);
     api.get<{ steps: WorkflowStepNodeDto[] }>("/api/v1/workflow/default-steps")
       .then((d) => setDefaultSteps(d?.steps ?? []))
@@ -139,7 +143,7 @@ export function Projects() {
   }, [searchQuery, page, limit, refetchTrigger]);
 
   const handleCreateProject = async () => {
-    if (createStep !== 2) return;
+    if (createStep !== 2 || creatingRef.current) return;
     if (!newProjectName.trim()) return;
 
     // Validate all steps (or sub-steps) have at least one assignee
@@ -159,13 +163,15 @@ export function Projects() {
     }
     setAssignmentError(null);
 
+    creatingRef.current = true;
     setCreating(true);
     try {
       // 1. Create project
-      const project = await api.post<Project>("/api/v1/projects", {
+      const project = pendingProject ?? await api.post<Project>("/api/v1/projects", {
         name: newProjectName,
         description: newProjectDesc,
       });
+      setPendingProject(project);
 
       // 2. Create workflow instance with one multi-user assignment per step
       if (selectedTemplateSteps.length > 0) {
@@ -218,7 +224,10 @@ export function Projects() {
         }
 
         if (assignments.length > 0) {
-          await api.post("/api/v1/workflow/instances", {
+          const existing = pendingProject
+            ? await api.get<{ instance: { id: string } | null }>(`/api/v1/workflow/instances/${project.id}`)
+            : null;
+          if (!existing?.instance) await api.post("/api/v1/workflow/instances", {
             projectId: project.id,
             templateId: selectedTemplateId || undefined,
             assignments,
@@ -227,6 +236,7 @@ export function Projects() {
       }
 
       setIsModalOpen(false);
+      setPendingProject(null);
       setNewProjectName("");
       setNewProjectDesc("");
       setStepAssignments({});
@@ -237,15 +247,17 @@ export function Projects() {
       setSearchInput("");
       setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
+      setRefetchTrigger((prev) => prev + 1);
       toast.error(err instanceof ApiError ? err.message : t("create_failed"));
     } finally {
+      creatingRef.current = false;
       setCreating(false);
     }
   };
 
   const handleUpdateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProject || !editName.trim()) return;
+    if (!editingProject || !canManageProject(editingProject) || !editName.trim()) return;
     setSaving(true);
     try {
       await api.put(`/api/v1/projects/${editingProject.id}`, {
@@ -264,6 +276,7 @@ export function Projects() {
   };
 
   const handleDeleteProject = async (project: Project) => {
+    if (!canManageProject(project)) return;
     try {
       await api.delete(`/api/v1/projects/${project.id}`);
       setRefetchTrigger((prev) => prev + 1);
@@ -289,9 +302,9 @@ export function Projects() {
           search={<SearchInput
             value={searchInput}
             onChange={setSearchInput}
-            onSubmit={() => {
+            onSubmit={(value) => {
               setPage(1);
-              setSearchQuery(searchInput);
+              setSearchQuery(value);
             }}
             placeholder={t("search_projects")}
           />}
@@ -304,7 +317,7 @@ export function Projects() {
         />
 
         <TableWrapper>
-          <Table>
+          <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow>
                 <TableHead>{t("project_name")}</TableHead>
@@ -347,18 +360,18 @@ export function Projects() {
                   <TableCell>{format(new Date(project.createdAt), "yyyy年M月d日")}</TableCell>
                   {hasPermission("projects:write") && (
                     <TableCell className="text-right sticky right-0 z-10 bg-white group-hover:bg-gray-50">
-                      <div className="flex items-center justify-end gap-3">
-                        <Button variant="text" onClick={(e) => { e.stopPropagation(); setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action"><Edit3 className="w-4 h-4" /></Button>
+                      {canManageProject(project) && <div className="flex items-center justify-end gap-3">
+                        <Button variant="text" aria-label={`${t("edit")} ${project.name}`} title={t("edit")} onClick={(e) => { e.stopPropagation(); if (!canManageProject(project)) return; setEditingProject(project); setEditName(project.name); setEditDesc(project.description || ""); setEditStatus(project.status); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action"><Edit3 className="w-4 h-4" /></Button>
                         <Popconfirm
                           title={t("delete_project_confirm", { name: project.name })}
                           onConfirm={() => handleDeleteProject(project)}
                           placement="top"
                         >
-                          <Button variant="text" onClick={(e) => { e.stopPropagation(); }} className="!text-gray-400 hover:!text-red-600">
+                          <Button variant="text" aria-label={`${t("delete")} ${project.name}`} title={t("delete")} onClick={(e) => { e.stopPropagation(); }} className="!text-gray-400 hover:!text-red-600">
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </Popconfirm>
-                      </div>
+                      </div>}
                     </TableCell>
                   )}
                 </TableRow>
@@ -396,16 +409,16 @@ export function Projects() {
         </div>
       )}
 
-      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("create_new_project")}
+      <Modal open={isModalOpen} onClose={() => { if (!creatingRef.current) setIsModalOpen(false); }} title={t("create_new_project")}
         maxWidth="2xl"
         footer={
           <>
-            <Button size="sm" variant="secondary" onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
-            {createStep === 2 && (
+            <Button size="sm" variant="secondary" disabled={creating} onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
+            {createStep === 2 && !pendingProject && (
               <Button size="sm" type="button" variant="secondary" onClick={() => { setCreateStep(1); setAssignmentError(null); }}>{t("previous")}</Button>
             )}
             {createStep === 2 ? (
-              <Button size="sm" type="button" loading={creating} onClick={handleCreateProject}>{t("create_project")}</Button>
+              <Button size="sm" type="button" loading={creating} onClick={handleCreateProject}>{pendingProject ? t("retry") : t("create_project")}</Button>
             ) : (
               <Button size="sm" type="button" onClick={() => {
                 if (!newProjectName.trim()) return;
@@ -414,6 +427,7 @@ export function Projects() {
             )}
           </>
         }>
+        {pendingProject && <p role="status" className="mb-4 rounded-md bg-amber-50 p-3 text-sm text-amber-800">{t("project_workflow_pending")}</p>}
         {createStep === 1 ? (
           <div className="space-y-5">
             <TextInput
@@ -448,6 +462,7 @@ export function Projects() {
               <label className="block text-sm font-medium text-gray-700 mb-1">{t("workflow_template", "Workflow Template")}</label>
               <FormSelect
                 value={selectedTemplateId || ""}
+                disabled={creating || !!pendingProject}
                 onChange={(e) => setSelectedTemplateId(e.target.value || null)}
               >
                 <option value="">{t("use_default", "Use Default Template")}</option>
@@ -464,7 +479,7 @@ export function Projects() {
               <p className="text-xs text-red-500 bg-red-50 rounded-md px-3 py-2">{assignmentError}</p>
             )}
             <TableWrapper className="max-h-[400px] overflow-y-auto">
-              <Table>
+              <Table className="min-w-[760px]">
                 <TableHeader className="sticky top-0 z-10">
                   <TableRow>
                     <TableHead className="w-10">#</TableHead>

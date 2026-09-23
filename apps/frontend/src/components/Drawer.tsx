@@ -19,6 +19,7 @@ interface DrawerProps {
   /** Max-width class override — default "max-w-lg" */
   size?: string;
   className?: string;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function Drawer({
@@ -32,10 +33,11 @@ export function Drawer({
   side = "right",
   size = "max-w-lg",
   className,
+  returnFocusRef,
 }: DrawerProps) {
   const titleId = useId();
   const descriptionId = useId();
-  const dialogRef = useDialogA11y(open, onClose);
+  const dialogRef = useDialogA11y(open, onClose, returnFocusRef);
 
   if (!open) return null;
 

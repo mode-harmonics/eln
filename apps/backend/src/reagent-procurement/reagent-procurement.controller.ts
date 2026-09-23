@@ -1,3 +1,4 @@
+import { ResourceAccess } from '../access/resource-access.guard';
 import {
   Controller,
   Get,
@@ -24,6 +25,7 @@ export class ReagentProcurementController {
   ) {}
 
   @Get('projects/:projectId/procurement')
+  @ResourceAccess('step', 'projectId', 'read', { step: 'procurement' })
   @RequirePermission('experiments:read')
   async list(@Param('projectId') projectId: string) {
     return {
@@ -33,6 +35,7 @@ export class ReagentProcurementController {
   }
 
   @Get('projects/:projectId/procurement/valid-groups')
+  @ResourceAccess('step', 'projectId', 'read', { step: 'procurement' })
   @RequirePermission('experiments:read')
   async validGroups(@Param('projectId') projectId: string) {
     return {
@@ -42,6 +45,7 @@ export class ReagentProcurementController {
   }
 
   @Get('projects/:projectId/procurement/invalid-internalcodes')
+  @ResourceAccess('step', 'projectId', 'read', { step: 'procurement' })
   @RequirePermission('experiments:read')
   async invalidInternalCodes(@Param('projectId') projectId: string) {
     return {
@@ -51,6 +55,7 @@ export class ReagentProcurementController {
   }
 
   @Put('projects/:projectId/procurement/batch')
+  @ResourceAccess('step', 'projectId', 'write', { step: 'procurement' })
   @RequirePermission('experiments:write')
   async updateBatch(
     @Param('projectId') projectId: string,
@@ -63,6 +68,7 @@ export class ReagentProcurementController {
   }
 
   @Put('projects/:projectId/procurement/:id')
+  @ResourceAccess('step', 'projectId', 'write', { step: 'procurement' })
   @RequirePermission('experiments:write')
   async update(
     @Param('projectId') projectId: string,

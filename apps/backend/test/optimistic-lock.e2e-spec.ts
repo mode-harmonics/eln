@@ -21,7 +21,7 @@ describe('Experiments optimistic lock (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }));
     await app.init();
 
     const loginRes = await request(app.getHttpServer())
@@ -37,25 +37,25 @@ describe('Experiments optimistic lock (e2e)', () => {
   });
 
   it('returns 409 when versionNo is stale, and 200 when it is current', async () => {
-    const experimentId = process.env.E2E_SEED_EXPERIMENT_ID;
-    if (!experimentId) return;
+    const auth = { Authorization: `Bearer ${accessToken}` };
+    const project = await request(app.getHttpServer()).post('/api/v1/projects').set(auth)
+      .send({ name: 'E2E optimistic lock' }).expect(201);
+    const experiment = await request(app.getHttpServer()).post(`/api/v1/projects/${project.body.id}/experiments`).set(auth)
+      .send({ title: 'Lock test' }).expect(201);
+    const experimentId = experiment.body.id;
+    const detail = await request(app.getHttpServer()).get(`/api/v1/experiments/${experimentId}`).set(auth).expect(200);
 
-    const detail = await request(app.getHttpServer())
-      .get(`/api/v1/experiments/${experimentId}`)
-      .set('Authorization', `Bearer ${accessToken}`);
-
-    if (detail.status !== 200) {
-      // Environment not seeded for this id — skip rather than false-fail.
-      return;
-    }
-
-    const currentVersion = detail.body.versionNo;
+    // Advance once so the stale version is still a valid positive DTO value.
+    const initialEdit = await request(app.getHttpServer())
+      .put(`/api/v1/experiments/${experimentId}`).set(auth)
+      .send({ title: 'Initial edit', versionNo: detail.body.versionNo }).expect(200);
+    const currentVersion = initialEdit.body.versionNo;
 
     // Stale update: deliberately send an old version number.
     await request(app.getHttpServer())
       .put(`/api/v1/experiments/${experimentId}`)
       .set('Authorization', `Bearer ${accessToken}`)
-      .send({ title: 'Stale update', versionNo: currentVersion - 1 || 0 })
+      .send({ title: 'Stale update', versionNo: currentVersion - 1 })
       .expect(409);
 
     // Correct update: succeeds and increments versionNo.

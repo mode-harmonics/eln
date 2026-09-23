@@ -87,17 +87,17 @@ export class TempFilesController {
 
   @Get()
   @ApiOperation({ summary: '列出当前会话内所有临时文件。' })
-  async list() {
-    return Array.from(registry.values()).map(({ id, name, size, mimeType, uploadedBy, uploadedAt }) => ({
+  async list(@CurrentUser() user: RequestUser) {
+    return Array.from(registry.values()).filter(entry => entry.uploadedBy === user.id).map(({ id, name, size, mimeType, uploadedBy, uploadedAt }) => ({
       id, name, size, mimeType, uploadedBy, uploadedAt,
     }));
   }
 
   @Get(':id/download')
   @ApiOperation({ summary: '下载临时文件。' })
-  async download(@Param('id') id: string, @Res() res: any) {
+  async download(@Param('id') id: string, @Res() res: any, @CurrentUser() user: RequestUser) {
     const entry = registry.get(id);
-    if (!entry || !fs.existsSync(entry.filePath)) {
+    if (!entry || entry.uploadedBy !== user.id || !fs.existsSync(entry.filePath)) {
       throw new NotFoundException('文件不存在或已过期');
     }
     res.setHeader('Content-Type', entry.mimeType || 'application/octet-stream');
@@ -108,9 +108,9 @@ export class TempFilesController {
 
   @Delete(':id')
   @ApiOperation({ summary: '删除临时文件。' })
-  async remove(@Param('id') id: string) {
+  async remove(@Param('id') id: string, @CurrentUser() user: RequestUser) {
     const entry = registry.get(id);
-    if (!entry) throw new NotFoundException('文件不存在');
+    if (!entry || entry.uploadedBy !== user.id) throw new NotFoundException('文件不存在');
     if (fs.existsSync(entry.filePath)) fs.unlinkSync(entry.filePath);
     registry.delete(id);
     return { success: true };

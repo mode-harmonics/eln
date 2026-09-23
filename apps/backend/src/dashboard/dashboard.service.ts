@@ -1,3 +1,5 @@
+import { AccessService } from '../access/access.service';
+import { In } from 'typeorm';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -24,14 +26,20 @@ export class DashboardService {
     private readonly notificationRepo: Repository<Notification>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    private readonly access: AccessService,
   ) {}
 
-  async getSummary(userId: string) {
+  async getSummary(userId: string, permissionList: string[] = []) {
+    const scope = await this.access.visibleScope({ id: userId, username: '', email: null, roleId: null, permissionList });
+    const empty = '00000000-0000-0000-0000-000000000000';
+    const projectScope = scope.projectIds.length ? scope.projectIds : [empty];
+    const experimentScope = scope.experimentIds.length ? scope.experimentIds : [empty];
     // 1. Project Status Distribution
     const projectStatusCounts = await this.projectRepo
       .createQueryBuilder('p')
       .select('p.status', 'status')
       .addSelect('COUNT(p.id)', 'count')
+      .where('p.id IN (:...projectScope)', { projectScope })
       .groupBy('p.status')
       .getRawMany();
 
@@ -40,6 +48,7 @@ export class DashboardService {
       .createQueryBuilder('e')
       .select('e.status', 'status')
       .addSelect('COUNT(e.id)', 'count')
+      .where('e.id IN (:...experimentScope)', { experimentScope })
       .groupBy('e.status')
       .getRawMany();
 
@@ -50,6 +59,7 @@ export class DashboardService {
       .select(['e.id', 'e.title', 'e.status', 'e.updatedAt', 'e.projectId'])
       .where('e.status = :status', { status: ExperimentStatus.InReview })
       .andWhere('e.reviewerId = :reviewerId', { reviewerId: userId })
+      .andWhere('e.id IN (:...experimentScope)', { experimentScope })
       .orderBy('e.updatedAt', 'DESC')
       .getMany();
 
@@ -78,6 +88,9 @@ export class DashboardService {
     });
     
     for (const n of notifications) {
+      if (n.relatedExperimentId && !scope.experimentIds.includes(n.relatedExperimentId)) continue;
+      const notificationProjectId = (n.payload as any)?.projectId;
+      if (notificationProjectId && !scope.projectIds.includes(notificationProjectId)) continue;
       activities.push({
         id: `notif_${n.id}`,
         type: 'notification',
@@ -88,8 +101,9 @@ export class DashboardService {
       });
     }
 
-    // Comments globally (or could scope to user's projects)
+    // Comments from visible experiments
     const comments = await this.commentRepo.find({
+      where: { experimentId: In(scope.experimentIds) },
       order: { createdAt: 'DESC' },
       take: 10,
     });
@@ -110,8 +124,9 @@ export class DashboardService {
       });
     }
 
-    // Version History globally
+    // Version history from visible experiments
     const histories = await this.versionHistoryRepo.find({
+      where: { experimentId: In(scope.experimentIds) },
       order: { createdAt: 'DESC' },
       take: 10,
     });

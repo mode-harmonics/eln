@@ -1,3 +1,5 @@
+import { AccessService } from '../access/access.service';
+import { ResourceAccess } from '../access/resource-access.guard';
 import {
   BadRequestException,
   Body,
@@ -45,6 +47,7 @@ export class DataController {
   constructor(
     private readonly dataService: DataService,
     private readonly workflowService: WorkflowService,
+    private readonly access: AccessService,
   ) {}
 
   @Post('upload')
@@ -63,6 +66,7 @@ export class DataController {
       throw new BadRequestException('No files uploaded. Expected multipart field "files".');
     }
 
+    await this.access.assertExperiment(dto.experimentId, user, 'write');
     const experiment = await this.dataService.getExperiment(dto.experimentId);
     if (!experiment) {
       throw new BadRequestException('Experiment not found.');
@@ -77,6 +81,7 @@ export class DataController {
   }
 
   @Post('upload-project/:projectId')
+  @ResourceAccess('projectAll', 'projectId', 'owner')
   @RequirePermission('experiments:write')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
@@ -104,6 +109,7 @@ export class DataController {
       projectId,
       user.id,
       dto.mode ?? 'merge',
+      (stepName) => this.access.assertStep(projectId, stepName, user, 'write'),
     );
 
     if (result.sheetsProcessed === 0) {
@@ -125,6 +131,7 @@ export class DataController {
   }
 
   @Get('export/summary/:expId')
+  @ResourceAccess('experiment', 'expId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Export summary data for an experiment.' })
   async exportSummary(@Param('expId') expId: string) {
@@ -139,6 +146,7 @@ export class DataController {
   }
 
   @Get('export/raw/:expId')
+  @ResourceAccess('experiment', 'expId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Export raw data for an experiment.' })
   async exportRaw(@Param('expId') expId: string) {
@@ -153,6 +161,7 @@ export class DataController {
   }
 
   @Get('export/project/:projectId')
+  @ResourceAccess('projectAll', 'projectId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Export ALL business data for a project as an Excel workbook with Chinese headers.' })
   async exportProjectData(@Param('projectId') projectId: string) {
@@ -167,6 +176,7 @@ export class DataController {
   }
 
   @Get('raw/:expId')
+  @ResourceAccess('experiment', 'expId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Query raw step data rows for an experiment. Optional ?source=formation|grading to filter by data source.' })
   async findRawSteps(
@@ -176,7 +186,16 @@ export class DataController {
     return this.dataService.findRawSteps(expId, source);
   }
 
+  @Get('selection-candidates/:projectId')
+  @ResourceAccess('step', 'projectId', 'read', { step: 'battery_selection' })
+  @RequirePermission('experiments:read')
+  @ApiOperation({ summary: 'Get only the eligible cell identifiers and selection metrics for the battery-selection step.' })
+  async selectionCandidates(@Param('projectId') projectId: string) {
+    return this.dataService.findCellSelectionCandidates(projectId);
+  }
+
   @Post('pick-cells/:projectId')
+  @ResourceAccess('step', 'projectId', 'write', { step: 'battery_selection' })
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Auto or manual pick cells for a project (project-scoped).' })
   async pickCells(
@@ -191,6 +210,7 @@ export class DataController {
   }
 
   @Get('picked-cells/:projectId')
+  @ResourceAccess('project', 'projectId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get picked cells for a project.' })
   async getPickedCells(@Param('projectId') projectId: string) {
@@ -198,6 +218,7 @@ export class DataController {
   }
 
   @Get('scrapped-cells/:projectId')
+  @ResourceAccess('project', 'projectId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get scrapped cells for a project.' })
   async getScrappedCells(@Param('projectId') projectId: string) {
@@ -205,6 +226,7 @@ export class DataController {
   }
 
   @Post('scrapped-cells/:projectId')
+  @ResourceAccess('projectAll', 'projectId', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Scrap a single battery (project-scoped).' })
   async scrapCell(
@@ -219,6 +241,7 @@ export class DataController {
   }
 
   @Post('scrapped-cells/:projectId/restore')
+  @ResourceAccess('projectAll', 'projectId', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Restore a scrapped battery (remove the scrap record).' })
   async restoreCell(
@@ -232,6 +255,7 @@ export class DataController {
   }
 
   @Get('scrapped-solution-groups/:experimentId')
+  @ResourceAccess('experiment', 'experimentId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get scrapped solution-preparation groups for an experiment.' })
   async getScrappedSolutionGroups(@Param('experimentId') experimentId: string) {
@@ -239,6 +263,7 @@ export class DataController {
   }
 
   @Get('solution-preparation-groups/:experimentId')
+  @ResourceAccess('experiment', 'experimentId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get solution-preparation groups with formula and scrap status.' })
   async getSolutionPreparationGroups(@Param('experimentId') experimentId: string) {
@@ -246,6 +271,7 @@ export class DataController {
   }
 
   @Patch('solution-preparation-groups/:experimentId')
+  @ResourceAccess('experiment', 'experimentId', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Update the plain-text formula information for a solution-preparation group.' })
   async updateSolutionPreparationGroup(
@@ -256,6 +282,7 @@ export class DataController {
   }
 
   @Post('scrapped-solution-groups/:experimentId')
+  @ResourceAccess('experiment', 'experimentId', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Scrap a whole solution-preparation group.' })
   async scrapSolutionGroup(
@@ -268,6 +295,7 @@ export class DataController {
   }
 
   @Post('scrapped-solution-groups/:experimentId/restore')
+  @ResourceAccess('experiment', 'experimentId', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Restore a scrapped solution-preparation group.' })
   async restoreSolutionGroup(
@@ -279,6 +307,7 @@ export class DataController {
   }
 
   @Post('sync-cells/:projectId')
+  @ResourceAccess('step', 'projectId', 'write', { step: 'battery_selection' })
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Sync picked cells to all 6 target business tables (project-scoped, destructive).' })
   async syncCells(
@@ -289,6 +318,7 @@ export class DataController {
   }
 
   @Get(':type/:expId')
+  @ResourceAccess('experiment', 'expId')
   @RequirePermission('experiments:read')
   @ApiOperation({
     summary: 'Query rows for a business table by type (process/calendar/swelling/efficiency/dcr/fastcharge/htcycle) and experiment.',
@@ -301,6 +331,7 @@ export class DataController {
   }
 
   @Post(':type/:expId')
+  @ResourceAccess('experiment', 'expId', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Create a new row in a business table (for manual entry, e.g. StorageSwelling).',
@@ -315,6 +346,7 @@ export class DataController {
 
   /** Batch update rows of a business table — single PUT /api/v1/data/:type/batch */
   @Put(':type/batch')
+  @ResourceAccess('dataBatch')
   @RequirePermission('experiments:write')
   @HttpCode(200)
   @ApiOperation({
@@ -329,6 +361,7 @@ export class DataController {
   }
 
   @Put(':type/:id')
+  @ResourceAccess('dataRow')
   @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Update a single data row by type and row ID.',
@@ -342,6 +375,7 @@ export class DataController {
   }
 
   @Delete(':type/:id')
+  @ResourceAccess('dataRow')
   @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Delete a single data row by type and row ID.',

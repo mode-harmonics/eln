@@ -1,0 +1,504 @@
+{
+  "timestamp": "2026-09-23T03:43:02.415Z",
+  "base": "http://127.0.0.1:3309",
+  "runPrefix": "review-1790134978905",
+  "total": 97,
+  "passed": 97,
+  "failed": 0,
+  "coverage": {
+    "documented": 98,
+    "exercised": 76,
+    "operations": [
+      "DELETE /api/v1/experiments/{id}",
+      "DELETE /api/v1/experiments/{id}/attachments/{attachmentId}",
+      "DELETE /api/v1/experiments/{id}/collaborators/{userId}",
+      "DELETE /api/v1/projects/{id}",
+      "DELETE /api/v1/temp-files/{id}",
+      "DELETE /api/v1/workflow/templates/{id}",
+      "GET /api/v1/dashboard/summary",
+      "GET /api/v1/data/export/project/{projectId}",
+      "GET /api/v1/data/export/raw/{expId}",
+      "GET /api/v1/data/export/summary/{expId}",
+      "GET /api/v1/data/picked-cells/{projectId}",
+      "GET /api/v1/data/raw/{expId}",
+      "GET /api/v1/data/scrapped-cells/{projectId}",
+      "GET /api/v1/data/scrapped-solution-groups/{experimentId}",
+      "GET /api/v1/data/solution-preparation-groups/{experimentId}",
+      "GET /api/v1/data/{type}/{expId}",
+      "GET /api/v1/experiments/{id}",
+      "GET /api/v1/experiments/{id}/attachments",
+      "GET /api/v1/experiments/{id}/attachments/{attachmentId}/download",
+      "GET /api/v1/experiments/{id}/collaborators",
+      "GET /api/v1/experiments/{id}/comments",
+      "GET /api/v1/experiments/{id}/versions",
+      "GET /api/v1/inventory",
+      "GET /api/v1/inventory/{id}",
+      "GET /api/v1/notifications",
+      "GET /api/v1/notifications/unread-count",
+      "GET /api/v1/projects",
+      "GET /api/v1/projects/{id}",
+      "GET /api/v1/projects/{id}/experiments",
+      "GET /api/v1/projects/{id}/stats",
+      "GET /api/v1/projects/{projectId}/design",
+      "GET /api/v1/projects/{projectId}/procurement",
+      "GET /api/v1/projects/{projectId}/procurement/invalid-internalcodes",
+      "GET /api/v1/projects/{projectId}/procurement/valid-groups",
+      "GET /api/v1/roles",
+      "GET /api/v1/search",
+      "GET /api/v1/temp-files",
+      "GET /api/v1/temp-files/{id}/download",
+      "GET /api/v1/users",
+      "GET /api/v1/users/assignable",
+      "GET /api/v1/users/me",
+      "GET /api/v1/workflow/default-steps",
+      "GET /api/v1/workflow/tasks",
+      "GET /api/v1/workflow/templates",
+      "POST /api/v1/ai/analyze-data",
+      "POST /api/v1/ai/generate-insights",
+      "POST /api/v1/auth/login",
+      "POST /api/v1/data/upload",
+      "POST /api/v1/data/{type}/{expId}",
+      "POST /api/v1/experiments/{id}/approve",
+      "POST /api/v1/experiments/{id}/archive",
+      "POST /api/v1/experiments/{id}/attachments",
+      "POST /api/v1/experiments/{id}/collaborators",
+      "POST /api/v1/experiments/{id}/comments",
+      "POST /api/v1/experiments/{id}/reject",
+      "POST /api/v1/experiments/{id}/submit",
+      "POST /api/v1/inventory",
+      "POST /api/v1/projects",
+      "POST /api/v1/projects/{id}/experiments",
+      "POST /api/v1/projects/{projectId}/design",
+      "POST /api/v1/roles",
+      "POST /api/v1/temp-files/upload",
+      "POST /api/v1/users",
+      "POST /api/v1/workflow/instances",
+      "POST /api/v1/workflow/templates",
+      "PUT /api/v1/data/{type}/batch",
+      "PUT /api/v1/data/{type}/{id}",
+      "PUT /api/v1/experiments/{id}",
+      "PUT /api/v1/inventory/{id}",
+      "PUT /api/v1/notifications/read-all",
+      "PUT /api/v1/projects/{id}",
+      "PUT /api/v1/roles/{id}",
+      "PUT /api/v1/users/me/password",
+      "PUT /api/v1/users/{id}",
+      "PUT /api/v1/workflow/instances/{projectId}/steps/{stepName}",
+      "PUT /api/v1/workflow/instances/{projectId}/transition"
+    ],
+    "unexercised": [
+      "DELETE /api/v1/users/{id}",
+      "PUT /api/v1/projects/{id}/members",
+      "PUT /api/v1/notifications/{id}/read",
+      "GET /api/v1/workflow/templates/{id}",
+      "PUT /api/v1/workflow/templates/{id}",
+      "GET /api/v1/workflow/instances/{projectId}",
+      "GET /api/v1/workflow/instances/{projectId}/steps",
+      "GET /api/v1/workflow/instances/{projectId}/permissions",
+      "POST /api/v1/data/upload-project/{projectId}",
+      "POST /api/v1/data/pick-cells/{projectId}",
+      "POST /api/v1/data/scrapped-cells/{projectId}",
+      "POST /api/v1/data/scrapped-cells/{projectId}/restore",
+      "POST /api/v1/data/scrapped-solution-groups/{experimentId}",
+      "PATCH /api/v1/data/solution-preparation-groups/{experimentId}",
+      "POST /api/v1/data/scrapped-solution-groups/{experimentId}/restore",
+      "POST /api/v1/data/sync-cells/{projectId}",
+      "DELETE /api/v1/data/{type}/{id}",
+      "DELETE /api/v1/inventory/{id}",
+      "PUT /api/v1/projects/{projectId}/design/{id}",
+      "DELETE /api/v1/projects/{projectId}/design/{id}",
+      "PUT /api/v1/projects/{projectId}/procurement/batch",
+      "PUT /api/v1/projects/{projectId}/procurement/{id}"
+    ]
+  },
+  "results": [
+    {
+      "name": "login pi",
+      "pass": true
+    },
+    {
+      "name": "login editor",
+      "pass": true
+    },
+    {
+      "name": "login viewer",
+      "pass": true
+    },
+    {
+      "name": "login admin",
+      "pass": true
+    },
+    {
+      "name": "wrong password is 401",
+      "pass": true
+    },
+    {
+      "name": "unknown login field is 400",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /projects",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /users/me",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /inventory",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /workflow/templates",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /notifications",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /temp-files",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /search?q=test",
+      "pass": true
+    },
+    {
+      "name": "owner GET /users/me",
+      "pass": true
+    },
+    {
+      "name": "owner GET /projects",
+      "pass": true
+    },
+    {
+      "name": "owner GET /inventory?page=1&limit=10",
+      "pass": true
+    },
+    {
+      "name": "owner GET /roles",
+      "pass": true
+    },
+    {
+      "name": "owner GET /users?page=1&limit=10&withRole=true",
+      "pass": true
+    },
+    {
+      "name": "owner GET /workflow/templates",
+      "pass": true
+    },
+    {
+      "name": "owner GET /workflow/tasks",
+      "pass": true
+    },
+    {
+      "name": "owner GET /notifications",
+      "pass": true
+    },
+    {
+      "name": "owner GET /notifications/unread-count",
+      "pass": true
+    },
+    {
+      "name": "owner GET /search?q=review",
+      "pass": true
+    },
+    {
+      "name": "project create unknown field is 400",
+      "pass": true
+    },
+    {
+      "name": "viewer cannot create project",
+      "pass": true
+    },
+    {
+      "name": "empty project name rejected",
+      "pass": true
+    },
+    {
+      "name": "invalid project status rejected",
+      "pass": true
+    },
+    {
+      "name": "project list contains no passwordHash",
+      "pass": true
+    },
+    {
+      "name": "project detail contains no passwordHash",
+      "pass": true
+    },
+    {
+      "name": "non-member project detail denied",
+      "pass": true
+    },
+    {
+      "name": "non-member nested experiment list denied",
+      "pass": true
+    },
+    {
+      "name": "non-member project update denied",
+      "pass": true
+    },
+    {
+      "name": "search hides non-member project",
+      "pass": true
+    },
+    {
+      "name": "stale experiment version rejected",
+      "pass": true
+    },
+    {
+      "name": "concurrent experiment writes have one winner",
+      "pass": true
+    },
+    {
+      "name": "submit experiment for review",
+      "pass": true
+    },
+    {
+      "name": "submitted experiment rejects edits",
+      "pass": true
+    },
+    {
+      "name": "viewer cannot approve",
+      "pass": true
+    },
+    {
+      "name": "approve and archive happy path",
+      "pass": true
+    },
+    {
+      "name": "missing upload file rejected",
+      "pass": true
+    },
+    {
+      "name": "Excel upload produces data and derived decimal values",
+      "pass": true
+    },
+    {
+      "name": "existing upload requires explicit conflict choice",
+      "pass": true
+    },
+    {
+      "name": "invalid overwrite preserves existing rows and attachments",
+      "pass": true
+    },
+    {
+      "name": "valid overwrite replaces rather than duplicates rows",
+      "pass": true
+    },
+    {
+      "name": "read scientific data process",
+      "pass": true
+    },
+    {
+      "name": "read scientific data solution",
+      "pass": true
+    },
+    {
+      "name": "read scientific data calendar",
+      "pass": true
+    },
+    {
+      "name": "read scientific data swelling",
+      "pass": true
+    },
+    {
+      "name": "read scientific data efficiency",
+      "pass": true
+    },
+    {
+      "name": "read scientific data dcr",
+      "pass": true
+    },
+    {
+      "name": "read scientific data fastcharge",
+      "pass": true
+    },
+    {
+      "name": "read scientific data htcycle",
+      "pass": true
+    },
+    {
+      "name": "design creation produces procurement rows",
+      "pass": true
+    },
+    {
+      "name": "dashboard contains assigned pending approval",
+      "pass": true
+    },
+    {
+      "name": "temporary upload owner isolation",
+      "pass": true
+    },
+    {
+      "name": "create user response omits passwordHash",
+      "pass": true
+    },
+    {
+      "name": "update user response omits passwordHash and clears email",
+      "pass": true
+    },
+    {
+      "name": "password change retains login functionality",
+      "pass": true
+    },
+    {
+      "name": "disabled user token stops working",
+      "pass": true
+    },
+    {
+      "name": "user null nonnullable fields rejected",
+      "pass": true
+    },
+    {
+      "name": "malformed user input returns 400",
+      "pass": true
+    },
+    {
+      "name": "missing old password returns 400",
+      "pass": true
+    },
+    {
+      "name": "inventory create and decimal contract",
+      "pass": true
+    },
+    {
+      "name": "inventory rejects negative quantity",
+      "pass": true
+    },
+    {
+      "name": "inventory rejects primary key replacement",
+      "pass": true
+    },
+    {
+      "name": "invalid pagination returns 400",
+      "pass": true
+    },
+    {
+      "name": "unknown experiment is 404",
+      "pass": true
+    },
+    {
+      "name": "malformed experiment id is 400",
+      "pass": true
+    },
+    {
+      "name": "experiment with comments cannot be deleted and history is preserved",
+      "pass": true
+    },
+    {
+      "name": "empty draft experiment can be deleted",
+      "pass": true
+    },
+    {
+      "name": "project deletion does not orphan experiments",
+      "pass": true
+    },
+    {
+      "name": "referenced workflow template cannot be deleted",
+      "pass": true
+    },
+    {
+      "name": "non-member cannot reassign workflow to themselves",
+      "pass": true
+    },
+    {
+      "name": "role creation and permissions update",
+      "pass": true
+    },
+    {
+      "name": "mark notifications read",
+      "pass": true
+    },
+    {
+      "name": "owner read /users/assignable",
+      "pass": true
+    },
+    {
+      "name": "owner read /workflow/default-steps",
+      "pass": true
+    },
+    {
+      "name": "owner read /projects/:id/stats",
+      "pass": true
+    },
+    {
+      "name": "owner read /experiments/:id/collaborators",
+      "pass": true
+    },
+    {
+      "name": "owner read /experiments/:id/versions",
+      "pass": true
+    },
+    {
+      "name": "owner read /data/raw/:id",
+      "pass": true
+    },
+    {
+      "name": "owner read /data/picked-cells/:id",
+      "pass": true
+    },
+    {
+      "name": "owner read /data/scrapped-cells/:id",
+      "pass": true
+    },
+    {
+      "name": "owner read /data/scrapped-solution-groups/:id",
+      "pass": true
+    },
+    {
+      "name": "owner read /data/solution-preparation-groups/:id",
+      "pass": true
+    },
+    {
+      "name": "owner read /projects/:id/procurement/valid-groups",
+      "pass": true
+    },
+    {
+      "name": "owner read /projects/:id/procurement/invalid-internalcodes",
+      "pass": true
+    },
+    {
+      "name": "Excel export /data/export/summary/:id",
+      "pass": true
+    },
+    {
+      "name": "Excel export /data/export/raw/:id",
+      "pass": true
+    },
+    {
+      "name": "Excel export /data/export/project/:id",
+      "pass": true
+    },
+    {
+      "name": "AI documented placeholder /ai/analyze-data",
+      "pass": true
+    },
+    {
+      "name": "AI documented placeholder /ai/generate-insights",
+      "pass": true
+    },
+    {
+      "name": "attachment upload download delete lifecycle",
+      "pass": true
+    },
+    {
+      "name": "collaborator lifecycle",
+      "pass": true
+    },
+    {
+      "name": "reject submitted experiment returns Draft",
+      "pass": true
+    },
+    {
+      "name": "dashboard hides comments from inaccessible projects",
+      "pass": true
+    },
+    {
+      "name": "completed workflow rejects both single and batch data edits",
+      "pass": true
+    }
+  ]
+}

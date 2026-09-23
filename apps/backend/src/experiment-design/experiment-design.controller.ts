@@ -1,3 +1,4 @@
+import { ResourceAccess } from '../access/resource-access.guard';
 import {
   Controller,
   Get,
@@ -25,6 +26,7 @@ export class ExperimentDesignController {
   ) {}
 
   @Get('projects/:projectId/design')
+  @ResourceAccess('step', 'projectId', 'read', { step: 'design' })
   @RequirePermission('experiments:read')
   async list(@Param('projectId') projectId: string) {
     return {
@@ -34,6 +36,7 @@ export class ExperimentDesignController {
   }
 
   @Post('projects/:projectId/design')
+  @ResourceAccess('step', 'projectId', 'write', { step: 'design' })
   @RequirePermission('experiments:write')
   async batchCreate(
     @Param('projectId') projectId: string,
@@ -46,6 +49,7 @@ export class ExperimentDesignController {
   }
 
   @Put('projects/:projectId/design/:id')
+  @ResourceAccess('step', 'projectId', 'write', { step: 'design' })
   @RequirePermission('experiments:write')
   async update(
     @Param('projectId') projectId: string,
@@ -59,6 +63,7 @@ export class ExperimentDesignController {
   }
 
   @Delete('projects/:projectId/design/:id')
+  @ResourceAccess('step', 'projectId', 'write', { step: 'design' })
   @RequirePermission('experiments:write')
   async remove(
     @Param('projectId') projectId: string,

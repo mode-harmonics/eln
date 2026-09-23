@@ -22,8 +22,13 @@ describe('DataService solution group scrapping', () => {
       remove: jest.fn(async () => existingScrap = null),
     };
     const dataSource = {
-      getRepository: jest.fn((entity: any) => entity.name === 'SolutionPreparation' ? solutionRepository : scrapRepository),
+      getRepository: jest.fn((entity: any) => {
+        if (entity.name === 'Experiment') return { findOne: async () => ({ id: experimentId, projectId: 'project', status: 'Draft' }) };
+        if (entity.name === 'Project') return { findOne: async () => ({ id: 'project' }) };
+        return entity.name === 'SolutionPreparation' ? solutionRepository : scrapRepository;
+      }),
     };
+    (dataSource as any).transaction = async (work: any) => work({ getRepository: dataSource.getRepository });
     service = new DataService(dataSource as any, {} as any, {} as any, {} as any);
   });
 

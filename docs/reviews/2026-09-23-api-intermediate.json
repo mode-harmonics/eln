@@ -1,0 +1,288 @@
+{
+  "timestamp": "2026-09-23T01:51:45.656Z",
+  "base": "http://127.0.0.1:3000",
+  "runPrefix": "review-1790128303356",
+  "total": 67,
+  "passed": 57,
+  "failed": 10,
+  "results": [
+    {
+      "name": "login pi",
+      "pass": true
+    },
+    {
+      "name": "login editor",
+      "pass": true
+    },
+    {
+      "name": "login viewer",
+      "pass": true
+    },
+    {
+      "name": "login admin",
+      "pass": true
+    },
+    {
+      "name": "wrong password is 401",
+      "pass": true
+    },
+    {
+      "name": "unknown login field is 400",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /projects",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /users/me",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /inventory",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /workflow/templates",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /notifications",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /temp-files",
+      "pass": true
+    },
+    {
+      "name": "anonymous denied /search?q=test",
+      "pass": true
+    },
+    {
+      "name": "owner GET /users/me",
+      "pass": true
+    },
+    {
+      "name": "owner GET /projects",
+      "pass": true
+    },
+    {
+      "name": "owner GET /inventory?page=1&limit=10",
+      "pass": true
+    },
+    {
+      "name": "owner GET /roles",
+      "pass": true
+    },
+    {
+      "name": "owner GET /users?page=1&limit=10&withRole=true",
+      "pass": true
+    },
+    {
+      "name": "owner GET /workflow/templates",
+      "pass": true
+    },
+    {
+      "name": "owner GET /workflow/tasks",
+      "pass": false,
+      "error": "HTTP 404; expected 200"
+    },
+    {
+      "name": "owner GET /notifications",
+      "pass": true
+    },
+    {
+      "name": "owner GET /notifications/unread-count",
+      "pass": true
+    },
+    {
+      "name": "owner GET /search?q=review",
+      "pass": true
+    },
+    {
+      "name": "project create unknown field is 400",
+      "pass": true
+    },
+    {
+      "name": "viewer cannot create project",
+      "pass": true
+    },
+    {
+      "name": "empty project name rejected",
+      "pass": true
+    },
+    {
+      "name": "invalid project status rejected",
+      "pass": true
+    },
+    {
+      "name": "project list contains no passwordHash",
+      "pass": true
+    },
+    {
+      "name": "project detail contains no passwordHash",
+      "pass": true
+    },
+    {
+      "name": "non-member project detail denied",
+      "pass": true
+    },
+    {
+      "name": "non-member nested experiment list denied",
+      "pass": false,
+      "error": "HTTP 200; expected 403,404"
+    },
+    {
+      "name": "non-member project update denied",
+      "pass": false,
+      "error": "HTTP 200; expected 403,404"
+    },
+    {
+      "name": "search hides non-member project",
+      "pass": false,
+      "error": "non-member project returned by search\n\ntrue !== false\n"
+    },
+    {
+      "name": "stale experiment version rejected",
+      "pass": true
+    },
+    {
+      "name": "concurrent experiment writes have one winner",
+      "pass": true
+    },
+    {
+      "name": "submit experiment for review",
+      "pass": true
+    },
+    {
+      "name": "submitted experiment rejects edits",
+      "pass": true
+    },
+    {
+      "name": "viewer cannot approve",
+      "pass": true
+    },
+    {
+      "name": "approve and archive happy path",
+      "pass": true
+    },
+    {
+      "name": "missing upload file rejected",
+      "pass": true
+    },
+    {
+      "name": "Excel upload produces data and derived decimal values",
+      "pass": true
+    },
+    {
+      "name": "existing upload requires explicit conflict choice",
+      "pass": true
+    },
+    {
+      "name": "invalid overwrite preserves existing rows and attachments",
+      "pass": false,
+      "error": "old scientific rows lost\n\n0 !== 1\n"
+    },
+    {
+      "name": "valid overwrite replaces rather than duplicates rows",
+      "pass": true
+    },
+    {
+      "name": "read scientific data process",
+      "pass": true
+    },
+    {
+      "name": "read scientific data solution",
+      "pass": true
+    },
+    {
+      "name": "read scientific data calendar",
+      "pass": true
+    },
+    {
+      "name": "read scientific data swelling",
+      "pass": true
+    },
+    {
+      "name": "read scientific data efficiency",
+      "pass": true
+    },
+    {
+      "name": "read scientific data dcr",
+      "pass": true
+    },
+    {
+      "name": "read scientific data fastcharge",
+      "pass": true
+    },
+    {
+      "name": "read scientific data htcycle",
+      "pass": true
+    },
+    {
+      "name": "design creation produces procurement rows",
+      "pass": true
+    },
+    {
+      "name": "dashboard contains assigned pending approval",
+      "pass": false,
+      "error": "assigned pending approval missing"
+    },
+    {
+      "name": "temporary upload owner isolation",
+      "pass": true
+    },
+    {
+      "name": "create user response omits passwordHash",
+      "pass": true
+    },
+    {
+      "name": "malformed user input returns 400",
+      "pass": true
+    },
+    {
+      "name": "missing old password returns 400",
+      "pass": true
+    },
+    {
+      "name": "inventory create and decimal contract",
+      "pass": true
+    },
+    {
+      "name": "inventory rejects negative quantity",
+      "pass": true
+    },
+    {
+      "name": "inventory rejects primary key replacement",
+      "pass": true
+    },
+    {
+      "name": "invalid pagination returns 400",
+      "pass": false,
+      "error": "HTTP 500; expected 400"
+    },
+    {
+      "name": "unknown experiment is 404",
+      "pass": true
+    },
+    {
+      "name": "malformed experiment id is 400",
+      "pass": false,
+      "error": "HTTP 500; expected 400"
+    },
+    {
+      "name": "experiment deletion removes comments",
+      "pass": false,
+      "error": "deleted experiment comments remain accessible"
+    },
+    {
+      "name": "project deletion does not orphan experiments",
+      "pass": false,
+      "error": "HTTP 200; expected 404"
+    },
+    {
+      "name": "referenced workflow template cannot be deleted",
+      "pass": true
+    }
+  ]
+}

@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, In } from 'typeorm';
+import { DataSource, EntityManager, Repository, In } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { deriveWorkflowGraphMeta, hasPermission } from '@eln/shared';
 import { Experiment } from '../entities/experiment.entity';
@@ -11,6 +11,7 @@ import { PickedCell } from '../entities/picked-cell.entity';
 import { WorkflowInstance } from '../entities/workflow-instance.entity';
 import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.entity';
 import { WorkflowTemplate } from '../entities/workflow-template.entity';
+import { ExperimentDesign, ReagentProcurement, ScrappedCell, User } from '../entities';
 import { CreateProjectDto, UpdateProjectDto, UpdateProjectMembersDto } from './dto';
 import { CreateExperimentDto } from '../experiments/dto';
 
@@ -29,8 +30,11 @@ export class ProjectsService {
     page?: number,
     limit?: number,
     search?: string,
+    allowedProjectIds?: string[],
   ): Promise<{ items: any[]; total?: number } | any[]> {
-    const query = (await this.buildVisibleProjectsQuery(userId)).leftJoinAndSelect('project.creator', 'creator');
+    const query = (allowedProjectIds !== undefined
+      ? this.projectsRepo.createQueryBuilder('project').where('project.id IN (:...ids)', { ids: allowedProjectIds.length ? allowedProjectIds : ['00000000-0000-0000-0000-000000000000'] })
+      : await this.buildVisibleProjectsQuery(userId)).leftJoinAndSelect('project.creator', 'creator');
 
     if (search && search.trim() !== '') {
       const searchPattern = `%${search.trim().toLowerCase()}%`;
@@ -42,8 +46,8 @@ export class ProjectsService {
 
     query.orderBy('project.createdAt', 'DESC');
 
-    if (page !== undefined && limit !== undefined) {
-      query.skip((page - 1) * limit).take(limit);
+    if (page !== undefined || limit !== undefined) {
+      query.skip(((page ?? 1) - 1) * (limit ?? 10)).take(limit ?? 10);
       const [items, total] = await query.getManyAndCount();
       const enrichedItems = await this.attachProgressToProjects(items);
       return { items: enrichedItems, total };
@@ -201,13 +205,14 @@ export class ProjectsService {
     limit?: number,
     search?: string,
     permissionList?: string[],
+    allowedExperimentIds?: string[],
   ): Promise<any> {
     const project = await this.projectsRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found.');
 
     if (page === undefined && limit === undefined) {
       const experiments = (await this.experimentsRepo.find({
-        where: { projectId },
+        where: { projectId, ...(allowedExperimentIds !== undefined ? { id: In(allowedExperimentIds) } : {}) },
         order: { updatedAt: 'DESC' },
       })).filter((experiment) => !experiment.workflowStepName || hasPermission(permissionList, `workflow_step:${experiment.workflowStepName}`));
       return Promise.all(
@@ -226,6 +231,10 @@ export class ProjectsService {
 
     const query = this.experimentsRepo.createQueryBuilder('experiment')
       .where('experiment.projectId = :projectId', { projectId });
+
+    if (allowedExperimentIds !== undefined) {
+      query.andWhere('experiment.id IN (:...ids)', { ids: allowedExperimentIds.length ? allowedExperimentIds : ['00000000-0000-0000-0000-000000000000'] });
+    }
 
     const allowedStepNames = (permissionList ?? [])
       .filter((permission) => permission.startsWith('workflow_step:') && permission !== 'workflow_step:*')
@@ -281,11 +290,12 @@ export class ProjectsService {
    * assayType is persisted in metadata so the Excel upload parser
    * can work independently of any enforced column.
    */
-  async createExperiment(projectId: string, userId: string, dto: CreateExperimentDto): Promise<Experiment> {
-    const project = await this.projectsRepo.findOne({ where: { id: projectId } });
+  async createExperiment(projectId: string, userId: string, dto: CreateExperimentDto, manager?: EntityManager): Promise<Experiment> {
+    if (!manager) return this.dataSource.transaction((tx) => this.createExperiment(projectId, userId, dto, tx));
+    const project = await manager.findOne(Project, { where: { id: projectId }, lock: { mode: 'pessimistic_write' } });
     if (!project) throw new NotFoundException('Project not found.');
 
-    const experiment = this.experimentsRepo.create({
+    const experiment = manager.getRepository(Experiment).create({
       id: uuid(),
       projectId,
       title: dto.title,
@@ -298,7 +308,7 @@ export class ProjectsService {
       createdBy: userId,
     });
 
-    const saved = await this.experimentsRepo.save(experiment);
+    const saved = await manager.save(Experiment, experiment);
 
     return saved;
   }
@@ -315,10 +325,17 @@ export class ProjectsService {
   }
 
   async remove(id: string): Promise<{ deleted: boolean }> {
-    const project = await this.projectsRepo.findOne({ where: { id } });
-    if (!project) throw new NotFoundException('Project not found.');
-    await this.projectsRepo.remove(project);
-    return { deleted: true };
+    return this.dataSource.transaction(async (manager) => {
+      const project = await manager.findOne(Project, { where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!project) throw new NotFoundException('Project not found.');
+      for (const entity of [Experiment, WorkflowInstance, ExperimentDesign, ReagentProcurement, PickedCell, ScrappedCell]) {
+        if (await manager.getRepository(entity).count({ where: { projectId: id } })) {
+          throw new ConflictException('Project contains experiments or workflow data and cannot be deleted.');
+        }
+      }
+      await manager.remove(Project, project);
+      return { deleted: true };
+    });
   }
 
   /**
@@ -328,38 +345,31 @@ export class ProjectsService {
    * 的所有实验权限").
    */
   async updateMembers(projectId: string, dto: UpdateProjectMembersDto): Promise<{ updated: number }> {
-    const project = await this.projectsRepo.findOne({ where: { id: projectId } });
-    if (!project) {
-      throw new NotFoundException('Project not found.');
-    }
-
-    const experiments = await this.experimentsRepo.find({ where: { projectId } });
-
-    let updated = 0;
-
-    for (const experiment of experiments) {
+    return this.dataSource.transaction(async (manager) => {
+      const project = await manager.findOne(Project, { where: { id: projectId }, lock: { mode: 'pessimistic_write' } });
+      if (!project) throw new NotFoundException('Project not found.');
       for (const member of dto.members) {
-        const existing = await this.collaboratorsRepo.findOne({
-          where: { experimentId: experiment.id, userId: member.userId },
-        });
-
-        if (existing) {
-          existing.role = member.role;
-          await this.collaboratorsRepo.save(existing);
-        } else {
-          await this.collaboratorsRepo.save(
-            this.collaboratorsRepo.create({
-              id: uuid(),
-              experimentId: experiment.id,
-              userId: member.userId,
-              role: member.role,
-            }),
-          );
+        if (!await manager.findOne(User, { where: { id: member.userId, isActive: true } })) {
+          throw new NotFoundException('Active collaborator user not found.');
         }
-        updated += 1;
       }
-    }
-
-    return { updated };
+      const experiments = await manager.getRepository(Experiment).find({ where: { projectId }, order: { id: 'ASC' } });
+      let updated = 0;
+      const repo = manager.getRepository(ExperimentCollaborator);
+      for (const experiment of experiments) {
+        // Serialize against experiment deletion and individual collaborator edits.
+        const existingExperiment = await manager.findOne(Experiment, { where: { id: experiment.id }, lock: { mode: 'pessimistic_write' } });
+        if (!existingExperiment) continue;
+        for (const member of dto.members) {
+          const existing = await repo.findOne({ where: { experimentId: experiment.id, userId: member.userId } });
+          await repo.save(existing ? { ...existing, role: member.role } : repo.create({
+            id: uuid(), experimentId: experiment.id, userId: member.userId, role: member.role,
+          }));
+          updated += 1;
+        }
+      }
+      return { updated };
+    });
   }
+
 }

@@ -4,16 +4,18 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { ExperimentDesign } from '../entities/experiment-design.entity';
 import { ReagentProcurement } from '../entities/reagent-procurement.entity';
 import { Project } from '../entities/project.entity';
 import { WorkflowService } from '../workflow/workflow.service';
 import { BuiltInStep } from '@eln/shared';
+import { ProcessData } from '../entities/process-data.entity';
 
 @Injectable()
 export class ExperimentDesignService {
+  private manager?: EntityManager;
   constructor(
     @InjectRepository(ExperimentDesign)
     private readonly designRepo: Repository<ExperimentDesign>,
@@ -23,6 +25,21 @@ export class ExperimentDesignService {
     private readonly projectRepo: Repository<Project>,
     private readonly workflowService: WorkflowService,
   ) {}
+
+  private transactional<T>(work: (service: ExperimentDesignService) => Promise<T>): Promise<T> {
+    return this.projectRepo.manager.transaction(async (manager) => {
+      const service = new ExperimentDesignService(manager.getRepository(ExperimentDesign), manager.getRepository(ReagentProcurement), manager.getRepository(Project), this.workflowService);
+      service.manager = manager;
+      return work(service);
+    });
+  }
+
+  private async lockProject(projectId: string): Promise<void> {
+    const project = await this.projectRepo.findOne({ where: { id: projectId }, lock: { mode: 'pessimistic_write' } });
+    if (!project) throw new NotFoundException('Project not found');
+    await this.workflowService.assertStepNotCompleted(projectId, BuiltInStep.ExperimentDesign, this.manager);
+    await this.workflowService.assertStepNotCompleted(projectId, BuiltInStep.Design, this.manager);
+  }
 
   async findByProject(projectId: string): Promise<ExperimentDesign[]> {
     return this.designRepo.find({
@@ -46,10 +63,10 @@ export class ExperimentDesignService {
       }>;
     },
   ): Promise<ExperimentDesign[]> {
+    if (!this.manager) return this.transactional((service) => service.batchCreate(projectId, dto));
+    await this.lockProject(projectId);
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');
-
-    await this.workflowService.assertStepNotCompleted(projectId, BuiltInStep.ExperimentDesign);
 
     // Block duplicate submission
     const existingCount = await this.designRepo.count({ where: { projectId } });
@@ -105,7 +122,8 @@ export class ExperimentDesignService {
       designPrinciple: string;
     }>,
   ): Promise<ExperimentDesign> {
-    await this.workflowService.assertStepNotCompleted(projectId, BuiltInStep.ExperimentDesign);
+    if (!this.manager) return this.transactional((service) => service.update(projectId, id, dto));
+    await this.lockProject(projectId);
 
     if (dto.moleculeName !== undefined && (!dto.moleculeName || !dto.moleculeName.trim())) {
       throw new BadRequestException('分子名称不可为空');
@@ -117,14 +135,22 @@ export class ExperimentDesignService {
     if (!design) throw new NotFoundException('Experiment design not found');
 
     Object.assign(design, dto);
-    return this.designRepo.save(design);
+    const saved = await this.designRepo.save(design);
+    if (dto.moleculeName !== undefined) await this.procurementRepo.update({ projectId, experimentDesignId: id }, { moleculeName: dto.moleculeName });
+    return saved;
   }
 
   async remove(projectId: string, id: string): Promise<void> {
+    if (!this.manager) return this.transactional((service) => service.remove(projectId, id));
+    await this.lockProject(projectId);
     const design = await this.designRepo.findOne({
       where: { id, projectId },
     });
     if (!design) throw new NotFoundException('Experiment design not found');
+    if (await this.manager.getRepository(ProcessData).count({ where: { experimentDesignId: id } })) {
+      throw new BadRequestException('Cannot delete a design already used by experimental data');
+    }
+    await this.procurementRepo.delete({ projectId, experimentDesignId: id });
     await this.designRepo.remove(design);
   }
 

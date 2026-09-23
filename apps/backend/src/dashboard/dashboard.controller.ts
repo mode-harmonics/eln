@@ -17,7 +17,7 @@ export class DashboardController {
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get dashboard summary data' })
   async getSummary(@Request() req: any) {
-    const summary = await this.dashboardService.getSummary(req.user.userId);
+    const summary = await this.dashboardService.getSummary(req.user.id, req.user.permissionList);
     return { success: true, data: summary };
   }
 }

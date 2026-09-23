@@ -5,6 +5,8 @@ import { Drawer } from "./Drawer";
 import { cn } from "../lib/utils";
 import { api } from "../lib/api";
 import { toast } from "./Toast";
+import { BuiltInStep } from "@eln/shared";
+import { completeWorkflowStep } from "../lib/workflow";
 
 interface CellPickerProps {
   open: boolean;
@@ -34,11 +36,11 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
 
   // Load cells once on open
   useEffect(() => {
-    if (!open || !processExperimentId) return;
+    if (!open || !projectId) return;
     setLoading(true);
     Promise.all([
-      api.get<any[]>(`/api/v1/data/process/${processExperimentId}`),
-      api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`).catch(() => []),
+      api.get<any[]>(`/api/v1/data/selection-candidates/${projectId}`),
+      api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`),
     ]).then(([processData, picked]) => {
       const initSelected: Record<string, string> = {};
       (picked || []).forEach((p: any) => {
@@ -106,12 +108,7 @@ export function CellPicker({ open, onClose, projectId, processExperimentId, onCo
       // 同步数据到业务表
       await api.post(`/api/v1/data/sync-cells/${projectId}`, {});
 
-      // 尝试推进工作流，如果已经完成则忽略报错
-      try {
-        await api.put(`/api/v1/workflow/instances/${projectId}/transition`, {});
-      } catch (e) {
-        console.warn("Workflow transition skipped or failed", e);
-      }
+      await completeWorkflowStep(projectId, BuiltInStep.BatterySelection);
 
       onComplete?.(assignments.map(a => a.cellId));
       toast(`已挑选并分配 ${assignments.length} 个电池`, "success");

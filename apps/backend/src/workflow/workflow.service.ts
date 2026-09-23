@@ -6,9 +6,10 @@ import {
   BadRequestException,
   Logger,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, Repository, In } from 'typeorm';
+import { DataSource, EntityManager, Repository, In } from 'typeorm';
 import { v4 as uuid } from 'uuid';
 import { WorkflowTemplate } from '../entities/workflow-template.entity';
 import { WorkflowInstance } from '../entities/workflow-instance.entity';
@@ -16,6 +17,7 @@ import { WorkflowStepAssignment } from '../entities/workflow-step-assignment.ent
 import { Project } from '../entities/project.entity';
 import { PickedCell } from '../entities/picked-cell.entity';
 import { User } from '../entities/user.entity';
+import { Notification } from '../entities/notification.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ExperimentsService } from '../experiments/experiments.service';
 import {
@@ -42,6 +44,7 @@ export function isTerminalStepStatus(status: string): boolean {
  * workflow template graph at read time (see decorateSteps) — never persisted.
  */
 export type WorkflowStepView = WorkflowStepAssignment & {
+  builtInStep: string | null;
   /** true if this step is a group (has child steps) — regardless of serial/parallel */
   isParallelGroup: boolean;
   /** parent group step name, or null for top-level steps */
@@ -95,6 +98,7 @@ function topologicalSort(
 @Injectable()
 export class WorkflowService {
   private readonly logger = new Logger(WorkflowService.name);
+  private manager?: EntityManager;
 
   constructor(
     @InjectRepository(WorkflowTemplate)
@@ -112,6 +116,25 @@ export class WorkflowService {
     private readonly experimentsService: ExperimentsService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
+
+  private scoped(manager: EntityManager): WorkflowService {
+    const service = new WorkflowService(
+      manager.getRepository(WorkflowTemplate), manager.getRepository(WorkflowInstance),
+      manager.getRepository(WorkflowStepAssignment), manager.getRepository(Project), manager.getRepository(User),
+      new NotificationsService(manager.getRepository(Notification)), this.experimentsService, this.dataSource,
+    );
+    service.manager = manager;
+    return service;
+  }
+
+  private transactional<T>(work: (service: WorkflowService) => Promise<T>): Promise<T> {
+    return this.dataSource.transaction((manager) => work(this.scoped(manager)));
+  }
+
+  private async lockProject(projectId: string): Promise<void> {
+    const project = await this.projectRepo.findOne({ where: { id: projectId }, lock: { mode: 'pessimistic_write' } });
+    if (!project) throw new NotFoundException('Project not found');
+  }
 
   // Step → assayType / label maps are defined once in @eln/shared
   // (STEP_ASSAY_MAP / STEP_NAME_MAP) and imported above.
@@ -157,15 +180,26 @@ export class WorkflowService {
       steps: any;
     }>,
   ): Promise<WorkflowTemplate> {
-    const tpl = await this.findTemplateById(id);
+    if (!this.manager) return this.transactional((service) => service.updateTemplate(id, dto));
+    const tpl = await this.templateRepo.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+    if (!tpl) throw new NotFoundException('Workflow template not found');
+    if (dto.steps !== undefined && await this.instanceRepo.count({ where: { templateId: id } })) {
+      throw new BadRequestException('Cannot change the graph of a template referenced by workflow instances');
+    }
     Object.assign(tpl, dto);
     return this.templateRepo.save(tpl);
   }
 
   async removeTemplate(id: string): Promise<void> {
-    const tpl = await this.findTemplateById(id);
+    if (!this.manager) return this.transactional((service) => service.removeTemplate(id));
+    const tpl = await this.templateRepo.findOne({ where: { id }, lock: { mode: 'pessimistic_write' } });
+    if (!tpl) throw new NotFoundException('Workflow template not found');
     if (tpl.isDefault) {
       throw new BadRequestException('Cannot delete a default template');
+    }
+    const instanceCount = await this.instanceRepo.count({ where: { templateId: id } });
+    if (instanceCount > 0) {
+      throw new BadRequestException('Cannot delete a template referenced by workflow instances');
     }
     await this.templateRepo.remove(tpl);
   }
@@ -193,9 +227,14 @@ export class WorkflowService {
       visibleToUserIds?: string[];
     }>;
   }): Promise<WorkflowInstance> {
-    const template = dto.templateId
-      ? await this.findTemplateById(dto.templateId)
-      : await this.getDefaultTemplate();
+    if (!this.manager) return this.transactional((service) => service.createInstance(dto));
+    await this.lockProject(dto.projectId);
+    if (await this.instanceRepo.count({ where: { projectId: dto.projectId } })) {
+      throw new BadRequestException('Project already has a workflow instance');
+    }
+    const templateId = dto.templateId ?? (await this.getDefaultTemplate()).id;
+    const template = await this.templateRepo.findOne({ where: { id: templateId }, lock: { mode: 'pessimistic_write' } });
+    if (!template) throw new NotFoundException('Workflow template not found');
 
     const graph = template.steps as any;
     const nodes: Array<{ id: string; label: string; builtInStep?: string; parentId?: string }> =
@@ -342,9 +381,10 @@ export class WorkflowService {
    * Load the template graph for an instance and derive its hierarchy meta
    * (group membership) from the graph — the single source of truth.
    */
-  private async getGraphMeta(instance: WorkflowInstance): Promise<WorkflowGraphMeta> {
+  private async getGraphMeta(instance: WorkflowInstance): Promise<WorkflowGraphMeta & { builtInSteps: Record<string, string> }> {
     const tpl = await this.findTemplateById(instance.templateId);
-    return deriveWorkflowGraphMeta((tpl.steps as any) || {});
+    const graph = (tpl.steps as any) || {};
+    return { ...deriveWorkflowGraphMeta(graph), builtInSteps: Object.fromEntries((graph.nodes ?? []).map((node: any) => [node.id, node.builtInStep ?? node.id])) };
   }
 
   /**
@@ -353,11 +393,12 @@ export class WorkflowService {
    */
   private decorateSteps<T extends WorkflowStepAssignment>(
     steps: T[],
-    meta: WorkflowGraphMeta,
+    meta: WorkflowGraphMeta & { builtInSteps?: Record<string, string> },
   ): WorkflowStepView[] {
     const availableStepNames = new Set(steps.map((step) => step.stepName));
     return steps.map((s) => ({
       ...s,
+      builtInStep: meta.builtInSteps?.[s.stepName] ?? null,
       isParallelGroup: !!meta.isGroup[s.stepName],
       // A child whose parent is hidden by role permissions is rendered as a
       // standalone step instead of leaking the parent group or disappearing.
@@ -408,17 +449,10 @@ export class WorkflowService {
           (s) => this.isAssignee(s, userId) && s.canViewOtherSteps,
         );
 
-        if (canSeeAll) {
-          // User can see all steps (e.g. PI/Admin role assigned)
-          // Enrich before early return
-          const enriched = await this.enrichSteps(steps);
-          return { instance, steps: this.decorateSteps(enriched, meta) };
-        }
-
         // Filter: only steps user is assigned to OR explicitly granted visibility
         // Group nodes are kept so the frontend can render the group container.
         const allowed = new Set([...userAssignmentNames, ...visibleByPerm]);
-        steps = steps.filter(
+        if (!canSeeAll) steps = steps.filter(
           (s) => allowed.has(s.stepName) || !!meta.isGroup[s.stepName],
         );
       }
@@ -467,7 +501,8 @@ export class WorkflowService {
   /**
    * Throws ForbiddenException if the given stepName is completed in the workflow.
    */
-  async assertStepNotCompleted(projectId: string, stepName: string): Promise<void> {
+  async assertStepNotCompleted(projectId: string, stepName: string, manager?: EntityManager): Promise<void> {
+    if (manager && this.manager !== manager) return this.scoped(manager).assertStepNotCompleted(projectId, stepName);
     const { instance, steps } = await this.findByProject(projectId);
     if (!instance) return; // No workflow instance, allow bypass
 
@@ -475,8 +510,8 @@ export class WorkflowService {
       throw new ForbiddenException('整个流程已结束，不可修改数据');
     }
 
-    const step = steps.find((s) => s.stepName === stepName);
-    if (step && step.status === StepStatus.Completed) {
+    const matchingSteps = steps.filter((s) => s.stepName === stepName || s.builtInStep === stepName);
+    if (matchingSteps.some((step) => isTerminalStepStatus(step.status))) {
       throw new ForbiddenException('该步骤已提交，不可再修改数据');
     }
   }
@@ -502,7 +537,11 @@ export class WorkflowService {
   async transition(
     projectId: string,
     userId: string,
+    permissionList?: string[],
+    expectedStepName?: string,
   ): Promise<{ instance: WorkflowInstance; steps: WorkflowStepView[] }> {
+    if (!this.manager) return this.transactional((service) => service.transition(projectId, userId, permissionList, expectedStepName));
+    await this.lockProject(projectId);
     const { instance, steps } = await this.findByProject(projectId);
     if (!instance) throw new NotFoundException('Workflow instance not found');
     if (instance.status === WorkflowStatus.Completed) {
@@ -511,15 +550,21 @@ export class WorkflowService {
 
     const project = await this.projectRepo.findOne({ where: { id: projectId } });
 
+    if (expectedStepName) {
+      const expected = steps.find((step) => step.stepName === expectedStepName);
+      if (!expected || expected.status !== StepStatus.InProgress || expected.isParallelGroup) throw new ConflictException('The active workflow step has changed');
+      if (!hasPermission(permissionList, `workflow_step:${expected.stepName}`)) throw new ForbiddenException('No permission to complete this workflow step');
+    }
+
     // Find the user's active leaf step
     let currentStep = steps.find(
-      (s) => s.status === StepStatus.InProgress && this.isAssignee(s, userId) && !s.isParallelGroup,
+      (s) => s.status === StepStatus.InProgress && this.isAssignee(s, userId) && !s.isParallelGroup && (!expectedStepName || s.stepName === expectedStepName),
     );
 
     // If no active step for user, allow project creator to force-complete
     if (!currentStep && project && project.createdBy === userId) {
       currentStep = steps.find(
-        (s) => s.status === StepStatus.InProgress && !s.isParallelGroup,
+        (s) => s.status === StepStatus.InProgress && !s.isParallelGroup && (!expectedStepName || s.stepName === expectedStepName),
       );
       if (currentStep) {
         this.logger.log(`Project creator ${userId} force-completing step "${currentStep.stepName}"`);
@@ -577,6 +622,10 @@ export class WorkflowService {
     }
 
     // Mark step completed
+    if (expectedStepName && currentStep.stepName !== expectedStepName) throw new ConflictException('The active workflow step has changed');
+    if (!hasPermission(permissionList, `workflow_step:${currentStep.stepName}`)) {
+      throw new ForbiddenException('No permission to complete this workflow step');
+    }
     currentStep.status = StepStatus.Completed;
     currentStep.completedAt = new Date();
     currentStep.completedBy = userId;
@@ -716,7 +765,7 @@ export class WorkflowService {
 
       // Auto-create experiments for activated children
       for (const c of toActivate) {
-        await this.experimentsService.ensureWorkflowExperiment(instance.projectId, c.stepName);
+        await this.experimentsService.ensureWorkflowExperiment(instance.projectId, c.stepName, this.manager);
       }
 
       for (const c of toActivate) {
@@ -734,7 +783,7 @@ export class WorkflowService {
       await this.assignmentRepo.save(next);
 
       // Auto-create experiment for this step
-      await this.experimentsService.ensureWorkflowExperiment(instance.projectId, next.stepName);
+      await this.experimentsService.ensureWorkflowExperiment(instance.projectId, next.stepName, this.manager);
 
       for (const assignedUserId of next.assignedUserIds ?? []) {
         const stepLabel = STEP_NAME_MAP[next.stepName] || next.stepName;
@@ -762,6 +811,8 @@ export class WorkflowService {
    * project-level action.
    */
   async completeWorkflow(projectId: string, userId: string): Promise<{ completed: boolean }> {
+    if (!this.manager) return this.transactional((service) => service.completeWorkflow(projectId, userId));
+    await this.lockProject(projectId);
     const { instance, steps } = await this.findByProject(projectId);
     if (!instance) return { completed: false };
     if (instance.status === WorkflowStatus.Completed) return { completed: true };
@@ -814,6 +865,8 @@ export class WorkflowService {
       canViewInternalCode: boolean;
     }>,
   ): Promise<WorkflowStepAssignment> {
+    if (!this.manager) return this.transactional((service) => service.updateStepAssignment(projectId, stepName, dto));
+    await this.lockProject(projectId);
     const { instance } = await this.findByProject(projectId);
     if (!instance) throw new NotFoundException('Workflow instance not found');
 

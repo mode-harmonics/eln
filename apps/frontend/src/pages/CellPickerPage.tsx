@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Loader2, Sparkles, Check, Layers } from "lucide-react";
 import { Button } from "../components/Button";
+import { completeWorkflowStep } from "../lib/workflow";
 import { SegmentedControl } from "../components/SegmentedControl";
 import { PageHeader } from "../components/PageHeader";
 import { toast } from "../components/Toast";
@@ -20,55 +21,17 @@ interface ColDef {
 
 const PD_COLS: ColDef[] = [
   { field: "cellId", label: "电池编号（cellId）" },
-  { field: "m0", label: "注液前电池重（m0）", tooltip: "注液前电池重 (m0, g)" },
-  { field: "m1", label: "预充后电池重（m1）", tooltip: "预充后电池重 (m1, g)" },
-  { field: "mIn", label: "注液量（mIn）", tooltip: "注液量 = m1 - m0 (g)" },
-  { field: "m2", label: "二封后电池重（m2）", tooltip: "二封后电池重 (m2, g)" },
-  { field: "mLoss", label: "失液量（mLoss）", tooltip: "失液量 = m1 - m2 (g)" },
-  { field: "v0", label: "二封前OCV（v0）", tooltip: "二封前 OCV (v0, V)" },
-  { field: "fu0", label: "化成前OCV（fu0）", tooltip: "化成前 OCV (fu0, V)" },
-  { field: "fr0", label: "化成前ACIR（fr0）", tooltip: "化成前 ACIR (fr0, mΩ)" },
-  { field: "fq1", label: "化成充电容量（fq1）", tooltip: "化成充电容量 (fq1, Ah)" },
-  { field: "fq2", label: "化成放电容量（fq2）", tooltip: "化成放电容量 (fq2, Ah)" },
-  { field: "fq", label: "化成充总容量（fq）", tooltip: "化成充总容量 = fq1 + fq2 (Ah)" },
-  { field: "v1", label: "二封后OCV（v1）", tooltip: "二封后 OCV (v1, V)" },
-  { field: "fvg", label: "化成产气量（fvg）", tooltip: "化成产气量 = (v1 - v0) / qdFirst (mL/Ah)" },
-  { field: "fu1", label: "老化前电压（fu1）", tooltip: "老化前电压 (fu1, V)" },
-  { field: "fr1", label: "老化前电阻（fr1）", tooltip: "老化前电阻 (fr1, mΩ)" },
-  { field: "fu2", label: "老化后电压（fu2）", tooltip: "老化后电压 (fu2, V)" },
-  { field: "fr2", label: "老化后电阻（fr2）", tooltip: "老化后电阻 (fr2, mΩ)" },
-  { field: "ku", label: "老化电压降（ku）", tooltip: "老化电压降 = fu1 - fu2 (V)" },
-  { field: "m3", label: "二封前电池质量（m3）", tooltip: "二封前电池质量 (m3, g)" },
-  { field: "m4", label: "二封后电池质量（m4）", tooltip: "二封后电池质量 (m4, g)" },
-  { field: "mHold", label: "保液量（mHold）", tooltip: "保液量 = m4 - m0 (g)" },
-  { field: "gu0", label: "定容前OCV（gu0）", tooltip: "定容前 OCV (gu0, V)" },
-  { field: "gr0", label: "定容前ACIR（gr0）", tooltip: "定容前 ACIR (gr0, mΩ)" },
-  { field: "gqc1", label: "第一步分容充电容量（gqc1）", tooltip: "第一步分容充电容量 (gqc1, Ah)" },
-  { field: "gqd1", label: "第一步分容放电容量（gqd1）", tooltip: "第一步分容放电容量 (gqd1, Ah)" },
-  { field: "gqc2", label: "第二步分容充电容量（gqc2）", tooltip: "第二步分容充电容量 (gqc2, Ah)" },
-  { field: "gu1", label: "定容后电压（gu1）", tooltip: "定容后电压 (gu1, V)" },
-  { field: "gr1", label: "定容后电阻（gr1）", tooltip: "定容后电阻 (gr1, mΩ)" },
-  { field: "qcFirst", label: "首次充电容量（qcFirst）", tooltip: "首次充电容量 = fq + gqc1 (Ah)" },
-  { field: "qdFirst", label: "首次放电容量（qdFirst）", tooltip: "首次放电容量 = gqd1 (Ah)" },
-  { field: "ceFirst", label: "首圈库仑效率（ceFirst）", tooltip: "首圈库仑效率 = qdFirst / qcFirst * 100 (%)" },
+  { field: "gqd1", label: "第一步分容放电容量（gqd1）" },
+  { field: "gr1", label: "定容后电阻（gr1）" },
+  { field: "fvg", label: "化成产气量（fvg）" },
+  { field: "ku", label: "老化电压降（ku）" },
+  { field: "fq1", label: "化成充电容量（fq1）" },
+  { field: "fq2", label: "化成放电容量（fq2）" },
 ];
-
 const PD_COLOR: Record<string, string> = {
-  m0: "text-amber-700", m1: "text-amber-700", m2: "text-amber-700",
-  m3: "text-amber-700", m4: "text-amber-700",
-  v0: "text-amber-700", v1: "text-amber-700",
-  fu0: "text-amber-700", fr0: "text-amber-700",
-  fu1: "text-amber-700", fr1: "text-amber-700",
-  fu2: "text-amber-700", fr2: "text-amber-700",
-  gu0: "text-amber-700", gr0: "text-amber-700",
-  fq1: "text-sky-700", fq2: "text-sky-700",
-  gqc1: "text-sky-700", gqd1: "text-sky-700", gqc2: "text-sky-700",
-  gu1: "text-sky-700", gr1: "text-sky-700",
-  mIn: "text-emerald-700", mLoss: "text-emerald-700", mHold: "text-emerald-700",
-  fq: "text-emerald-700", fvg: "text-emerald-700", ku: "text-emerald-700",
-  qcFirst: "text-emerald-700", qdFirst: "text-emerald-700", ceFirst: "text-emerald-700",
+  gqd1: "text-sky-700", gr1: "text-sky-700", fq1: "text-sky-700", fq2: "text-sky-700",
+  fvg: "text-emerald-700", ku: "text-emerald-700",
 };
-
 /** Extract group prefix from cellId: "A001" → "A", "B002" → "B" */
 function getGroupFromCellId(cellId: string): string {
   const m = cellId.match(/^([A-Za-z]+)/);
@@ -92,73 +55,33 @@ export function CellPickerPage() {
   const [cells, setCells] = useState<Record<string, any>[]>([]);
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [autoPicking, setAutoPicking] = useState(false);
   const [saving, setSaving] = useState(false);
+  const operationLock = useRef(false);
+  const [pendingAutoSync, setPendingAutoSync] = useState(false);
   const [readonly, setReadonly] = useState(false);
   const [activeGroup, setActiveGroup] = useState<string>(t("all"));
-  const [bsMap, setBsMap] = useState<Record<string, string>>({});
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    fetch("/api/v1/workflow/default-steps", { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } })
-      .then((r) => r.json().catch(() => ({})))
-      .then((json) => {
-        const steps: Array<{ name: string; builtInStep: string | null; children?: any[]; parallelChildren?: string[] }> = json?.data?.steps ?? json?.steps ?? [];
-        const m: Record<string, string> = {};
-        for (const s of steps) {
-          m[s.name] = s.builtInStep ?? s.name;
-          if (s.children) for (const c of s.children) m[c.name] = c.builtInStep ?? c.name;
-          if (s.parallelChildren) for (const c of s.parallelChildren) m[c] = c;
-        }
-        setBsMap(m);
-      })
-      .catch(() => {});
-  }, []);
-
   const loadData = useCallback(async () => {
     if (!projectId) return;
     setLoading(true);
+    setLoadError(null);
     try {
-      // ── Same fetch pattern as ProjectDetail data loading ──
-      const allExps = await api.get<any[]>(`/api/v1/projects/${projectId}/experiments`);
-      if (!Array.isArray(allExps)) { setCells([]); setLoading(false); return; }
-
-      // Find ALL ProcessData experiment IDs (may be more than one)
-      const processExpIds = allExps
-        .filter((e: any) => e.metadata?.assayType === "ProcessData")
-        .map((e: any) => e.id);
-
-      const [rowsByExp, picked, wf] = await Promise.all([
-        processExpIds.length > 0
-          ? Promise.all(processExpIds.map((eid: string) => api.get<any[]>(`/api/v1/data/process/${eid}`).catch(() => [])))
-          : Promise.resolve([]),
-        api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`).catch(() => []),
-        api.get<any>(`/api/v1/workflow/instances/${projectId}`).catch(() => null),
+      const [candidates, picked, wf] = await Promise.all([
+        api.get<any[]>(`/api/v1/data/selection-candidates/${projectId}`),
+        api.get<any[]>(`/api/v1/data/picked-cells/${projectId}`),
+        api.get<any>(`/api/v1/workflow/instances/${projectId}`),
       ]);
-
-      // ── Deduplicate by cellId (same logic as ProjectDetail) ──
-      const rawRows = (rowsByExp as any[][]).flat();
-      const seen = new Map<string, any>();
-      for (const row of rawRows) {
-        const key = row.cellId || row.id;
-        if (!seen.has(key)) seen.set(key, row);
-        else {
-          const existing = seen.get(key);
-          for (const [k, v] of Object.entries(row)) {
-            if (v != null && v !== "" && (existing[k] == null || existing[k] === "")) existing[k] = v;
-          }
-        }
-      }
-      const deduped = Array.from(seen.values()).filter((r: any) => r.cellId && !r.scrapped);
-
+      const deduped = candidates.filter((row) => row.cellId && !row.scrapped);
       // ── Picked / readonly ──
       const initSelected: Record<string, string> = {};
       (picked || []).forEach((p: any) => { if (p.testType) initSelected[p.cellId] = p.testType; });
-      const bsStep = wf?.steps?.find((s: any) => (bsMap[s.stepName] ?? s.stepName) === BuiltInStep.BatterySelection);
+      const bsStep = wf?.steps?.find((s: any) => (s.builtInStep ?? s.stepName) === BuiltInStep.BatterySelection);
       setReadonly(bsStep?.status === "completed");
 
       setCells(deduped);
       setSelected(initSelected);
-    } catch { toast(t("load_cell_data_failed", "加载电池数据失败"), "error"); }
+    } catch (error) { setLoadError(error instanceof Error ? error.message : t("load_cell_data_failed")); }
     finally { setLoading(false); }
   }, [projectId]);
 
@@ -169,27 +92,33 @@ export function CellPickerPage() {
   };
 
   const handleAutoPick = async () => {
+    if (operationLock.current) return;
+    operationLock.current = true;
     setAutoPicking(true);
     try {
-      await api.post(`/api/v1/data/pick-cells/${projectId}`, { mode: "auto" });
-      try { await api.post(`/api/v1/data/sync-cells/${projectId}`, {}); } catch { }
+      if (!pendingAutoSync) await api.post(`/api/v1/data/pick-cells/${projectId}`, { mode: "auto" });
+      setPendingAutoSync(true);
+      await api.post(`/api/v1/data/sync-cells/${projectId}`, {});
+      setPendingAutoSync(false);
       await loadData();
       toast(t("auto_assign_synced"), "success");
     } catch (err: any) { toast(err?.message ?? "自动挑选失败", "error"); }
-    finally { setAutoPicking(false); }
+    finally { operationLock.current = false; setAutoPicking(false); }
   };
 
   const handleSave = async () => {
+    if (operationLock.current || pendingAutoSync) return;
+    operationLock.current = true;
     setSaving(true);
     const assignments = Object.entries(selected).map(([cellId, testType]) => ({ cellId, testType }));
     try {
       await api.post(`/api/v1/data/pick-cells/${projectId}`, { mode: "manual", assignments });
       await api.post(`/api/v1/data/sync-cells/${projectId}`, {});
-      try { await api.put(`/api/v1/workflow/instances/${projectId}/transition`, {}); } catch { }
+      await completeWorkflowStep(projectId!, BuiltInStep.BatterySelection);
       toast(t("pick_assign_success", { count: assignments.length }), "success");
       navigate(`/projects/${projectId}`);
     } catch (err: any) { toast(err?.message ?? "操作失败", "error"); }
-    finally { setSaving(false); }
+    finally { operationLock.current = false; setSaving(false); }
   };
 
   // Group tabs
@@ -223,6 +152,7 @@ export function CellPickerPage() {
   return (
     <div className="space-y-4">
       <PageHeader title={t("pick_assign_title")} description={t("pick_assign_desc")} onBack={() => navigate(`/projects/${projectId}`)} />
+      {loadError && <div role="alert" className="space-y-2 rounded-md border border-red-200 p-4 text-sm text-red-600"><p>{loadError}</p><Button onClick={loadData}>{t("retry")}</Button></div>}
       <div className="rounded-surface border border-border bg-surface-subtle px-5 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4 text-[13px]">
@@ -233,8 +163,8 @@ export function CellPickerPage() {
             <span className="font-medium text-gray-700">{t("assigned")} <span className="text-action-muted">{displayAssignedCount}</span></span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {!readonly && <Button variant="secondary" size="sm" onClick={handleAutoPick} loading={autoPicking} disabled={autoPicking || cells.length === 0}><Sparkles className="w-3.5 h-3.5 mr-1" />{autoPicking ? t("auto_assigning") : t("auto_assign_default")}</Button>}
-            {!readonly && <Button size="sm" onClick={handleSave} loading={saving} disabled={saving || displayAssignedCount === 0}><Check className="w-3.5 h-3.5 mr-1" />{t("confirm_assign")}</Button>}
+            {!readonly && <Button variant="secondary" size="sm" onClick={handleAutoPick} loading={autoPicking} disabled={loading || !!loadError || autoPicking || saving || cells.length === 0}><Sparkles className="w-3.5 h-3.5 mr-1" />{autoPicking ? t("auto_assigning") : (pendingAutoSync ? t("retry_cell_sync") : t("auto_assign_default"))}</Button>}
+            {!readonly && <Button size="sm" onClick={handleSave} loading={saving} disabled={loading || !!loadError || saving || autoPicking || pendingAutoSync || displayAssignedCount === 0}><Check className="w-3.5 h-3.5 mr-1" />{t("confirm_assign")}</Button>}
             {readonly && <span className="text-sm text-amber-600 font-medium">{t("pick_completed_readonly")}</span>}
           </div>
         </div>
@@ -290,7 +220,7 @@ export function CellPickerPage() {
                       <select
                         value={assignedType || ""}
                         onChange={(e) => handleAssign(cell.cellId, e.target.value)}
-                        disabled={readonly}
+                        disabled={readonly || loading || !!loadError || saving || autoPicking || pendingAutoSync}
                         className={cn(
                           "w-36 rounded-control border py-1 pl-2 pr-7 text-xs outline-none focus:ring-1 focus:ring-focus/35",
                           isSel ? "border-action bg-action-subtle text-action-muted font-semibold" : "border-gray-200 text-gray-500",

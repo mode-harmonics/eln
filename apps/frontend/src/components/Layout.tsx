@@ -14,7 +14,7 @@ import {
   Upload,
   ChevronDown,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { Dropdown } from "./Dropdown";
@@ -47,6 +47,7 @@ export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [tempUploadOpen, setTempUploadOpen] = useState(false);
+  const tempUploadTriggerRef = useRef<HTMLButtonElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -233,6 +234,7 @@ export function Layout() {
           {/* Temp Upload button & Footer links */}
           <div className="px-4 pb-4 mt-auto space-y-4">
             <button
+              ref={tempUploadTriggerRef}
               onClick={() => setTempUploadOpen(true)}
               className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-black/5 hover:text-gray-900 transition-colors group"
             >
@@ -270,7 +272,7 @@ export function Layout() {
         </main>
       </div>
 
-      <TempUploadDrawer open={tempUploadOpen} onClose={() => setTempUploadOpen(false)} />
+      <TempUploadDrawer open={tempUploadOpen} onClose={() => setTempUploadOpen(false)} returnFocusRef={tempUploadTriggerRef} />
     </div>
   );
 }

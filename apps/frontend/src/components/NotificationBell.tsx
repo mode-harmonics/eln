@@ -3,6 +3,7 @@ import { Bell, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { toast } from "./Toast";
 import { Dropdown } from "./Dropdown";
 import { formatDistanceToNow } from "date-fns";
 
@@ -79,8 +80,12 @@ export function NotificationBell() {
     } else if (projectId) {
       navigate(`/projects/${projectId}`);
     } else if (experimentId) {
-      // Fallback — try to find project from payload
-      navigate(`/experiments/${experimentId}`);
+      try {
+        const experiment = await api.get<{ projectId: string }>(`/api/v1/experiments/${experimentId}`);
+        navigate(`/projects/${experiment.projectId}/experiments/${experimentId}`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : t("load_failed"));
+      }
     }
   };
 

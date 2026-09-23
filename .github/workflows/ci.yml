@@ -42,6 +42,11 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://eln:eln@127.0.0.1:5432/eln
+      JWT_SECRET: ci-isolated-test-jwt-secret
+      PORT: 3309
     services:
       postgres:
         image: postgres:16-alpine
@@ -86,6 +91,37 @@ jobs:
           DB_PASSWORD: eln
           DB_NAME: eln
           JWT_SECRET: ci-test-jwt-secret-min-16-char
+
+      - name: Prepare isolated database
+        run: |
+          cp apps/backend/env/example.env apps/backend/env/local.env
+          pnpm --filter @eln/backend run typeorm:run
+          pnpm --filter @eln/backend run seed
+
+      - name: Run database E2E tests
+        run: pnpm --filter @eln/backend exec jest --config ./test/jest-e2e.json --runInBand
+
+      - name: Run independent HTTP regression suite
+        env:
+          ELN_REVIEW_ALLOW_WRITES: 'yes'
+          ELN_REVIEW_URL: http://127.0.0.1:3309
+          ELN_REVIEW_OUTPUT: docs/reviews/api-ci.json
+        run: |
+          (cd apps/backend && node dist/main.js) > /tmp/eln-api.log 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3309/api/docs-json > /dev/null; then break; fi
+            sleep 1
+          done
+          node apps/backend/test/independent-api-review.mjs
+
+      - name: Upload HTTP test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-regression-results
+          path: docs/reviews/api-ci.json
 
   docker-build:
     name: Docker Build

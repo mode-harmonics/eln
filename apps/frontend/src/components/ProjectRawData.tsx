@@ -18,7 +18,7 @@ import { toast } from "./Toast";
 import { api, ApiError } from "../lib/api";
 import { ExperimentChart } from "./ExperimentChart";
 
-export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]; projectId: string; onImported?: () => void }) {
+export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]; projectId: string; canImport: boolean; onImported?: () => void }) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("process");
 
@@ -29,12 +29,14 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const pickMode = (mode: "merge" | "overwrite") => {
+    if (!props.canImport || uploading) return;
     importModeRef.current = mode;
     setImportMode(mode);
     uploadInputRef.current?.click();
   };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!props.canImport || uploading) return;
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const mode = importModeRef.current;
@@ -137,6 +139,7 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
             <p className="mt-1 text-xs text-gray-500">{t("project_data_overview_desc")}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {props.canImport && <>
             <input
               ref={uploadInputRef}
               type="file"
@@ -182,6 +185,7 @@ export function ProjectRawData(props: SummaryDataProps & { loadedTypes: string[]
                 </button>
               </div>
             </Dropdown>
+            </>}
             <Button variant="secondary" size="sm" onClick={handleExport}>
               <Download className="w-4 h-4" />
               {t("export_summary")}

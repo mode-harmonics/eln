@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../lib/api";
 import { toast } from "./Toast";
 import { cn } from "../lib/utils";
+import { Drawer } from "./Drawer";
 
 interface TempFile {
   id: string;
@@ -16,6 +17,7 @@ interface TempFile {
 interface TempUploadDrawerProps {
   open: boolean;
   onClose: () => void;
+  returnFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 function formatBytes(bytes: number): string {
@@ -102,7 +104,7 @@ function FileRow({ file, onDelete }: { file: TempFile; onDelete: (id: string) =>
   );
 }
 
-export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
+export function TempUploadDrawer({ open, onClose, returnFocusRef }: TempUploadDrawerProps) {
   const { t } = useTranslation();
   const [files, setFiles] = useState<TempFile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -123,8 +125,10 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
     if (open) loadFiles();
   }, [open, loadFiles]);
 
+  const uploadLock = useRef(false);
   const uploadFiles = async (fileList: File[]) => {
-    if (fileList.length === 0) return;
+    if (fileList.length === 0 || uploadLock.current) return;
+    uploadLock.current = true;
     setLoading(true);
     const form = new FormData();
     fileList.forEach((f) => form.append("files", f));
@@ -135,6 +139,7 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : t("upload_failed"));
     } finally {
+      uploadLock.current = false;
       setLoading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -164,36 +169,7 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
   if (!open) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]"
-        onClick={onClose}
-      />
-
-      {/* Drawer panel */}
-      <div role="dialog" aria-modal="true" aria-labelledby="temp-files-title" className="fixed right-0 top-0 bottom-0 z-50 flex w-full max-w-sm flex-col bg-white shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-action-subtle flex items-center justify-center">
-              <CloudUpload className="w-4 h-4 text-action" />
-            </div>
-            <div>
-              <h3 id="temp-files-title" className="text-sm font-semibold text-gray-900">{t("temp_files")}</h3>
-              <p className="text-xs text-gray-400">{t("temp_files_auto_clear")}</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            aria-label={t("close")}
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
+    <Drawer open={open} onClose={onClose} returnFocusRef={returnFocusRef} title={t("temp_files")} description={t("temp_files_auto_clear")} size="max-w-sm" icon={<CloudUpload className="w-4 h-4 text-action" />}>
         {/* Drop zone */}
         <div className="px-5 py-4 border-b border-gray-100">
           <div
@@ -249,7 +225,7 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
           {files.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
               <FileIcon className="w-8 h-8 opacity-30" />
-              <p className="text-sm">{t("no_cells_available")}</p>
+              <p className="text-sm">{t("no_temp_files")}</p>
             </div>
           ) : (
             <div className="px-2 py-2">
@@ -262,7 +238,6 @@ export function TempUploadDrawer({ open, onClose }: TempUploadDrawerProps) {
             </div>
           )}
         </div>
-      </div>
-    </>
+    </Drawer>
   );
 }

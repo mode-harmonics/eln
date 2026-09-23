@@ -1,11 +1,13 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsString, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsString, IsUUID, MaxLength, IsNotEmpty, ValidateNested } from 'class-validator';
 
 export class ProjectMemberDto {
-  @IsString()
+  @IsUUID()
   userId!: string;
 
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
   role!: string;
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Loader2, Trash2, Plus, Edit3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Pagination } from "../components/Pagination";
@@ -41,6 +41,8 @@ export function Users() {
   const [pageSize, setPageSize] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
   const [refetchTrigger, setRefetchTrigger] = useState(0);
+  const mutationLock = useRef(false);
+  const [saving, setSaving] = useState(false);
 
   const [rolesLoaded, setRolesLoaded] = useState(false);
 
@@ -82,11 +84,14 @@ export function Users() {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (mutationLock.current) return;
     if (!newUserName || !newUserUsername) return;
     if (/[\u4e00-\u9fa5]/.test(newUserUsername) || !/^[a-zA-Z0-9_.-]+$/.test(newUserUsername)) {
       alert(t("username_no_chinese", "用户名不能包含中文或非法字符，只能包含英文字母、数字、下划线、连字符或点"));
       return;
     }
+    mutationLock.current = true;
+    setSaving(true);
     try {
       await api.post<any>("/api/v1/users", {
         username: newUserUsername,
@@ -104,12 +109,15 @@ export function Users() {
       setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "创建用户失败");
+    } finally {
+      mutationLock.current = false;
+      setSaving(false);
     }
   };
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingUser) return;
+    if (!editingUser || mutationLock.current) return;
     const form = e.currentTarget as HTMLFormElement;
     const username = (form.elements.namedItem("edit-username") as HTMLInputElement).value;
     const email = (form.elements.namedItem("edit-email") as HTMLInputElement).value;
@@ -122,6 +130,8 @@ export function Users() {
       return;
     }
 
+    mutationLock.current = true;
+    setSaving(true);
     try {
       await api.put(`/api/v1/users/${editingUser.id}`, {
         username,
@@ -135,6 +145,9 @@ export function Users() {
       setRefetchTrigger((prev) => prev + 1);
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "更新用户失败");
+    } finally {
+      mutationLock.current = false;
+      setSaving(false);
     }
   };
 
@@ -168,7 +181,7 @@ export function Users() {
           search={<SearchInput
             value={searchInput}
             onChange={setSearchInput}
-            onSubmit={() => { setSearchQuery(searchInput); setCurrentPage(1); }}
+            onSubmit={(value) => { setSearchQuery(value); setCurrentPage(1); }}
             placeholder={t("search_users")}
           />}
           view={<ViewToggle
@@ -176,7 +189,7 @@ export function Users() {
               setViewMode={setViewMode}
               className="hidden sm:flex"
           />}
-          actions={hasPermission("users:write") ? (
+          actions={hasPermission("system:write") ? (
               <Button
                 size="sm"
                 variant="secondary"
@@ -201,7 +214,7 @@ export function Users() {
                   <TableHead>{t("email")}</TableHead>
                   <TableHead>{t("role")}</TableHead>
                   <TableHead>{t("status")}</TableHead>
-                  {hasPermission("users:write") && <TableHead className="sticky right-0 z-20 bg-gray-50 text-right">{t("actions")}</TableHead>}
+                  {hasPermission("system:write") && <TableHead className="sticky right-0 z-20 bg-gray-50 text-right">{t("actions")}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -242,17 +255,17 @@ export function Users() {
                           {user.isActive ? t("active") : t("inactive", "Inactive")}
                         </span>
                       </TableCell>
-                      {hasPermission("users:write") && (
+                      {hasPermission("system:write") && (
                         <TableCell className="text-right text-sm font-medium sticky right-0 z-10 bg-white group-hover:bg-gray-50">
                           <div className="inline-flex items-center gap-3">
-                            <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action">
+                            <Button variant="text" aria-label={`${t("edit")} ${user.fullName || user.username}`} onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action">
                               <Edit3 className="w-4 h-4" />
                             </Button>
                             <Popconfirm
                               title={t("delete_project_confirm", { name: user.username || user.email })}
                               onConfirm={() => handleDeleteUser(user.id)}
                             >
-                              <Button variant="text" className="!text-gray-400 hover:!text-red-600">
+                              <Button variant="text" aria-label={`${t("delete")} ${user.fullName || user.username}`} className="!text-gray-400 hover:!text-red-600">
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </Popconfirm>
@@ -271,9 +284,9 @@ export function Users() {
               const initial = user.fullName ? user.fullName.charAt(0).toUpperCase() : "U";
               return (
                 <Card key={user.id} className="flex flex-col items-center text-center relative group p-6 border-gray-200 hover:border-gray-300">
-                  {hasPermission("users:write") && (
+                  {hasPermission("system:write") && (
                     <div className="absolute top-4 right-4 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="text" onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action">
+                      <Button variant="text" aria-label={`${t("edit")} ${user.fullName || user.username}`} onClick={() => { loadRolesIfNeeded(); setEditingUser(user); setIsEditModalOpen(true); }} className="!text-gray-400 hover:!text-action">
                         <Edit3 className="w-4 h-4" />
                       </Button>
                       <Popconfirm
@@ -281,7 +294,7 @@ export function Users() {
                         onConfirm={() => handleDeleteUser(user.id)}
                         placement="left"
                       >
-                        <Button variant="text" className="!text-gray-400 hover:!text-red-600">
+                        <Button variant="text" aria-label={`${t("delete")} ${user.fullName || user.username}`} className="!text-gray-400 hover:!text-red-600">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </Popconfirm>
@@ -332,11 +345,11 @@ export function Users() {
         )}
       </div>
 
-      <Modal open={isEditModalOpen && !!editingUser} onClose={() => setIsEditModalOpen(false)} title={t("edit_user")} maxWidth="md"
+      <Modal open={isEditModalOpen && !!editingUser} onClose={() => { if (!mutationLock.current) setIsEditModalOpen(false); }} title={t("edit_user")} maxWidth="md"
         footer={
           <>
-            <Button size="sm" variant="secondary" onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
-            <Button size="sm" type="submit" form="modal-user-edit-form">{t("save_changes")}</Button>
+            <Button size="sm" variant="secondary" disabled={saving} onClick={() => setIsEditModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" type="submit" form="modal-user-edit-form" disabled={saving} loading={saving}>{t("save_changes")}</Button>
           </>
         }>
         <form id="modal-user-edit-form" key={editingUser?.id || "edit-form"} onSubmit={handleUpdateUser} className="space-y-5">
@@ -377,11 +390,11 @@ export function Users() {
         </form>
       </Modal>
 
-      <Modal open={isModalOpen} onClose={() => setIsModalOpen(false)} title={t("add_user")} maxWidth="md"
+      <Modal open={isModalOpen} onClose={() => { if (!mutationLock.current) setIsModalOpen(false); }} title={t("add_user")} maxWidth="md"
         footer={
           <>
-            <Button size="sm" variant="secondary" onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
-            <Button size="sm" type="submit" form="modal-user-form">{t("create")}</Button>
+            <Button size="sm" variant="secondary" disabled={saving} onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" type="submit" form="modal-user-form" disabled={saving} loading={saving}>{t("create")}</Button>
           </>
         }>
         <form id="modal-user-form" onSubmit={handleCreateUser} className="space-y-5">

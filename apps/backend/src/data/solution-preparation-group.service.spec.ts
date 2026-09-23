@@ -32,12 +32,15 @@ describe('DataService solution preparation group metadata', () => {
     };
     const dataSource = {
       getRepository: jest.fn((entity: any) => {
+        if (entity.name === 'Experiment') return { findOne: async () => ({ id: experimentId, projectId: 'project', status: 'Draft' }) };
+        if (entity.name === 'Project') return { findOne: async () => ({ id: 'project' }) };
         if (entity.name === 'SolutionPreparation') return solutionRepository;
         if (entity.name === 'SolutionPreparationGroup') return groupRepository;
         if (entity.name === 'ScrappedSolutionGroup') return scrapRepository;
         throw new Error(`Unexpected repository: ${entity.name}`);
       }),
     };
+    (dataSource as any).transaction = async (work: any) => work({ getRepository: dataSource.getRepository });
     service = new DataService(dataSource as any, {} as any, {} as any, {} as any);
   });
 

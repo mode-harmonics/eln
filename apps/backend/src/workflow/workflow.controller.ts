@@ -1,3 +1,5 @@
+import { ResourceAccess } from '../access/resource-access.guard';
+import { hasPermission } from '@eln/shared';
 import {
   Controller,
   Get,
@@ -20,6 +22,7 @@ import {
   CreateWorkflowTemplateDto,
   UpdateStepAssignmentDto,
   UpdateWorkflowTemplateDto,
+  TransitionWorkflowDto,
 } from './dto/workflow.dto';
 
 @ApiTags('Workflow')
@@ -82,6 +85,7 @@ export class WorkflowController {
   // ─── Instances ────────────────────────────────────────────────
 
   @Post('workflow/instances')
+  @ResourceAccess('project', 'projectId', 'owner', { body: true })
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Create a workflow instance for a project' })
   async createInstance(@Body() dto: CreateWorkflowInstanceDto) {
@@ -89,6 +93,7 @@ export class WorkflowController {
   }
 
   @Get('workflow/instances/:projectId')
+  @ResourceAccess('project', 'projectId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get workflow instance + steps visible to current user for a project' })
   async getInstance(@Param('projectId') projectId: string, @CurrentUser() user: RequestUser) {
@@ -96,13 +101,16 @@ export class WorkflowController {
   }
 
   @Get('workflow/instances/:projectId/steps')
+  @ResourceAccess('project', 'projectId')
   @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get all step assignments for a project' })
-  async getSteps(@Param('projectId') projectId: string) {
-    return { success: true, data: await this.workflowService.getSteps(projectId) };
+  async getSteps(@Param('projectId') projectId: string, @CurrentUser() user: RequestUser) {
+    const result = await this.workflowService.findByProject(projectId, user.id, user.permissionList);
+    return { success: true, data: result.steps };
   }
 
   @Put('workflow/instances/:projectId/transition')
+  @ResourceAccess('project', 'projectId', 'write')
   @RequirePermission('experiments:write')
   @ApiOperation({
     summary: 'Complete current step and advance workflow to next step(s)',
@@ -111,14 +119,16 @@ export class WorkflowController {
   async transition(
     @Param('projectId') projectId: string,
     @CurrentUser() user: RequestUser,
+    @Body() dto: TransitionWorkflowDto,
   ) {
     return {
       success: true,
-      data: await this.workflowService.transition(projectId, user.id),
+      data: await this.workflowService.transition(projectId, user.id, user.permissionList, dto.expectedStepName),
     };
   }
 
   @Put('workflow/instances/:projectId/steps/:stepName')
+  @ResourceAccess('project', 'projectId', 'owner')
   @RequirePermission('experiments:write')
   @ApiOperation({ summary: 'Update step assignment (reassign user, change permissions)' })
   async updateStepAssignment(
@@ -135,6 +145,8 @@ export class WorkflowController {
   // ─── Permissions ─────────────────────────────────────────────
 
   @Get('workflow/instances/:projectId/permissions')
+  @RequirePermission('experiments:read')
+  @ResourceAccess('project', 'projectId')
   @ApiOperation({ summary: 'Get current user permissions for this project workflow' })
   async getPermissions(
     @Param('projectId') projectId: string,
@@ -149,8 +161,10 @@ export class WorkflowController {
   // ─── My Tasks ─────────────────────────────────────────────────
 
   @Get('workflow/tasks')
+  @RequirePermission('experiments:read')
   @ApiOperation({ summary: 'Get all active workflow tasks for current user across projects' })
-  async getMyTasks(@CurrentUser('id') userId: string) {
-    return { success: true, data: await this.workflowService.getMyTasks(userId) };
+  async getMyTasks(@CurrentUser() user: RequestUser) {
+    const tasks = await this.workflowService.getMyTasks(user.id);
+    return { success: true, data: tasks.filter(task => hasPermission(user.permissionList, `workflow_step:${task.stepName}`)) };
   }
 }

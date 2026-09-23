@@ -28,6 +28,7 @@ describe('DataService high-temperature cycle updates', () => {
       save: jest.fn(async (value) => value),
     };
     const dataSource = { getRepository: jest.fn(() => repository) };
+    (dataSource as any).transaction = async (work: any) => work({ getRepository: dataSource.getRepository });
     service = new DataService(dataSource as any, {} as any, {} as any, {} as any);
   });
 
