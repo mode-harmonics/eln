@@ -1,0 +1,40 @@
+export const DEFAULT_WORKFLOW_STEPS = {
+  nodes: [
+    { id: 'experiment_design', label: '实验设计', builtInStep: 'experiment_design' },
+    { id: 'design', label: '实验设计', builtInStep: 'design', parentId: 'experiment_design' },
+    { id: 'procurement', label: '试剂采购', builtInStep: 'procurement', parentId: 'experiment_design' },
+    { id: 'solution_preparation', label: '配液', builtInStep: 'solution_preparation' },
+    { id: 'drying_injection', label: '干燥/注液', builtInStep: 'drying_injection' },
+    { id: 'formation', label: '化成', builtInStep: 'formation' },
+    { id: 'second_sealing', label: '二封', builtInStep: 'second_sealing' },
+    { id: 'capacity_grading', label: '定容', builtInStep: 'capacity_grading' },
+    { id: 'battery_selection', label: '挑选电池', builtInStep: 'battery_selection' },
+    { id: 'testing', label: '测试', builtInStep: 'testing' },
+    { id: 'calendar_life', label: '日历寿命', builtInStep: 'calendar_life', parentId: 'testing' },
+    { id: 'storage_swelling', label: '存储胀气', builtInStep: 'storage_swelling', parentId: 'testing' },
+    { id: 'energy_efficiency', label: '能量效率', builtInStep: 'energy_efficiency', parentId: 'testing' },
+    { id: 'dcr_test', label: 'DCR测试', builtInStep: 'dcr_test', parentId: 'testing' },
+    { id: 'fast_charge', label: '快充测试', builtInStep: 'fast_charge', parentId: 'testing' },
+    { id: 'ht_cycle', label: '高温循环', builtInStep: 'ht_cycle', parentId: 'testing' },
+  ],
+  edges: [
+    // experiment_design → design → procurement → solution_preparation (serial sub-steps)
+    { from: 'experiment_design', to: 'design' },
+    { from: 'design', to: 'procurement' },
+    { from: 'procurement', to: 'solution_preparation' },
+    // serial chain
+    { from: 'solution_preparation', to: 'drying_injection' },
+    { from: 'drying_injection', to: 'formation' },
+    { from: 'formation', to: 'second_sealing' },
+    { from: 'second_sealing', to: 'capacity_grading' },
+    { from: 'capacity_grading', to: 'battery_selection' },
+    { from: 'battery_selection', to: 'testing' },
+    // testing → 6 parallel children
+    { from: 'testing', to: 'calendar_life' },
+    { from: 'testing', to: 'storage_swelling' },
+    { from: 'testing', to: 'energy_efficiency' },
+    { from: 'testing', to: 'dcr_test' },
+    { from: 'testing', to: 'fast_charge' },
+    { from: 'testing', to: 'ht_cycle' },
+  ],
+};

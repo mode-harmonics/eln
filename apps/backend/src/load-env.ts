@@ -7,10 +7,16 @@ import { resolve } from 'path';
  *
  * Usage in scripts:
  *   nest start --watch -- --env local
- *   ts-node src/seed.ts -- --env test
+ *   ts-node src/seed-test.ts -- --env test
  *   typeorm-ts-node-commonjs migration:run -d src/data-source.ts -- --env test
  */
 export function loadEnv(): string {
+  // Production receives configuration from its process environment/secret manager.
+  // Do not require a local env file on a deployed server.
+  if (process.env.NODE_ENV === 'production') {
+    if (!process.env.DATABASE_URL) throw new Error('[loadEnv] DATABASE_URL is required in production.');
+    return 'production';
+  }
   const idx = process.argv.indexOf('--env');
   const name = idx !== -1 ? process.argv[idx + 1] : 'local';
 

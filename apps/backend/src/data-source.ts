@@ -39,6 +39,6 @@ const connectionOptions: DataSourceOptions = dbUrl
  * Standalone DataSource used only by the TypeORM CLI:
  *   pnpm --filter @eln/backend run typeorm:generate
  *   pnpm --filter @eln/backend run typeorm:run
- * Also imported by src/seed.ts to populate initial data.
+ * Also imported by the test fixture seed to populate disposable databases.
  */
 export const AppDataSource = new DataSource(connectionOptions);

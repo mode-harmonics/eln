@@ -17,11 +17,12 @@ Requires Node 20+ and pnpm 9.12.0. Run commands from the repository root.
 ```bash
 pnpm install
 pnpm --filter @eln/backend run typeorm:run
-pnpm --filter @eln/backend run seed
 pnpm run dev
 ```
 
 `pnpm run dev` starts backend, frontend, and shared watch tasks. Backend environment files live at `apps/backend/env/<name>.env`; local runtime defaults to `env/local.env`. Start from `apps/backend/env/example.env`. Never edit or commit the checked-in/local secret-bearing environment files as part of an unrelated task.
+
+`seed` now initializes a production database from `NODE_ENV=production`, `DATABASE_URL`, `ELN_BOOTSTRAP_USERNAME`, and `ELN_BOOTSTRAP_PASSWORD` after migration and build. It creates no demo data. Use `seed:test` only against a disposable test database.
 
 Prefer the narrowest validation that covers the change:
 

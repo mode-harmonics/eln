@@ -159,6 +159,7 @@ async function ensureTestingWorkflow(project: Project, owner: User): Promise<str
 }
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') throw new Error('Chart demo seed is disabled in production.');
   await AppDataSource.initialize();
   const projectRepo = AppDataSource.getRepository(Project);
   const experimentRepo = AppDataSource.getRepository(Experiment);

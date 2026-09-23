@@ -95,8 +95,9 @@ jobs:
       - name: Prepare isolated database
         run: |
           cp apps/backend/env/example.env apps/backend/env/local.env
+          cp apps/backend/env/example.env apps/backend/env/test.env
           pnpm --filter @eln/backend run typeorm:run
-          pnpm --filter @eln/backend run seed
+          pnpm --filter @eln/backend run seed:test
 
       - name: Run database E2E tests
         run: pnpm --filter @eln/backend exec jest --config ./test/jest-e2e.json --runInBand

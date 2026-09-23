@@ -36,29 +36,28 @@ across packages).
 ## Setup
 
 ```bash
-# 1. Install dependencies across the whole workspace
 pnpm install
-
-# 2. Configure environment
-cp .env.example apps/backend/.env
-# edit apps/backend/.env with your real DB credentials / JWT secret
-
-# 3. Create the database (if it doesn't exist yet)
-createdb eln   # or via your Postgres client of choice
-
-# 4. Run migrations — creates all 15 tables
-pnpm --filter @eln/backend run typeorm:run
-
-# 5. Seed demo data — 4 roles, 2 users, 1 project, 1 experiment
+pnpm run build
+pnpm --filter @eln/backend run typeorm:run:prod
 pnpm --filter @eln/backend run seed
 ```
 
-Seeded demo accounts (password for both: `Password123!`):
+Create an empty database first. Supply `NODE_ENV=production`, `DATABASE_URL`,
+and `JWT_SECRET` through the process environment or secret manager before
+running these commands. `seed` is the production-safe first-run initializer.
+It also requires `ELN_BOOTSTRAP_USERNAME` and `ELN_BOOTSTRAP_PASSWORD`;
+`ELN_BOOTSTRAP_FULL_NAME` is optional.
+Supply a unique password of at least 12 characters and at most 72 UTF-8 bytes
+from a secret manager. On a migrated database with no users, the command
+creates four roles, one Owner account and
+the default workflow. Re-running it preserves the existing password and
+workflow. If the database already has another user, it refuses to create an
+administrator. No fixed login or demo projects are installed. Run the
+production migration command `typeorm:run:prod` before `seed`.
 
-| Email              | Role   |
-| ------------------ | ------ |
-| `pi@eln.local`      | Owner  |
-| `editor@eln.local`  | Editor |
+For disposable test databases only, `seed:test` installs the historical test
+fixtures, including fixed test accounts. It refuses to run with
+`NODE_ENV=production`.
 
 ## Running
 
