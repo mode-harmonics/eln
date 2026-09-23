@@ -15,6 +15,12 @@ export interface SolutionPreparationDto {
   createdAt: string;
 }
 
+export interface SolutionPreparationGroupDto {
+  groupName: string;
+  formulaInfo: string;
+  scrapped: boolean;
+}
+
 export interface ProcessDataDto {
   id: string;
   experimentId: string;
@@ -140,6 +146,7 @@ export interface HtCycleDto {
   cycle: number;
   cellName: string;
   ironDissolution: string | null;
+  ironDissolutionStage: 'initial' | 'final' | null;
   dischargeCapacity: string | null;
   capacityRetention: string | null;
   createdAt: string;

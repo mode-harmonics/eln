@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
   Param,
+  Patch,
   Post,
   Put,
   Query,
@@ -27,6 +28,7 @@ import { WorkflowService } from '../workflow/workflow.service';
 import { RECORD_TYPE_TO_API_TYPE as RECORD_TYPE_TO_PERMISSION } from '@eln/shared';
 import { UploadDataDto } from './dto/upload-data.dto';
 import { PickCellsDto } from '../experiments/dto/pick-cells.dto';
+import { UpdateSolutionPreparationGroupDto } from './dto/update-solution-preparation-group.dto';
 
 interface UploadedFile {
   buffer: Buffer;
@@ -227,6 +229,53 @@ export class DataController {
       throw new BadRequestException('cellId is required.');
     }
     return this.dataService.restoreCell(projectId, body.cellId);
+  }
+
+  @Get('scrapped-solution-groups/:experimentId')
+  @RequirePermission('experiments:read')
+  @ApiOperation({ summary: 'Get scrapped solution-preparation groups for an experiment.' })
+  async getScrappedSolutionGroups(@Param('experimentId') experimentId: string) {
+    return this.dataService.getScrappedSolutionGroups(experimentId);
+  }
+
+  @Get('solution-preparation-groups/:experimentId')
+  @RequirePermission('experiments:read')
+  @ApiOperation({ summary: 'Get solution-preparation groups with formula and scrap status.' })
+  async getSolutionPreparationGroups(@Param('experimentId') experimentId: string) {
+    return this.dataService.getSolutionPreparationGroups(experimentId);
+  }
+
+  @Patch('solution-preparation-groups/:experimentId')
+  @RequirePermission('experiments:write')
+  @ApiOperation({ summary: 'Update the plain-text formula information for a solution-preparation group.' })
+  async updateSolutionPreparationGroup(
+    @Param('experimentId') experimentId: string,
+    @Body() body: UpdateSolutionPreparationGroupDto,
+  ) {
+    return this.dataService.updateSolutionPreparationGroup(experimentId, body.groupName, body.formulaInfo);
+  }
+
+  @Post('scrapped-solution-groups/:experimentId')
+  @RequirePermission('experiments:write')
+  @ApiOperation({ summary: 'Scrap a whole solution-preparation group.' })
+  async scrapSolutionGroup(
+    @Param('experimentId') experimentId: string,
+    @Body() body: { groupName: string; reason?: string },
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!body?.groupName) throw new BadRequestException('groupName is required.');
+    return this.dataService.scrapSolutionGroup(experimentId, body.groupName, user.id, body.reason);
+  }
+
+  @Post('scrapped-solution-groups/:experimentId/restore')
+  @RequirePermission('experiments:write')
+  @ApiOperation({ summary: 'Restore a scrapped solution-preparation group.' })
+  async restoreSolutionGroup(
+    @Param('experimentId') experimentId: string,
+    @Body() body: { groupName: string },
+  ) {
+    if (!body?.groupName) throw new BadRequestException('groupName is required.');
+    return this.dataService.restoreSolutionGroup(experimentId, body.groupName);
   }
 
   @Post('sync-cells/:projectId')

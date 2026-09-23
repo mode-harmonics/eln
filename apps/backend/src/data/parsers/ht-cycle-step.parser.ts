@@ -6,6 +6,10 @@ import { DataParser, findHeaderRow, normalizeHeaders, toNumberOrNull, toStringOr
 
 const CELL_NAME_KEYS = ['cellname', 'cellid', 'batteryid', 'cell', '电池名称', '电池'];
 
+export function normalizeImportedHtCycle(originalCycle: number): number | null {
+  return originalCycle < 7 ? null : originalCycle - 6;
+}
+
 /**
  * HtCycleStepParser — 读取机器导出的「循环层」cycle sheet，
  * 每行一个循环号 + 放电容量，汇总为 HtCycle 业务行。
@@ -71,9 +75,11 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
         ? (toStringOrNull(row.getCell(cellCol).value) ?? defaultCellName)
         : defaultCellName;
 
-      const cycle = cycleCol >= 1 ? toNumberOrNull(row.getCell(cycleCol).value) : null;
+      const originalCycle = cycleCol >= 1 ? toNumberOrNull(row.getCell(cycleCol).value) : null;
       const cap   = capCol >= 1 ? toNumberOrNull(row.getCell(capCol).value) : null;
 
+      if (originalCycle == null) return;
+      const cycle = normalizeImportedHtCycle(originalCycle);
       if (cycle == null) return;
 
       rawPairs.push({ cellName, cycle, cap });
@@ -125,6 +131,7 @@ export class HtCycleStepParser implements DataParser<HtCycle> {
         dischargeCapacity: rp.cap != null ? rp.cap.toFixed(6) : null,
         capacityRetention: retention != null ? retention.toFixed(6) : null,
         ironDissolution: null,
+        ironDissolutionStage: null,
         createdAt: new Date(),
       } as HtCycle);
     }

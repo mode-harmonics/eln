@@ -19,38 +19,38 @@ interface ColDef {
 }
 
 const PD_COLS: ColDef[] = [
-  { field: "cellId", label: "电池编号" },
-  { field: "m0", label: "m0", tooltip: "注液前电池重 (m0, g)" },
-  { field: "m1", label: "m1", tooltip: "预充后电池重 (m1, g)" },
-  { field: "mIn", label: "mIn (计算)", tooltip: "注液量 = m1 - m0 (g)" },
-  { field: "m2", label: "m2", tooltip: "二封后电池重 (m2, g)" },
-  { field: "mLoss", label: "mLoss (计算)", tooltip: "失液量 = m1 - m2 (g)" },
-  { field: "v0", label: "v0", tooltip: "二封前 OCV (v0, V)" },
-  { field: "fu0", label: "fu0", tooltip: "化成前 OCV (fu0, V)" },
-  { field: "fr0", label: "fr0", tooltip: "化成前 ACIR (fr0, mΩ)" },
-  { field: "fq1", label: "fq1", tooltip: "化成充电容量 (fq1, Ah)" },
-  { field: "fq2", label: "fq2", tooltip: "化成放电容量 (fq2, Ah)" },
-  { field: "fq", label: "fq (计算)", tooltip: "化成充总容量 = fq1 + fq2 (Ah)" },
-  { field: "v1", label: "v1", tooltip: "二封后 OCV (v1, V)" },
-  { field: "fvg", label: "fvg (计算)", tooltip: "化成产气量 = (v1 - v0) / qdFirst (mL/Ah)" },
-  { field: "fu1", label: "fu1", tooltip: "老化前电压 (fu1, V)" },
-  { field: "fr1", label: "fr1", tooltip: "老化前电阻 (fr1, mΩ)" },
-  { field: "fu2", label: "fu2", tooltip: "老化后电压 (fu2, V)" },
-  { field: "fr2", label: "fr2", tooltip: "老化后电阻 (fr2, mΩ)" },
-  { field: "ku", label: "ku (计算)", tooltip: "老化电压降 = fu1 - fu2 (V)" },
-  { field: "m3", label: "m3", tooltip: "二封前电池质量 (m3, g)" },
-  { field: "m4", label: "m4", tooltip: "二封后电池质量 (m4, g)" },
-  { field: "mHold", label: "mHold (计算)", tooltip: "保液量 = m4 - m0 (g)" },
-  { field: "gu0", label: "gu0", tooltip: "定容前 OCV (gu0, V)" },
-  { field: "gr0", label: "gr0", tooltip: "定容前 ACIR (gr0, mΩ)" },
-  { field: "gqc1", label: "gqc1", tooltip: "第一步分容充电容量 (gqc1, Ah)" },
-  { field: "gqd1", label: "gqd1", tooltip: "第一步分容放电容量 (gqd1, Ah)" },
-  { field: "gqc2", label: "gqc2", tooltip: "第二步分容充电容量 (gqc2, Ah)" },
-  { field: "gu1", label: "gu1", tooltip: "定容后电压 (gu1, V)" },
-  { field: "gr1", label: "gr1", tooltip: "定容后电阻 (gr1, mΩ)" },
-  { field: "qcFirst", label: "qcFirst (计算)", tooltip: "首次充电容量 = fq + gqc1 (Ah)" },
-  { field: "qdFirst", label: "qdFirst (计算)", tooltip: "首次放电容量 = gqd1 (Ah)" },
-  { field: "ceFirst", label: "ceFirst (计算)", tooltip: "首圈库比效率 = qdFirst / qcFirst * 100 (%)" },
+  { field: "cellId", label: "电池编号（cellId）" },
+  { field: "m0", label: "注液前电池重（m0）", tooltip: "注液前电池重 (m0, g)" },
+  { field: "m1", label: "预充后电池重（m1）", tooltip: "预充后电池重 (m1, g)" },
+  { field: "mIn", label: "注液量（mIn）", tooltip: "注液量 = m1 - m0 (g)" },
+  { field: "m2", label: "二封后电池重（m2）", tooltip: "二封后电池重 (m2, g)" },
+  { field: "mLoss", label: "失液量（mLoss）", tooltip: "失液量 = m1 - m2 (g)" },
+  { field: "v0", label: "二封前OCV（v0）", tooltip: "二封前 OCV (v0, V)" },
+  { field: "fu0", label: "化成前OCV（fu0）", tooltip: "化成前 OCV (fu0, V)" },
+  { field: "fr0", label: "化成前ACIR（fr0）", tooltip: "化成前 ACIR (fr0, mΩ)" },
+  { field: "fq1", label: "化成充电容量（fq1）", tooltip: "化成充电容量 (fq1, Ah)" },
+  { field: "fq2", label: "化成放电容量（fq2）", tooltip: "化成放电容量 (fq2, Ah)" },
+  { field: "fq", label: "化成充总容量（fq）", tooltip: "化成充总容量 = fq1 + fq2 (Ah)" },
+  { field: "v1", label: "二封后OCV（v1）", tooltip: "二封后 OCV (v1, V)" },
+  { field: "fvg", label: "化成产气量（fvg）", tooltip: "化成产气量 = (v1 - v0) / qdFirst (mL/Ah)" },
+  { field: "fu1", label: "老化前电压（fu1）", tooltip: "老化前电压 (fu1, V)" },
+  { field: "fr1", label: "老化前电阻（fr1）", tooltip: "老化前电阻 (fr1, mΩ)" },
+  { field: "fu2", label: "老化后电压（fu2）", tooltip: "老化后电压 (fu2, V)" },
+  { field: "fr2", label: "老化后电阻（fr2）", tooltip: "老化后电阻 (fr2, mΩ)" },
+  { field: "ku", label: "老化电压降（ku）", tooltip: "老化电压降 = fu1 - fu2 (V)" },
+  { field: "m3", label: "二封前电池质量（m3）", tooltip: "二封前电池质量 (m3, g)" },
+  { field: "m4", label: "二封后电池质量（m4）", tooltip: "二封后电池质量 (m4, g)" },
+  { field: "mHold", label: "保液量（mHold）", tooltip: "保液量 = m4 - m0 (g)" },
+  { field: "gu0", label: "定容前OCV（gu0）", tooltip: "定容前 OCV (gu0, V)" },
+  { field: "gr0", label: "定容前ACIR（gr0）", tooltip: "定容前 ACIR (gr0, mΩ)" },
+  { field: "gqc1", label: "第一步分容充电容量（gqc1）", tooltip: "第一步分容充电容量 (gqc1, Ah)" },
+  { field: "gqd1", label: "第一步分容放电容量（gqd1）", tooltip: "第一步分容放电容量 (gqd1, Ah)" },
+  { field: "gqc2", label: "第二步分容充电容量（gqc2）", tooltip: "第二步分容充电容量 (gqc2, Ah)" },
+  { field: "gu1", label: "定容后电压（gu1）", tooltip: "定容后电压 (gu1, V)" },
+  { field: "gr1", label: "定容后电阻（gr1）", tooltip: "定容后电阻 (gr1, mΩ)" },
+  { field: "qcFirst", label: "首次充电容量（qcFirst）", tooltip: "首次充电容量 = fq + gqc1 (Ah)" },
+  { field: "qdFirst", label: "首次放电容量（qdFirst）", tooltip: "首次放电容量 = gqd1 (Ah)" },
+  { field: "ceFirst", label: "首圈库仑效率（ceFirst）", tooltip: "首圈库仑效率 = qdFirst / qcFirst * 100 (%)" },
 ];
 
 const PD_COLOR: Record<string, string> = {
@@ -262,9 +262,9 @@ export function CellPickerPage() {
         <div className="flex flex-col items-center justify-center py-24 text-gray-400"><Layers className="h-10 w-10 mb-3 opacity-30" /><p className="text-sm">暂无可挑选的电池</p></div>
       ) : (
         <div className="overflow-auto max-h-[calc(100vh-380px)] rounded-surface border border-border bg-white">
-          <table className="min-w-max border-collapse">
+          <table className="min-w-max border-separate border-spacing-0">
             <thead className="bg-gray-50 sticky top-0 z-20"><tr>
-              <th className={cn(thClass, "sticky left-0 z-20 min-w-[130px]")}>{t("cell_id")}</th>
+              <th className={cn(thClass, "sticky left-0 z-40 min-w-[130px] bg-gray-50 shadow-[2px_0_6px_rgba(0,0,0,0.06)]")}>{t("cell_id")}</th>
               {dataCols.map((c) => (
                 c.tooltip ? (
                   <TooltipTh key={c.field} content={c.tooltip} label={c.label} className={cn(thClass, PD_COLOR[c.field] ?? "", "min-w-[90px]")} />
@@ -280,7 +280,7 @@ export function CellPickerPage() {
                 const isSel = !!assignedType;
                 return (
                   <tr key={cell.cellId || cell.id} className={cn(isSel && "bg-blue-50/40")}>
-                    <td className={cn("sticky left-0 z-20 bg-white px-3 py-2 whitespace-nowrap text-[13px] font-semibold border-r border-gray-100 shadow-[2px_0_6px_rgba(0,0,0,0.06)]",
+                    <td className={cn("sticky left-0 z-30 bg-white px-3 py-2 whitespace-nowrap text-[13px] font-semibold border-r border-gray-100 shadow-[2px_0_6px_rgba(0,0,0,0.06)]",
                       isSel ? "text-action-muted" : "text-gray-900"
                     )}>
                       {cell.cellId}
