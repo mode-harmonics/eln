@@ -26,6 +26,9 @@ const ROLE_DEFS: Array<{ name: string; permissionList: string[] }> = [
 ];
 
 async function seed(): Promise<void> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Demo data seed is disabled in production. Provision production roles, workflow template, and administrator separately.');
+  }
   await AppDataSource.initialize();
   console.log('DataSource initialized for seeding.');
 

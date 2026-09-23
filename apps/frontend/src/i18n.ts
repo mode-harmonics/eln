@@ -9,7 +9,6 @@ const resources = {
       project: "Project",
       back: "Back",
       retry: "Retry",
-      no_temp_files: "No temporary files",
       project_workflow_pending: "Project created. Workflow setup is incomplete. Retry continues this project without creating another.",
       setup_workflow: "Set up workflow",
       workflow_steps_required: "Workflow steps are unavailable. Select a valid template or try again before creating the project.",
@@ -569,11 +568,7 @@ const resources = {
       invalid_credentials: "Invalid username or password",
       network_error: "Network error, please try again later",
       enter_credentials: "Please enter your username and password",
-      dev_account: "Dev — Quick Login (Password123!)",
-      dev_account_pi: "Owner (PI)",
-      dev_account_admin: "Admin",
-      dev_account_editor: "Editor",
-      dev_account_viewer: "Viewer",
+      initial_password: "Initial password",
       // ─── Cell Picker Page ───
       pick_assign_title: "Pick & Assign Cells",
       pick_assign_desc: "All process data at a glance. Pick cells for subsequent testing manually or automatically.",
@@ -594,10 +589,6 @@ const resources = {
       pick_completed_readonly: "Pick completed. Read-only view.",
       operation_failed: "Operation failed",
       // ─── Temp Upload ───
-      temp_files: "Temp Files",
-      temp_files_auto_clear: "Cleared after server restart",
-      upload_count: "Uploaded {{count}} files",
-      download_failed: "Download failed",
       download: "Download",
       delete: "Delete",
       // ─── Form Fields ───
@@ -679,7 +670,6 @@ const resources = {
       project: "项目",
       back: "返回",
       retry: "重试",
-      no_temp_files: "暂无临时文件",
       project_workflow_pending: "项目已创建，流程配置尚未完成。重试将继续配置当前项目，不会重复创建。",
       setup_workflow: "配置工作流",
       workflow_steps_required: "流程步骤不可用。请选择有效模板，或稍后重试，再创建项目。",
@@ -1256,11 +1246,7 @@ const resources = {
       invalid_credentials: "用户名或密码不正确",
       network_error: "网络错误，请稍后重试",
       enter_credentials: "请输入用户名和密码",
-      dev_account: "Dev — 快捷登录 (密码 Password123!)",
-      dev_account_pi: "负责人 (PI)",
-      dev_account_admin: "管理员",
-      dev_account_editor: "编辑",
-      dev_account_viewer: "查看",
+      initial_password: "初始密码",
       // ─── Cell Picker Page ───
       pick_assign_title: "挑选与分配电池",
       pick_assign_desc: "所有制程数据一览，手动或自动为后续测试挑选电池",
@@ -1281,10 +1267,6 @@ const resources = {
       pick_completed_readonly: "挑选流程已完成，当前仅供查看",
       operation_failed: "操作失败",
       // ─── Temp Upload ───
-      temp_files: "临时文件",
-      temp_files_auto_clear: "服务重启后自动清空",
-      upload_count: "已上传 {{count}} 个文件",
-      download_failed: "下载失败",
       download: "下载",
       delete: "删除",
       // ─── Form Fields ───

@@ -114,7 +114,8 @@ export class UsersService {
     return { items, total };
   }
 
-  async create(dto: { username: string; email?: string; fullName: string; roleId?: string; password?: string }): Promise<Omit<User, 'passwordHash'>> {
+  async create(dto: { username: string; email?: string; fullName: string; roleId?: string; password: string }): Promise<Omit<User, 'passwordHash'>> {
+    if (!dto.password?.trim()) throw new BadRequestException('Password is required');
     if (/[\u4e00-\u9fa5]/.test(dto.username) || !/^[a-zA-Z0-9_.-]+$/.test(dto.username)) {
       throw new BadRequestException('用户名不能包含中文或特殊字符，只能包含英文字母、数字、下划线、连字符或点。');
     }
@@ -131,8 +132,7 @@ export class UsersService {
       throw new ConflictException('Username already exists.');
     }
 
-    const password = dto.password || 'Password123!';
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, 10);
 
     const user = this.usersRepo.create({
       id: uuid(),

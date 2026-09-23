@@ -24,11 +24,11 @@ export class CreateUserDto {
   @IsUUID()
   roleId?: string;
 
-  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MinLength(6)
   @MaxLength(72)
-  password?: string;
+  password!: string;
 }
 
 export class UpdateUserDto extends PartialType(OmitType(CreateUserDto, ['password'] as const), { skipNullProperties: false }) {

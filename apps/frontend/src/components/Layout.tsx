@@ -11,10 +11,9 @@ import {
   FlaskConical,
   User,
   Globe,
-  Upload,
   ChevronDown,
 } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { Dropdown } from "./Dropdown";
@@ -25,7 +24,6 @@ import { Logo } from "./Logo";
 import favSrc from "../../assets/fav.png";
 import { Breadcrumb } from "./Breadcrumb";
 import { NotificationBell } from "./NotificationBell";
-import { TempUploadDrawer } from "./TempUploadDrawer";
 
 const NAVIGATION = [
   // { nameKey: "dashboard", href: "/dashboard", icon: LayoutDashboard, requiredPermission: "experiments:read" },
@@ -46,8 +44,6 @@ export function Layout() {
   const { hasPermission } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [tempUploadOpen, setTempUploadOpen] = useState(false);
-  const tempUploadTriggerRef = useRef<HTMLButtonElement>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -231,17 +227,6 @@ export function Layout() {
             )}
           </nav>
 
-          {/* Temp Upload button & Footer links */}
-          <div className="px-4 pb-4 mt-auto space-y-4">
-            <button
-              ref={tempUploadTriggerRef}
-              onClick={() => setTempUploadOpen(true)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-[13px] font-medium text-gray-500 hover:bg-black/5 hover:text-gray-900 transition-colors group"
-            >
-              <Upload className="w-4 h-4 shrink-0 stroke-[2] text-gray-400 group-hover:text-gray-600" />
-              临时文件
-            </button>
-          </div>
         </div>
       </div>
 
@@ -268,7 +253,6 @@ export function Layout() {
         </main>
       </div>
 
-      <TempUploadDrawer open={tempUploadOpen} onClose={() => setTempUploadOpen(false)} returnFocusRef={tempUploadTriggerRef} />
     </div>
   );
 }

@@ -6,13 +6,6 @@ import { Logo } from "../components/Logo";
 import { api, ApiError } from "../lib/api";
 import { Surface } from "../components/Surface";
 
-const DEV_ACCOUNTS = [
-  { username: "pi", labelKey: "dev_account_pi", color: "bg-purple-500" },
-  { username: "admin", labelKey: "dev_account_admin", color: "bg-blue-500" },
-  { username: "editor", labelKey: "dev_account_editor", color: "bg-emerald-500" },
-  { username: "viewer", labelKey: "dev_account_viewer", color: "bg-gray-500" },
-];
-
 export function Login() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -56,12 +49,6 @@ export function Login() {
       return;
     }
     await doLogin(username, password);
-  };
-
-  const handleDevLogin = (user: string) => {
-    setUsername(user);
-    setPassword("Password123!");
-    doLogin(user, "Password123!");
   };
 
   return (
@@ -116,26 +103,6 @@ export function Login() {
           </div>
         </form>
 
-        {/* Dev quick login */}
-        <div className="mt-8 pt-6 border-t border-gray-100">
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 text-center">
-            {t("dev_account")}
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {DEV_ACCOUNTS.map((acc) => (
-              <button
-                key={acc.username}
-                type="button"
-                onClick={() => handleDevLogin(acc.username)}
-                disabled={loading}
-                className="flex items-center gap-2 px-3 py-2 rounded border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors disabled:opacity-50"
-              >
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${acc.color}`} />
-                {t(acc.labelKey)}
-              </button>
-            ))}
-          </div>
-        </div>
       </Surface>
     </div>
   );

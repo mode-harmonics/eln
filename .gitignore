@@ -13,6 +13,7 @@ build/
 # Uploads
 uploads/*
 !uploads/.gitkeep
+apps/backend/uploads-review-*/
 .turbo/
 
 # Env

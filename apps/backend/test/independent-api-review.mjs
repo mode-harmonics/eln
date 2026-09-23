@@ -47,7 +47,7 @@ for (const role of ['pi', 'editor', 'viewer', 'admin']) {
 }
 await check('wrong password is 401', async () => status(await req('POST', '/auth/login', null, { username: 'pi', password: 'wrong-password' }), 401));
 await check('unknown login field is 400', async () => status(await req('POST', '/auth/login', null, { username: 'pi', password: 'wrong', extra: true }), 400));
-for (const path of ['/projects', '/users/me', '/inventory', '/workflow/templates', '/notifications', '/temp-files', '/search?q=test']) {
+for (const path of ['/projects', '/users/me', '/inventory', '/workflow/templates', '/notifications', '/search?q=test']) {
   await check(`anonymous denied ${path}`, async () => status(await req('GET', path), 401));
 }
 for (const path of ['/users/me', '/projects', '/inventory?page=1&limit=10', '/roles', '/users?page=1&limit=10&withRole=true', '/workflow/templates', '/workflow/tasks', '/notifications', '/notifications/unread-count', '/search?q=review']) {
@@ -111,23 +111,20 @@ await check('dashboard contains assigned pending approval',async()=>{
   const r=await req('GET','/dashboard/summary','pi');status(r,200);
   assert.ok(JSON.stringify(r.data.pendingApprovals).includes(e.id),'assigned pending approval missing');
 });
-await check('temporary upload owner isolation', async () => {
-  const form = new FormData(); form.append('files', new Blob(['review synthetic content']), `${prefix}.txt`);
-  const uploaded = await req('POST', '/temp-files/upload', 'pi', form); status(uploaded, 201); const id = uploaded.data[0].id;
-  try {
-    const list = await req('GET', '/temp-files', 'viewer'); status(list, 200);
-    const download = await req('GET', `/temp-files/${id}/download`, 'viewer');
-    const removal = await req('DELETE', `/temp-files/${id}`, 'viewer');
-    assert.ok(!list.data.some(f => f.id === id) && [403,404].includes(download.status) && [403,404].includes(removal.status), `listed=${list.data.some(f=>f.id===id)}, download=${download.status}, delete=${removal.status}`);
-  } finally { await req('DELETE', `/temp-files/${id}`, 'pi'); }
+await check('temporary upload API is absent from the production surface', async () => {
+  assert.equal(documentedOperations.some(item => item.path.includes('/temp-files')), false);
+  for (const [method, path] of [['GET', '/temp-files'], ['POST', '/temp-files/upload'], ['GET', `/temp-files/${randomUUID()}/download`], ['DELETE', `/temp-files/${randomUUID()}`]]) {
+    status(await req(method, path, 'pi'), 404);
+  }
 });
 let createdUser;
-await check('create user response omits passwordHash', async () => { const r = await req('POST', '/users', 'pi', { username: `${prefix}-user`, fullName: 'Synthetic reviewer' }); status(r, 201); createdUser=r.data; assert.equal(Boolean(hasSecret(r.data)), false, 'passwordHash key found (value withheld)'); });
+await check('user creation requires an explicit password', async () => status(await req('POST', '/users', 'pi', { username: `${prefix}-no-password`, fullName: 'Synthetic reviewer' }), 400));
+await check('create user response omits passwordHash', async () => { const r = await req('POST', '/users', 'pi', { username: `${prefix}-user`, fullName: 'Synthetic reviewer', password: 'Synthetic-review-456!' }); status(r, 201); createdUser=r.data; assert.equal(Boolean(hasSecret(r.data)), false, 'passwordHash key found (value withheld)'); });
 await check('update user response omits passwordHash and clears email',async()=>{ assert.ok(createdUser);const r=await req('PUT',`/users/${createdUser.id}`,'pi',{email:null,fullName:'Updated synthetic reviewer'});status(r,200);assert.equal(r.data.email,null);assert.equal(Boolean(hasSecret(r.data)),false); });
 await check('password change retains login functionality',async()=>{
-  assert.ok(createdUser); const login=await req('POST','/auth/login',null,{username:createdUser.username,password:'Password123!'});status(login,200);tokens.synthetic=login.data.accessToken;
-  status(await req('PUT','/users/me/password','synthetic',{oldPassword:'Password123!',newPassword:'Synthetic-review-456!'}),200);
-  status(await req('POST','/auth/login',null,{username:createdUser.username,password:'Synthetic-review-456!'}),200);
+  assert.ok(createdUser); const login=await req('POST','/auth/login',null,{username:createdUser.username,password:'Synthetic-review-456!'});status(login,200);tokens.synthetic=login.data.accessToken;
+  status(await req('PUT','/users/me/password','synthetic',{oldPassword:'Synthetic-review-456!',newPassword:'Synthetic-review-789!'}),200);
+  status(await req('POST','/auth/login',null,{username:createdUser.username,password:'Synthetic-review-789!'}),200);
   status(await req('POST','/auth/login',null,{username:createdUser.username,password:'Password123!'}),401);
 });
 await check('disabled user token stops working',async()=>{status(await req('PUT',`/users/${createdUser.id}`,'pi',{isActive:false}),200);status(await req('GET','/users/me','synthetic'),401);});
@@ -372,8 +369,8 @@ await check('empty-project summary import cannot grant step assignee whole-proje
 });
 await check('limited-role project owner cannot import unauthorized future steps',async()=>{
   const role=await req('POST','/roles','pi',{name:`${prefix}-limited`,permissionList:['experiments:read','experiments:write','workflow_step:drying_injection']});status(role,201);
-  const account=await req('POST','/users','pi',{username:`${prefix}-limited`,fullName:'Synthetic limited owner',roleId:role.data.id});status(account,201);
-  const login=await req('POST','/auth/login',null,{username:account.data.username,password:'Password123!'});status(login,200);tokens.limited=login.data.accessToken;
+  const account=await req('POST','/users','pi',{username:`${prefix}-limited`,fullName:'Synthetic limited owner',roleId:role.data.id,password:'Synthetic-review-456!'});status(account,201);
+  const login=await req('POST','/auth/login',null,{username:account.data.username,password:'Synthetic-review-456!'});status(login,200);tokens.limited=login.data.accessToken;
   const parent=await req('POST','/projects','limited',{name:`${prefix}-limited-project`});status(parent,201);
   const summary=new ExcelJS.Workbook();summary.addWorksheet('数据记录-制程数据').addRows([['cellId','m0'],['UNAUTHORIZED-FUTURE',1]]);
   const form=new FormData();form.append('files',new Blob([await summary.xlsx.writeBuffer()]),'limited-summary.xlsx');

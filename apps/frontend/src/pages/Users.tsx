@@ -33,6 +33,7 @@ export function Users() {
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserName, setNewUserName] = useState("");
   const [newUserUsername, setNewUserUsername] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
   const [newUserRole, setNewUserRole] = useState("");
   const [viewMode, setViewMode] = useViewMode("users_view_mode", "list");
   const [currentPage, setCurrentPage] = useState(1);
@@ -85,7 +86,7 @@ export function Users() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mutationLock.current) return;
-    if (!newUserName || !newUserUsername) return;
+    if (!newUserName || !newUserUsername || !newUserPassword) return;
     if (/[\u4e00-\u9fa5]/.test(newUserUsername) || !/^[a-zA-Z0-9_.-]+$/.test(newUserUsername)) {
       alert(t("username_no_chinese", "用户名不能包含中文或非法字符，只能包含英文字母、数字、下划线、连字符或点"));
       return;
@@ -98,11 +99,13 @@ export function Users() {
         email: newUserEmail ? newUserEmail.trim() : undefined,
         fullName: newUserName,
         roleId: newUserRole || undefined,
+        password: newUserPassword,
       });
       setIsModalOpen(false);
       setNewUserEmail("");
       setNewUserName("");
       setNewUserUsername("");
+      setNewUserPassword("");
       setSearchQuery("");
       setSearchInput("");
       setCurrentPage(1);
@@ -390,10 +393,10 @@ export function Users() {
         </form>
       </Modal>
 
-      <Modal open={isModalOpen} onClose={() => { if (!mutationLock.current) setIsModalOpen(false); }} title={t("add_user")} maxWidth="md"
+      <Modal open={isModalOpen} onClose={() => { if (!mutationLock.current) { setIsModalOpen(false); setNewUserPassword(""); } }} title={t("add_user")} maxWidth="md"
         footer={
           <>
-            <Button size="sm" variant="secondary" disabled={saving} onClick={() => setIsModalOpen(false)}>{t("cancel")}</Button>
+            <Button size="sm" variant="secondary" disabled={saving} onClick={() => { setIsModalOpen(false); setNewUserPassword(""); }}>{t("cancel")}</Button>
             <Button size="sm" type="submit" form="modal-user-form" disabled={saving} loading={saving}>{t("create")}</Button>
           </>
         }>
@@ -413,6 +416,16 @@ export function Users() {
             placeholder={t("email_placeholder")}
             value={newUserEmail}
             onChange={(e) => setNewUserEmail(e.target.value)}
+          />
+          <TextInput
+            id="initial-password"
+            label={t("initial_password")}
+            type="password"
+            autoComplete="new-password"
+            minLength={6}
+            required
+            value={newUserPassword}
+            onChange={(e) => setNewUserPassword(e.target.value)}
           />
           <TextInput
             id="name"
