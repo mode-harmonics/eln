@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuid } from 'uuid';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { ROLE_DEFAULT_PERMISSIONS } from '@eln/shared';
 import * as entities from './entities';
 import { Role } from './entities/role.entity';
@@ -35,33 +35,48 @@ export function readBootstrapConfig(env: BootstrapEnvironment): BootstrapConfig 
 }
 
 /** One transaction prevents partially initialized production databases. */
-export async function bootstrapProduction(dataSource: DataSource, config: BootstrapConfig): Promise<'created' | 'already_initialized'> {
+export async function bootstrapProduction(dataSource: DataSource, config: BootstrapConfig): Promise<'created' | 'already_initialized' | 'migrated'> {
   return dataSource.transaction(async (manager) => {
     await manager.query('SELECT pg_advisory_xact_lock(274392814)');
     const users = manager.getRepository(User);
+    const roles = manager.getRepository(Role);
     const existingCount = await users.count();
     if (existingCount > 0) {
       const existing = await users.findOne({ where: { username: config.username } });
-      const owner = existing?.roleId
-        ? await manager.getRepository(Role).findOne({ where: { id: existing.roleId } })
+      const currentRole = existing?.roleId
+        ? await roles.findOne({ where: { id: existing.roleId } })
         : null;
-      if (existing?.isActive && owner?.name === 'Owner' && owner.permissionList?.includes('*')) {
+      if (existing?.isActive && currentRole?.name === 'Admin' &&
+        ROLE_DEFAULT_PERMISSIONS.Admin.every((permission) => currentRole.permissionList?.includes(permission))) {
         return 'already_initialized';
+      }
+      // Upgrade only the exact four-role bootstrap written by the previous version.
+      // Leave any populated or customized installation untouched.
+      if (existingCount === 1 && existing?.isActive && currentRole?.name === 'Owner' && currentRole.permissionList?.includes('*')) {
+        const existingRoles = await roles.find();
+        const presets = ['Owner', 'Admin', 'Editor', 'Viewer'] as const;
+        const isOldBootstrap = existingRoles.length === presets.length && presets.every((name) => {
+          const role = existingRoles.find((candidate) => candidate.name === name);
+          const expected = ROLE_DEFAULT_PERMISSIONS[name];
+          return role && role.permissionList?.length === expected.length && expected.every((permission) => role.permissionList?.includes(permission));
+        });
+        if (isOldBootstrap) {
+          const admin = existingRoles.find((role) => role.name === 'Admin')!;
+          existing.roleId = admin.id;
+          await users.save(existing);
+          await roles.delete({ id: In(existingRoles.filter((role) => role.id !== admin.id).map((role) => role.id)) });
+          return 'migrated';
+        }
       }
       throw new Error('Database already has users; refusing to create a privileged account.');
     }
 
-    const roles = manager.getRepository(Role);
-    let owner: Role | null = null;
-    for (const name of ['Owner', 'Admin', 'Editor', 'Viewer'] as const) {
-      let role = await roles.findOne({ where: { name } });
-      if (!role) {
-        role = await roles.save(roles.create({ id: uuid(), name, permissionList: ROLE_DEFAULT_PERMISSIONS[name] }));
-      }
-      if (name === 'Owner') owner = role;
+    let admin = await roles.findOne({ where: { name: 'Admin' } });
+    if (!admin) {
+      admin = await roles.save(roles.create({ id: uuid(), name: 'Admin', permissionList: ROLE_DEFAULT_PERMISSIONS.Admin }));
     }
-    if (!owner || !owner.permissionList?.includes('*')) {
-      throw new Error('Owner role is missing full permissions; refusing to create administrator.');
+    if (!ROLE_DEFAULT_PERMISSIONS.Admin.every((permission) => admin.permissionList?.includes(permission))) {
+      throw new Error('Admin role is missing required permissions; refusing to create administrator.');
     }
 
     const templates = manager.getRepository(WorkflowTemplate);
@@ -80,7 +95,7 @@ export async function bootstrapProduction(dataSource: DataSource, config: Bootst
       passwordHash: await bcrypt.hash(config.password, 12),
       fullName: config.fullName,
       email: null,
-      roleId: owner.id,
+      roleId: admin.id,
       isActive: true,
     }));
     return 'created';
@@ -98,7 +113,11 @@ export async function runProductionBootstrap(): Promise<void> {
   try {
     await dataSource.initialize();
     const result = await bootstrapProduction(dataSource, config);
-    console.log(result === 'created' ? 'Production administrator, roles and default workflow created.' : 'Production administrator already exists; no changes made.');
+    console.log(result === 'created'
+      ? 'Production administrator, Admin role and default workflow created.'
+      : result === 'migrated'
+        ? 'Previous bootstrap converted to one Admin role; administrator password unchanged.'
+        : 'Production administrator already exists; no changes made.');
   } finally {
     if (dataSource.isInitialized) await dataSource.destroy();
   }
@@ -110,7 +129,7 @@ export function reportBootstrapError(error: unknown): void {
     error.message.startsWith('DATABASE_URL') ||
     error.message.startsWith('ELN_BOOTSTRAP_') ||
     error.message.startsWith('Database already has users') ||
-    error.message.startsWith('Owner role')
+    error.message.startsWith('Admin role')
   )) {
     console.error(error.message);
   } else {

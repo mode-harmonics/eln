@@ -49,10 +49,12 @@ It also requires `ELN_BOOTSTRAP_USERNAME` and `ELN_BOOTSTRAP_PASSWORD`;
 `ELN_BOOTSTRAP_FULL_NAME` is optional.
 Supply a unique password of at least 12 characters and at most 72 UTF-8 bytes
 from a secret manager. On a migrated database with no users, the command
-creates four roles, one Owner account and
-the default workflow. Re-running it preserves the existing password and
-workflow. If the database already has another user, it refuses to create an
-administrator. No fixed login or demo projects are installed. Run the
+creates one Admin role, one administrator account and the default workflow.
+Re-running it preserves the existing password and workflow. An untouched
+four-role bootstrap from the previous release is converted to the single Admin
+role; populated or customized installations are left alone. If the database
+already has another user, initialization refuses to create an administrator.
+No fixed login or demo projects are installed. Run the
 production migration command `typeorm:run:prod` before `seed`.
 
 For disposable test databases only, `seed:test` installs the historical test
