@@ -61,6 +61,16 @@ For disposable test databases only, `seed:test` installs the historical test
 fixtures, including fixed test accounts. It refuses to run with
 `NODE_ENV=production`.
 
+### Docker Compose first start
+
+Copy `.env.example` to `.env`, then set a real `DB_PASSWORD`, `JWT_SECRET`, and
+`ELN_BOOTSTRAP_PASSWORD` before running `docker compose up --build -d`.
+The initial username is `admin` unless `ELN_BOOTSTRAP_USERNAME` is changed.
+Compose runs migrations and the production initializer automatically; a blank
+bootstrap password stops the backend with an explicit error. On later starts,
+the initializer leaves the existing password unchanged. For a database already
+initialized by another method, set `RUN_SEED=false`.
+
 ## Running
 
 ```bash

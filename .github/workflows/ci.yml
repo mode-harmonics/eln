@@ -79,6 +79,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify Compose administrator bootstrap
+        env:
+          ELN_BOOTSTRAP_USERNAME: admin
+          ELN_BOOTSTRAP_PASSWORD: ci-only-bootstrap-password
+        run: |
+          docker compose config --format json > /tmp/eln-compose.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const env = JSON.parse(fs.readFileSync('/tmp/eln-compose.json', 'utf8')).services.backend.environment;
+          if (String(env.RUN_SEED) !== 'true' || env.ELN_BOOTSTRAP_USERNAME !== 'admin' || env.ELN_BOOTSTRAP_PASSWORD !== process.env.ELN_BOOTSTRAP_PASSWORD) {
+            throw new Error('Compose does not enable and configure administrator initialization');
+          }
+          if (fs.readFileSync('apps/backend/docker-entrypoint.sh', 'utf8').includes('\r')) {
+            throw new Error('Docker entrypoint must use LF line endings');
+          }
+          NODE
+
       - name: Build
         run: pnpm run build
 
